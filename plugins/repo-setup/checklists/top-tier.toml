@@ -470,6 +470,17 @@ fix = "Add an eval target in mk/ai.mk."
 any = [{ paths = ["mk/ai.mk"], pattern = '(?m)^eval:' }]
 
 [[check]]
+id = "ai_agent_bounded"
+level = "starter"
+weight = 2
+capabilities = ["ai"]
+vars = { ai_tier = "agent" }
+title = "The agent has a limit on turns"
+why = "A loop without a limit can run up cost and keep acting after it should have stopped."
+fix = "Set MAX_ITERATIONS and pass it to the tool runner."
+any = [{ paths = ["src/**/agent.py", "src/ai/agent.ts"], pattern = 'MAX_ITERATIONS' }]
+
+[[check]]
 id = "ai_env_example"
 level = "starter"
 weight = 1

@@ -21,7 +21,7 @@ fi
 
 ALL=$(python3 "$S/apply.py" --list-presets --json | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)))")
 # Combinations: stack:archetype:deploy:capabilities:ai_tier
-COMBOS="ts-api:service-api:container:github-agents fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp python:none:none:github-agents python:none:none:ai:call ts-node:none:none:ai:workflow"
+COMBOS="ts-api:service-api:container:github-agents fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp python:none:none:github-agents python:none:none:ai:call ts-node:none:none:ai:workflow python:none:none:ai:agent ts-node:none:none:ai:agent fastapi:service-api:none:ai:agent"
 for spec in ${PRESETS:-$ALL $COMBOS}; do
   IFS=: read -r preset arch dep cap tier <<<"$spec"
   extra=(--archetype "${arch:-none}" --deploy "${dep:-none}")

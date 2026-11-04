@@ -1,0 +1,112 @@
+import json
+from collections.abc import Iterator
+from types import SimpleNamespace
+from typing import Any, cast
+
+import pytest
+
+from {{package_name}}.actions import HANDLERS, NOTES, reset_notes
+from {{package_name}}.agent import (
+    MAX_ITERATIONS,
+    AgentLimitError,
+    agent_tools,
+    deny_all,
+    run_agent,
+    run_tool,
+)
+from {{package_name}}.llm import LLMRefusedError
+from {{package_name}}.ontology_types import ACTIONS, ActionContext, ActionHandlers
+
+CTX = ActionContext(role="agent", actor="test")
+
+
+@pytest.fixture(autouse=True)
+def fresh_notes() -> Iterator[None]:
+    reset_notes()
+    yield
+    reset_notes()
+
+
+def call_tool(name: str, args: dict[str, Any], confirm: Any = deny_all) -> str:
+    spec = next(a for a in ACTIONS if a.name == name)
+    return run_tool(spec, args, HANDLERS, CTX, confirm)
+
+
+class BrokenHandlers:
+    def search_notes(self, data: Any, ctx: Any) -> Any:
+        raise RuntimeError("boom")
+
+
+def message(stop_reason: str = "end_turn", text: str = "done") -> Any:
+    block = SimpleNamespace(type="text", text=text)
+    return SimpleNamespace(stop_reason=stop_reason, content=[block], usage=None)
+
+
+class FakeClient:
+    """Stands in for anthropic.Anthropic: no test here calls the API."""
+
+    def __init__(self, *messages: Any) -> None:
+        self.yielded = messages
+        self.kwargs: dict[str, Any] = {}
+
+    @property
+    def beta(self) -> Any:
+        return SimpleNamespace(messages=self)
+
+    def tool_runner(self, **kwargs: Any) -> Any:
+        self.kwargs = kwargs
+        return iter(self.yielded)
+
+
+def test_forbidden_action_is_not_a_tool() -> None:
+    names = {tool.name for tool in agent_tools(HANDLERS, CTX)}
+    assert names == {"searchNotes", "deleteNote"}
+
+
+def test_confirm_denied_by_default_does_not_run() -> None:
+    assert "not confirmed" in call_tool("deleteNote", {"id": "n1"})
+    assert "n1" in NOTES
+
+
+def test_confirm_approved_runs() -> None:
+    call_tool("deleteNote", {"id": "n1"}, confirm=lambda action, data: True)
+    assert "n1" not in NOTES
+
+
+def test_tool_object_goes_through_the_gate() -> None:
+    tool = next(t for t in agent_tools(HANDLERS, CTX) if t.name == "deleteNote")
+    assert "not confirmed" in tool.call({"id": "n1"})
+    assert "n1" in NOTES
+
+
+def test_pii_is_redacted_in_tool_output() -> None:
+    found = json.loads(call_tool("searchNotes", {"query": "delivery"}))
+    assert found[0]["author"] == "[redacted]"
+    assert found[0]["text"].startswith("The delivery")
+
+
+def test_invalid_input_returns_an_error_to_the_model() -> None:
+    assert "invalid input" in call_tool("searchNotes", {"nope": 1})
+
+
+def test_handler_exception_returns_an_error_to_the_model() -> None:
+    spec = next(a for a in ACTIONS if a.name == "searchNotes")
+    broken = cast(ActionHandlers, BrokenHandlers())
+    assert "boom" in run_tool(spec, {"query": "x"}, broken, CTX, deny_all)
+
+
+def test_run_agent_is_bounded_and_returns_the_answer() -> None:
+    client = FakeClient(message(stop_reason="tool_use"), message(text="found it"))
+    assert run_agent("hello", client) == "found it"
+    assert client.kwargs["max_iterations"] == MAX_ITERATIONS
+    assert "tool_choice" not in client.kwargs and "temperature" not in client.kwargs
+
+
+def test_running_out_of_turns_stops_clearly() -> None:
+    with pytest.raises(AgentLimitError):
+        run_agent("hello", FakeClient(message(stop_reason="tool_use")))
+
+
+def test_refusal_raises() -> None:
+    with pytest.raises(LLMRefusedError):
+        run_agent("hello", FakeClient(message(stop_reason="refusal")))

@@ -1,0 +1,26 @@
+# Sample actions for the agent tier: replace them with your own domain (/repo-setup:ontology-add).
+actions:
+  - name: searchNotes
+    description: Find notes whose text contains the query.
+    entity: Note
+    kind: query
+    input:
+      query: { type: string, required: true }
+    output: Note[]
+    roles: [staff, agent]
+    agent: allowed
+    idempotent: true
+  - name: deleteNote
+    description: Delete a note by id.
+    entity: Note
+    kind: delete
+    input:
+      id: { type: string, required: true }
+    roles: [staff, agent]
+    agent: confirm
+  - name: purgeNotes
+    description: Delete every note.
+    entity: Note
+    kind: delete
+    roles: [staff]
+    agent: forbidden

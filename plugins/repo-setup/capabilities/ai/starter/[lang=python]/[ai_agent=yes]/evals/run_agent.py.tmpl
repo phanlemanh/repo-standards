@@ -1,0 +1,36 @@
+"""Agent evals against the real API. Grades the final state of the notes, not the steps taken."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+from {{package_name}}.actions import NOTES, reset_notes
+from {{package_name}}.agent import run_agent
+from {{package_name}}.llm import USAGE, make_client, model_name
+
+
+def main() -> int:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("evals call the real API: set ANTHROPIC_API_KEY first.", file=sys.stderr)
+        return 2
+    tasks = json.loads((Path(__file__).parent / "agent_tasks.json").read_text(encoding="utf-8"))
+    print(f"Running {len(tasks)} agent tasks on {model_name()}. This uses your API credit.")
+    client = make_client()
+    passed = 0
+    for task in tasks:
+        reset_notes()
+        run_agent(task["prompt"], client)
+        ok = all(i in NOTES for i in task["must_exist"]) and not any(
+            i in NOTES for i in task["must_be_gone"]
+        )
+        passed += ok
+        print(f"{'ok  ' if ok else 'FAIL'} {task['id']}: notes left {sorted(NOTES)}")
+    print(f"Passed {passed}/{len(tasks)}. Tokens: {dict(USAGE)}")
+    return 0 if passed == len(tasks) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

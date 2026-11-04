@@ -257,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     archetype = setup.get("archetype", "none")
     deploy = setup.get("deploy", "none")
     caps = set(setup.get("capabilities") or [])
+    setup_vars = setup.get("vars") or {}
     if archetype == "service-api":
         caps.add("mcp")
 
@@ -266,6 +267,8 @@ def main(argv: list[str] | None = None) -> int:
         if "archetypes" in c and archetype not in c["archetypes"]:
             return False
         if "capabilities" in c and not caps & set(c["capabilities"]):
+            return False
+        if any(setup_vars.get(k) != v for k, v in (c.get("vars") or {}).items()):
             return False
         return not ("deploy" in c and deploy not in c["deploy"])
 

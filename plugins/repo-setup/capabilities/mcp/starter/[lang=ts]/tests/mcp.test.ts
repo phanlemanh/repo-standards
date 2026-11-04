@@ -80,7 +80,7 @@ describe("MCP server", () => {
   });
 
   it("hides actions the role may not run", () => {
-    expect(agentActions({ role: "nobody", actor: "t" } as ActionContext, [echo])).toEqual([]);
+    expect(agentActions({ role: "nobody", actor: "t" } as unknown as ActionContext, [echo])).toEqual([]);
   });
 
   it("redacts output only for entities with personal data", () => {

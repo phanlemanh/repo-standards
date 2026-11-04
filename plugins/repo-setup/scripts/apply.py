@@ -441,11 +441,6 @@ def main(argv: list[str] | None = None) -> int:
     for c in (args.caps or "").split(","):
         if c.strip() and c.strip() not in caps:
             caps.append(c.strip())
-    try:
-        check_combination(preset, archetype, deploy, caps, level)
-    except ValueError as exc:
-        ap.error(str(exc))
-
     raw_vars: dict[str, str] = dict(previous.get("vars", {}))
     for item in args.var:
         if "=" not in item:
@@ -457,6 +452,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("Missing required --var: " + ", ".join(missing))
     try:
         variables = derive_vars(raw_vars)
+    except ValueError as exc:
+        ap.error(str(exc))
+    # The agent tier builds on the MCP layer (same permission checks), which must come first.
+    if "ai" in caps and variables["ai_tier"] == "agent" and "mcp" not in capabilities_for(archetype):
+        if "mcp" in caps:
+            caps.remove("mcp")
+        caps.insert(caps.index("ai"), "mcp")
+    try:
+        check_combination(preset, archetype, deploy, caps, level)
     except ValueError as exc:
         ap.error(str(exc))
     meta = load_meta(preset, level, archetype, deploy, caps)
