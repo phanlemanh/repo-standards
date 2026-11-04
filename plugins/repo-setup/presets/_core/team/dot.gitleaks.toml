@@ -1,0 +1,11 @@
+# Gitleaks reads this file automatically. Changing it is high-tier: it can hide real secrets.
+[extend]
+useDefault = true
+
+# .repo-setup.json records the SHA-256 of each generated file. Next to a name like
+# "tests/test_api.py" that looks like an API key. Only such hashes in that file are allowed.
+[[allowlists]]
+description = "File hashes in the repo-setup manifest"
+condition = "AND"
+paths = ['''^\.repo-setup\.json$''']
+regexes = ['''^[0-9a-f]{64}$''']

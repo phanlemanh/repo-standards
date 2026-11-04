@@ -320,5 +320,26 @@ case ",$failed," in *,autonomy_policy,*) ;; *) miss "doctor accepted a hollow au
 case ",$failed," in *,agent_workflows,*) ;; *) miss "doctor accepted a hollow PR pipeline: $failed" ;; esac
 echo "ok  doctor honesty (or misses reported above)"
 
+# 22. gitleaks: manifest file hashes are allowed, narrowly; the config itself is high-tier
+leak_cfg() {
+  python3 - "$1/.gitleaks.toml" <<'PY'
+import re, sys, tomllib
+cfg = tomllib.load(open(sys.argv[1], "rb"))
+assert cfg["extend"]["useDefault"] is True, "default rules must stay on"
+[rule] = cfg["allowlists"]
+assert rule["condition"] == "AND", "path and value must both match"
+assert any(re.search(p, ".repo-setup.json") for p in rule["paths"])
+assert not any(re.search(p, "src/.repo-setup.json") or re.search(p, "config.json") for p in rule["paths"])
+good, bad = "5aa89fea883d6eb806a0008bafafd84b27481aac169c51ae78e1ce81e57de9e3", "sk_live_" + "a" * 40
+assert any(re.search(p, good) for p in rule["regexes"])
+assert not any(re.search(p, bad) or re.search(p, good + "x") for p in rule["regexes"])
+PY
+}
+leak_cfg "$TMP/fastapi-team" 2>/dev/null || miss "team repo has no narrow gitleaks allowlist for manifest hashes"
+[ ! -e "$TMP/fastapi-starter/.gitleaks.toml" ] || miss "starter repo got .gitleaks.toml without a gitleaks hook"
+tier=$(cd "$g" && python3 tools/autonomy.py --files .gitleaks.toml | json 'd["tier"]')
+[ "$tier" = high ] || miss "tier of .gitleaks.toml: $tier"
+echo "ok  gitleaks allowlist (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
