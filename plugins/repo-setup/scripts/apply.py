@@ -54,6 +54,7 @@ LEVELS = ["starter", "team"]
 PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 CONDITION = re.compile(r"^\[([a-zA-Z_][a-zA-Z0-9_]*)=([^\]]+)\]$")
 REQUIRED_VARS = ["project_name", "description", "owner"]
+AI_TIERS = ("call", "workflow", "agent")
 LICENSES = {
     # license var -> (SPDX for pyproject, value for package.json)
     "MIT": ("MIT", "MIT"),
@@ -151,6 +152,9 @@ def check_combination(
         allowed = meta.get("stacks", [])
         if allowed and not chain & set(allowed):
             raise ValueError(f"{name} works with stacks: {', '.join(allowed)} (not {preset})")
+        refused = set(meta.get("not_stacks", []))
+        if chain & refused:
+            raise ValueError(f"{name} does not work with: {', '.join(sorted(chain & refused))}")
         required = meta.get("requires_level")
         if required and LEVELS.index(level) < LEVELS.index(required):
             raise ValueError(f"{name} needs level {required} (not {level})")
@@ -215,6 +219,12 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         raise ValueError(f"license must be one of: {', '.join(LICENSES)}")
     v.setdefault("license_spdx", LICENSES[v["license"]][0])
     v.setdefault("npm_license", LICENSES[v["license"]][1])
+    # Tiers of the "ai" capability. A higher tier also gets the files of the lower ones.
+    v.setdefault("ai_tier", "call")
+    if v["ai_tier"] not in AI_TIERS:
+        raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")
+    v["ai_workflow"] = "yes" if v["ai_tier"] in ("workflow", "agent") else "no"
+    v["ai_agent"] = "yes" if v["ai_tier"] == "agent" else "no"
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
     market = v.get("marketplace", "").strip()
     if market:

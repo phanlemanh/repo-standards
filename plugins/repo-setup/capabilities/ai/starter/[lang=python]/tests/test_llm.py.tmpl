@@ -1,0 +1,62 @@
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from {{package_name}}.feedback import Feedback, classify_feedback
+from {{package_name}}.llm import USAGE, LLMRefusedError, make_client, model_name
+
+
+class FakeClient:
+    """Stands in for anthropic.Anthropic: no test here calls the API."""
+
+    def __init__(self, label: str = "neutral", stop_reason: str = "end_turn") -> None:
+        self.label = label
+        self.stop_reason = stop_reason
+        self.kwargs: dict[str, Any] = {}
+
+    @property
+    def messages(self) -> Any:
+        return self
+
+    def parse(self, **kwargs: Any) -> Any:
+        self.kwargs = kwargs
+        return SimpleNamespace(
+            stop_reason=self.stop_reason,
+            parsed_output=Feedback(label=self.label),  # type: ignore[arg-type]
+            usage=SimpleNamespace(input_tokens=3, output_tokens=2),
+        )
+
+
+def test_classify_returns_label() -> None:
+    assert classify_feedback("great", FakeClient(label="positive")).label == "positive"
+
+
+def test_refusal_raises() -> None:
+    with pytest.raises(LLMRefusedError):
+        classify_feedback("x", FakeClient(stop_reason="refusal"))
+
+
+def test_model_name_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_MODEL", raising=False)
+    assert model_name() == "claude-opus-5-5"
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-sonnet-5-5")
+    assert model_name() == "claude-sonnet-5-5"
+
+
+def test_request_sets_effort_and_no_sampling() -> None:
+    client = FakeClient()
+    classify_feedback("x", client)
+    assert client.kwargs["output_config"] == {"effort": "low"}
+    assert "temperature" not in client.kwargs and "tool_choice" not in client.kwargs
+
+
+def test_usage_is_counted() -> None:
+    before = USAGE["input_tokens"]
+    classify_feedback("x", FakeClient())
+    assert USAGE["input_tokens"] == before + 3
+
+
+def test_make_client_builds_without_calling_the_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    assert make_client() is not None

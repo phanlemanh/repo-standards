@@ -449,6 +449,36 @@ why = "Small attack surface and self-healing deployments."
 fix = "Use the Dockerfile from the container deploy layer."
 any = [{ paths = ["Dockerfile"], pattern = '(?s)FROM .* AS .*FROM .*USER .*HEALTHCHECK' }]
 
+[[check]]
+id = "ai_evals"
+level = "starter"
+weight = 2
+capabilities = ["ai"]
+title = "Evals exist for the AI features"
+why = "You cannot tell whether a prompt or model change helped without a repeatable set of tasks."
+fix = "Add evals/tasks.json, starting from real failures."
+any = [{ paths = ["evals/tasks.json"] }]
+
+[[check]]
+id = "ai_eval_target"
+level = "starter"
+weight = 1
+capabilities = ["ai"]
+title = "make eval runs the evals, outside make check"
+why = "Evals cost money, so they run on purpose rather than on every check."
+fix = "Add an eval target in mk/ai.mk."
+any = [{ paths = ["mk/ai.mk"], pattern = '(?m)^eval:' }]
+
+[[check]]
+id = "ai_env_example"
+level = "starter"
+weight = 1
+capabilities = ["ai"]
+title = ".env.example documents the Claude settings"
+why = "New machines know which variables to set, without sharing the key."
+fix = "Add ANTHROPIC_API_KEY= and CLAUDE_MODEL= to .env.example."
+any = [{ paths = [".env.example"], pattern = 'ANTHROPIC_API_KEY' }]
+
 # ---------------------------------------------------------------- GitHub (scored with --remote, otherwise reminders)
 [[check]]
 id = "branch_protection"

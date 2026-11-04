@@ -20,12 +20,13 @@ if ! command -v pre-commit >/dev/null; then
 fi
 
 ALL=$(python3 "$S/apply.py" --list-presets --json | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)))")
-# Combinations: stack:archetype:deploy:capabilities
-COMBOS="ts-api:service-api:container:github-agents fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp python:none:none:github-agents"
+# Combinations: stack:archetype:deploy:capabilities:ai_tier
+COMBOS="ts-api:service-api:container:github-agents fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp python:none:none:github-agents python:none:none:ai:call ts-node:none:none:ai:call"
 for spec in ${PRESETS:-$ALL $COMBOS}; do
-  IFS=: read -r preset arch dep cap <<<"$spec"
+  IFS=: read -r preset arch dep cap tier <<<"$spec"
   extra=(--archetype "${arch:-none}" --deploy "${dep:-none}")
   [ -n "$cap" ] && extra+=(--with "$cap")
+  [ -n "$tier" ] && extra+=(--var "ai_tier=$tier")
   d="$TMP/${spec//:/-}"; mkdir -p "$d"; cd "$d"; git init -q -b main
   out=$(python3 "$S/apply.py" --preset "$preset" "${extra[@]}" --level team \
         --var "project_name=Coffee Shop" --var "description=E2E test" --var owner=acme --json)
@@ -38,6 +39,11 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
   git add -A
   while IFS= read -r c; do [ -z "$c" ] || { echo "[$spec] \$ $c"; bash -c "$c" </dev/null; }; done <<<"$verify"
   python3 "$S/doctor.py" --min-score 100
+  case ",$cap," in *,ai,*)
+    env -u ANTHROPIC_API_KEY make check >/dev/null || { echo "FAIL: make check needs an API key"; exit 1; }
+    if env -u ANTHROPIC_API_KEY make eval >/dev/null 2>&1; then echo "FAIL: make eval ran without a key"; exit 1; fi
+    ;;
+  esac
   # commit-msg hook: bad message rejected, conventional message accepted
   if [ -n "$HOOKS_PATH" ]; then
     echo "initial setup" > "$TMP/msg"

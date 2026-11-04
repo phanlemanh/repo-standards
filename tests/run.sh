@@ -373,5 +373,18 @@ steps "$n" True | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for 
 ( cd "$n" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert not g.has_agents(pathlib.Path('.'))" ) || miss "team repo wrongly detected as having agents"
 echo "ok  github-agents (or misses reported above)"
 
+# 24. capability ai: env keys, evals outside make check, valid tiers, no browser stacks
+for stack in python ts-node; do
+  a="$TMP/ai-$stack"; mkdir -p "$a" && git -C "$a" init -q -b main
+  python3 "$S/apply.py" --target "$a" --preset "$stack" --with ai --var project_name=Ai --var description=x --var owner=acme >/dev/null 2>&1 || miss "ai: apply failed on $stack"
+  grep -q '^CLAUDE_MODEL=' "$a/.env.example" 2>/dev/null && grep -q '^ANTHROPIC_API_KEY=$' "$a/.env.example" && grep -q '^APP_ENV=' "$a/.env.example" || miss "ai: .env.example on $stack"
+  [ -f "$a/evals/tasks.json" ] && grep -q '^eval:' "$a/mk/ai.mk" 2>/dev/null || miss "ai: eval parts on $stack"
+  if grep -qE '^CHECK_TARGETS.*eval' "$a/mk/ai.mk" 2>/dev/null; then miss "ai: eval joined make check on $stack"; fi
+  [ "$(python3 -c "import json;print(len(json.load(open('$a/evals/tasks.json'))))" 2>/dev/null || echo 0)" -ge 5 ] || miss "ai: fewer than 5 eval tasks on $stack"
+done
+if python3 "$S/apply.py" --target "$TMP/bad-tier" --preset python --with ai --var ai_tier=magic --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "bad ai_tier accepted"; fi
+if python3 "$S/apply.py" --target "$TMP/ai-browser" --preset react-vite --with ai --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "ai accepted on a browser stack"; fi
+echo "ok  ai capability (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
