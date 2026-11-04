@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import pytest
@@ -74,6 +74,16 @@ async def test_marks_confirm_actions_and_queries() -> None:
     assert "human confirmation" in (tool.description or "")
     assert tool.annotations is not None
     assert tool.annotations.read_only_hint is True
+
+
+@pytest.mark.anyio
+async def test_confirm_actions_require_user_interaction() -> None:
+    handlers = cast(ActionHandlers, FakeHandlers())
+    plain_echo = replace(ECHO, name="plainEcho", agent="allowed")
+    async with Client(build_server(handlers, AGENT, (ECHO, plain_echo))) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+    assert tools["echo"].meta == {"anthropic/requiresUserInteraction": True}
+    assert not tools["plainEcho"].meta
 
 
 @pytest.mark.anyio

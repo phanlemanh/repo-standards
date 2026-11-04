@@ -19,18 +19,24 @@ const echo = {
   output: "Thing",
   inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
 } as unknown as ActionSpec;
-const handlers = {
-  echo: (input: { text: string }) => Promise.resolve({ text: input.text }),
-} as unknown as ActionHandlers;
+const echoConfirm = {
+  ...echo,
+  name: "echoConfirm",
+  agent: "confirm",
+  roles: ["agent", "staff"],
+} as unknown as ActionSpec;
+const echoHandler = (input: { text: string }) => Promise.resolve({ text: input.text });
+const handlers = { echo: echoHandler, echoConfirm: echoHandler } as unknown as ActionHandlers;
 
 const app = buildApp(
   {},
   {
     handlers,
-    actions: [echo],
+    actions: [echo, echoConfirm],
     apiKeys: new Map([
       ["agent-key", "agent"],
       ["other-key", "someone"],
+      ["staff-key", "staff"],
     ]),
   },
 );
@@ -62,6 +68,13 @@ describe("HTTP API", () => {
     const ok = await post("echo", "agent-key", { text: "hi" });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toEqual({ text: "hi" });
+  });
+
+  it("refuses a confirm action for agents, not for people", async () => {
+    const refused = await post("echoConfirm", "agent-key", { text: "hi" });
+    expect(refused.statusCode).toBe(403);
+    expect(JSON.stringify(refused.json())).toContain("confirm");
+    expect((await post("echoConfirm", "staff-key", { text: "hi" })).statusCode).toBe(200);
   });
 
   it("serves the contract", async () => {

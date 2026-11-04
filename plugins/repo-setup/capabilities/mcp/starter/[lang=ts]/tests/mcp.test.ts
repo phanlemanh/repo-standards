@@ -56,6 +56,14 @@ describe("MCP server", () => {
     expect(tools[0]?.annotations?.readOnlyHint).toBe(true);
   });
 
+  it("requires user interaction for confirm actions only", async () => {
+    const plain = { ...echo, name: "plainEcho", agent: "allowed" } as unknown as ActionSpec;
+    const { tools } = await (await connect([echo, plain])).listTools();
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    expect(byName.get("echo")?._meta).toEqual({ "anthropic/requiresUserInteraction": true });
+    expect(byName.get("plainEcho")?._meta).toBeUndefined();
+  });
+
   it("runs an allowed action", async () => {
     const result = await (await connect([echo])).callTool({ name: "echo", arguments: { text: "hi" } });
     expect(result.isError).toBe(false);

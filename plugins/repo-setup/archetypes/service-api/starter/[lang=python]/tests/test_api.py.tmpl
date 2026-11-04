@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -42,12 +42,14 @@ ECHO = ActionSpec(
     },
 )
 
+ECHO_CONFIRM = replace(ECHO, name="echoConfirm", agent="confirm", roles=("agent", "staff"))
+
 app = FastAPI()
 app.include_router(
     build_router(
         cast(ActionHandlers, FakeHandlers()),
-        {"agent-key": "agent", "other-key": "someone"},
-        actions=(ECHO,),
+        {"agent-key": "agent", "other-key": "someone", "staff-key": "staff"},
+        actions=(ECHO, ECHO_CONFIRM),
     )
 )
 client = TestClient(app)
@@ -75,6 +77,17 @@ def test_checks_key_action_role_and_input_in_that_order() -> None:
     )
     assert ok.status_code == 200
     assert ok.json() == {"text": "hi"}
+
+
+def test_agent_cannot_run_a_confirm_action() -> None:
+    headers = {"Authorization": "Bearer agent-key"}
+    response = client.post("/v1/actions/echoConfirm", json={"text": "hi"}, headers=headers)
+    assert response.status_code == 403
+    assert "confirm" in response.json()["detail"]
+
+
+def test_human_role_runs_a_confirm_action() -> None:
+    assert post("echoConfirm", "staff-key", {"text": "hi"}) == 200
 
 
 def test_serves_the_contract() -> None:

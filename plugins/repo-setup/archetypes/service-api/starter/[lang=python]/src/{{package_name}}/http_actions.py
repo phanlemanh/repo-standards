@@ -1,7 +1,8 @@
 """HTTP API generated from the ontology: `POST /v1/actions/{name}` for every action.
 
 Contract: contracts/openapi.json (served at /contract/openapi.json). Order of checks:
-API key -> action exists -> role may run it -> input valid -> handler. Responses to role
+API key -> action exists -> role may run it -> not an agent on a confirm action -> input valid
+-> handler. Responses to role
 "agent" have personal data redacted. Logs never contain request bodies.
 """
 
@@ -60,6 +61,9 @@ def build_router(
             raise HTTPException(status_code=404, detail=f"unknown action {name}")
         if not can(role, spec):
             raise HTTPException(status_code=403, detail=f"role {role} may not run {name}")
+        if role == "agent" and spec.agent == "confirm":
+            # No approval queue yet: an API call has no person to ask, so this stays closed.
+            raise HTTPException(status_code=403, detail=f"{name} needs human confirmation")
         args = body or {}
         errors = validate(spec.input_schema, args)
         if errors:

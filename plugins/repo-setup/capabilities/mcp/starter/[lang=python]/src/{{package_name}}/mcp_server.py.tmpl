@@ -3,7 +3,7 @@
 Run with `make mcp` (Claude Code picks it up from .mcp.json). Safety rules applied here:
 the caller runs as role "agent"; actions it may not run are neither listed nor callable;
 arguments are checked against the action's input schema; personal data (`pii: true`) is
-redacted from everything returned; `agent: confirm` actions are marked for human confirmation.
+redacted from everything returned; `agent: confirm` actions ask MCP clients for a human.
 """
 
 from __future__ import annotations
@@ -20,6 +20,10 @@ from mcp.server.stdio import stdio_server
 
 from .actions import HANDLERS
 from .ontology_types import ACTIONS, ActionContext, ActionHandlers, ActionSpec, can, redact_pii
+
+# Claude Code asks a person before each call of such a tool, whatever the permission mode.
+# Other MCP clients may ignore it, and this server cannot tell whether anyone approved.
+REQUIRES_USER = {"anthropic/requiresUserInteraction": True}
 
 
 def agent_actions(
@@ -95,6 +99,7 @@ def build_server(
                         else a.description
                     ),
                     input_schema=a.input_schema,
+                    _meta=REQUIRES_USER if a.agent == "confirm" else None,
                     annotations=types.ToolAnnotations(
                         read_only_hint=a.kind == "query",
                         destructive_hint=a.kind == "delete",

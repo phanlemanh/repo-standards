@@ -6,7 +6,9 @@
  *  - the caller runs as role "agent"; actions it may not run are neither listed nor callable;
  *  - arguments are checked against the action's input schema before the handler runs;
  *  - personal data (`pii: true`) is redacted from everything returned;
- *  - actions with `agent: confirm` are marked so MCP clients ask a human first.
+ *  - actions with `agent: confirm` carry a marker that makes Claude Code ask a person before each
+ *    call, whatever the permission mode. Other clients may ignore it, and this server cannot tell
+ *    whether anyone approved.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -85,6 +87,7 @@ export function buildServer(
       description:
         a.agent === "confirm" ? `${a.description} Requires human confirmation.` : a.description,
       inputSchema: a.inputSchema as { type: "object" },
+      ...(a.agent === "confirm" ? { _meta: { "anthropic/requiresUserInteraction": true } } : {}),
       annotations: {
         readOnlyHint: a.kind === "query",
         destructiveHint: a.kind === "delete",
