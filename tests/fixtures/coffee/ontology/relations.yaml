@@ -1,0 +1,5 @@
+relations:
+  - from: Customer
+    name: places
+    to: Order
+    cardinality: one-to-many

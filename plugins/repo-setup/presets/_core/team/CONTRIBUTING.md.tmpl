@@ -1,0 +1,40 @@
+# Contributing to {{project_name}}
+
+## Setup
+
+```bash
+make setup
+pre-commit install   # format, lint and secret scan on every commit
+make check
+```
+
+## Workflow
+
+1. Create a branch from `main`: `feat/short-description`, `fix/...`, `docs/...`.
+2. Keep the change small and focused. One concern per PR.
+3. Add or update tests for every behaviour change.
+4. Run `make check` locally — it is exactly what CI runs.
+5. Open a PR using the template. CI must be green and one approval is required.
+6. Squash-merge. The squash commit message follows Conventional Commits.
+
+## Commit messages — Conventional Commits
+
+```
+feat: add VIP discount to checkout
+fix(order): prevent double charge on retry
+docs: explain points rule in glossary
+refactor | test | chore | ci | perf: ...
+```
+
+`feat` and `fix` drive automatic versioning and the CHANGELOG. Use `feat!:` or
+a `BREAKING CHANGE:` footer for breaking changes.
+
+## Domain changes
+
+If you add or change a business concept or rule, update `ontology/` in the same PR
+and mention it in the PR description — ontology changes need a reviewer who knows the domain.
+
+## Decisions and incidents
+
+Record significant decisions in `wiki/decisions/` and production incidents in
+`wiki/incidents/` (formats in `ontology/page-types.yaml`).

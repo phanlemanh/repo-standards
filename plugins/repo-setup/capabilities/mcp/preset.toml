@@ -1,0 +1,12 @@
+description = "MCP server: ontology actions become tools for AI agents (role 'agent', PII redacted, permission-checked)"
+stacks = ["ts-node", "python"]
+when = "AI agents (Claude, internal copilots) should operate the system through the same actions as the API"
+
+# Wiring/example code: not added in --adopt mode.
+sample = ["src/actions/**", "src/*/actions.py"]
+
+[starter]
+install = [
+  "[lang=ts] npm install @modelcontextprotocol/sdk",
+  "[lang=python] uv add \"mcp>=2\"",
+]

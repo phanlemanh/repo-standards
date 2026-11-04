@@ -1,0 +1,33 @@
+actions:
+  - name: placeOrder
+    description: A customer places an order.
+    entity: Order
+    kind: create
+    input:
+      customerId: { type: ref, target: Customer, required: true }
+      total: { type: number, required: true }
+      channel: { type: enum, values: [counter, app], required: true }
+    output: Order
+    roles: [staff, agent]
+    agent: allowed
+  - name: getCustomer
+    description: Look up a customer by id.
+    entity: Customer
+    kind: query
+    input:
+      id: { type: uuid, required: true }
+    output: Customer
+    roles: [staff, agent]
+    agent: allowed
+    idempotent: true
+  - name: awardPoints
+    description: Give a customer extra loyalty points.
+    entity: Customer
+    kind: update
+    input:
+      customerId: { type: ref, target: Customer, required: true }
+      points: { type: integer, required: true }
+      reason: { type: string }
+    output: Customer
+    roles: [manager, agent]
+    agent: confirm

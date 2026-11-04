@@ -1,0 +1,477 @@
+# Top-tier repository checklist used by scripts/doctor.py
+#
+# Each [[check]]:
+#   id       unique key
+#   level    "starter" (every repo) or "team" (shared, long-lived repos)
+#   weight   importance, 1-3
+#   title    what good looks like
+#   why      one line: why top teams do this
+#   fix      how to fix (a repo-setup command or a manual step)
+#   type     "exists" (default) | "not_committed" | "manual"
+#   any      list of alternatives; the check passes if ANY alternative matches.
+#            Alternative fields: paths (globs, relative to repo root),
+#            pattern (regex searched in the matched files), min_lines.
+#
+# Edit this file to encode YOUR team's standard. Doctor picks changes up immediately.
+
+# ---------------------------------------------------------------- starter: foundations
+[[check]]
+id = "readme"
+level = "starter"
+weight = 3
+title = "README explains what the project is and how to run it"
+why = "A newcomer (or an AI agent) should get running in 5 minutes."
+fix = "Run setup-new, or write README.md with a Quick start section."
+any = [{ paths = ["README.md", "README.rst", "README"], min_lines = 10 }]
+
+[[check]]
+id = "license"
+level = "starter"
+weight = 1
+title = "License file"
+why = "Makes usage rights explicit, even for internal code."
+fix = "Add LICENSE (setup-new adds MIT by default; change if your company requires another)."
+any = [{ paths = ["LICENSE", "LICENSE.*", "LICENCE", "COPYING"] }]
+
+[[check]]
+id = "gitignore"
+level = "starter"
+weight = 2
+title = ".gitignore covers dependencies, build output and secrets"
+why = "Keeps junk and secrets out of history."
+fix = "Use the preset .gitignore; make sure it ignores .env."
+any = [{ paths = [".gitignore"], pattern = '(?m)^\.env\b' }]
+
+[[check]]
+id = "editorconfig"
+level = "starter"
+weight = 1
+title = ".editorconfig for consistent whitespace across editors"
+why = "Removes noisy whitespace diffs."
+fix = "Add .editorconfig from the core preset."
+any = [{ paths = [".editorconfig"] }]
+
+[[check]]
+id = "gitattributes"
+level = "starter"
+weight = 1
+title = ".gitattributes normalises line endings"
+why = "Prevents CRLF/LF churn between Windows and macOS/Linux."
+fix = "Add .gitattributes with '* text=auto eol=lf'."
+any = [{ paths = [".gitattributes"] }]
+
+[[check]]
+id = "runtime_pinned"
+level = "starter"
+weight = 2
+title = "Runtime version pinned"
+why = "Same Node/Python version on every machine and in CI."
+fix = "Add .nvmrc / .python-version / .tool-versions / mise.toml."
+any = [{ paths = [".nvmrc", ".node-version", ".python-version", ".tool-versions", "mise.toml", ".mise.toml", "go.mod", "rust-toolchain.toml"] }]
+
+[[check]]
+id = "lockfile"
+level = "starter"
+weight = 3
+title = "Dependency lockfile committed"
+why = "Reproducible installs; no surprise upgrades."
+fix = "Run the preset install command (npm install / uv sync) and commit the lockfile."
+any = [{ paths = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock", "Cargo.lock", "go.sum"] }]
+
+[[check]]
+id = "task_runner"
+level = "starter"
+weight = 2
+title = "One-command tasks (setup, lint, test, check)"
+why = "Nobody has to remember tool-specific commands; agents can verify their work."
+fix = "Add a Makefile/justfile with setup, lint, typecheck, test, check targets."
+any = [
+  { paths = ["Makefile", "makefile"], pattern = '(?m)^check:' },
+  { paths = ["justfile", "Justfile"], pattern = '(?m)^check' },
+  { paths = ["Taskfile.yml", "Taskfile.yaml"], pattern = 'check:' },
+]
+
+[[check]]
+id = "formatter_linter"
+level = "starter"
+weight = 3
+title = "Formatter and linter configured"
+why = "Style debates end; many bugs are caught before review."
+fix = "Use the preset config (ESLint+Prettier, or Ruff)."
+any = [
+  { paths = ["eslint.config.*", ".eslintrc", ".eslintrc.*", "biome.json", "biome.jsonc"] },
+  { paths = ["ruff.toml", ".ruff.toml"] },
+  { paths = ["pyproject.toml"], pattern = '\[tool\.ruff' },
+  { paths = [".golangci.yml", ".golangci.yaml"] },
+]
+
+[[check]]
+id = "type_check"
+level = "starter"
+weight = 2
+title = "Strict type checking"
+why = "Whole classes of bugs disappear; refactors (human or AI) become safe."
+fix = "tsconfig.json with \"strict\": true, or [tool.mypy] strict = true."
+any = [
+  { paths = ["tsconfig.json"], pattern = '"strict"\s*:\s*true' },
+  { paths = ["pyproject.toml"], pattern = '(?s)\[tool\.mypy\].*?strict\s*=\s*true' },
+  { paths = ["mypy.ini", "pyrightconfig.json"] },
+  { paths = ["go.mod"] },
+]
+
+[[check]]
+id = "tests"
+level = "starter"
+weight = 3
+title = "Automated tests exist"
+why = "The safety net that lets people and agents change code confidently."
+fix = "Add at least one test (the presets include an example)."
+any = [
+  { paths = ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.test.js"] },
+  { paths = ["**/test_*.py", "**/*_test.py"] },
+  { paths = ["**/*_test.go"] },
+]
+
+[[check]]
+id = "ci"
+level = "starter"
+weight = 3
+title = "CI runs checks on every push / PR"
+why = "Rules enforced by CI are always followed; rules in people's heads are not."
+fix = "Add .github/workflows/ci.yml from the preset."
+any = [
+  { paths = [".github/workflows/*.yml", ".github/workflows/*.yaml"], pattern = '(?i)test|check' },
+  { paths = [".gitlab-ci.yml", "azure-pipelines.yml", "bitbucket-pipelines.yml"] },
+]
+
+[[check]]
+id = "env_example"
+level = "starter"
+weight = 1
+title = ".env.example documents required configuration"
+why = "New machines know which variables to set, without sharing secrets."
+fix = "Add .env.example with every variable and a dummy value."
+any = [{ paths = [".env.example", ".env.sample", ".env.template"] }]
+
+[[check]]
+id = "env_not_committed"
+level = "starter"
+weight = 3
+type = "not_committed"
+title = "No .env / secret files committed"
+why = "Leaked secrets in git history are the most common serious incident."
+fix = "git rm --cached .env, rotate the secrets, add .env to .gitignore."
+any = [{ paths = [".env", ".env.local", ".env.production", "*.pem", "id_rsa"] }]
+
+# ---------------------------------------------------------------- starter: AI-agent ready
+[[check]]
+id = "agent_guide"
+level = "starter"
+weight = 3
+title = "Agent guide (CLAUDE.md / AGENTS.md) with commands and rules"
+why = "AI agents start every session from zero; this is their onboarding doc."
+fix = "Run setup-new, or write CLAUDE.md listing make targets and conventions."
+any = [{ paths = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"], min_lines = 10 }]
+
+[[check]]
+id = "ontology"
+level = "starter"
+weight = 2
+title = "Domain ontology: glossary + entity definitions"
+why = "One shared meaning for business concepts, for people, code and agents."
+fix = "Add ontology/glossary.md and ontology/entities/*.yaml (setup-new creates the skeleton)."
+any = [{ paths = ["ontology/glossary.md"] }]
+
+[[check]]
+id = "wiki"
+level = "starter"
+weight = 2
+title = "Project wiki with index and decision records"
+why = "Keeps the 'why' (decisions, incidents) next to the code, maintained by agents."
+fix = "Add wiki/index.md and wiki/decisions/0001-*.md."
+any = [
+  { paths = ["wiki/index.md"] },
+  { paths = ["docs/adr/*.md", "docs/decisions/*.md"] },
+]
+
+[[check]]
+id = "ontology_wiki_valid"
+level = "starter"
+weight = 2
+type = "command"
+command = ["{python}", "tools/wiki_lint.py"]
+requires = "tools/wiki_lint.py"
+title = "ontology/ and wiki/ are consistent (wiki-lint passes)"
+why = "A wrong map is worse than no map: broken links and unknown entities mislead agents."
+fix = "Run: python3 tools/wiki_lint.py and fix the errors (or run setup-new to add the tool)."
+
+[[check]]
+id = "ontology_in_check"
+level = "starter"
+weight = 1
+title = "make check runs wiki-lint and verifies generated code"
+why = "CI keeps the ontology, the wiki and the generated types in sync automatically."
+fix = "Add an 'ontology' target (wiki_lint.py + ontology_codegen.py --check) to make check."
+any = [{ paths = ["Makefile", "justfile"], pattern = 'wiki_lint' }]
+
+# ---------------------------------------------------------------- team: collaboration & security
+[[check]]
+id = "pre_commit"
+level = "team"
+weight = 2
+title = "Pre-commit hooks run format/lint/secret scan locally"
+why = "Problems are caught seconds after they are made, not in review."
+fix = "Add .pre-commit-config.yaml (team level), then run: pre-commit install"
+any = [{ paths = [".pre-commit-config.yaml", "lefthook.yml", "lefthook.yaml", ".husky/pre-commit"] }]
+
+[[check]]
+id = "secret_scan"
+level = "team"
+weight = 3
+title = "Secret scanning (gitleaks / trufflehog)"
+why = "Blocks credentials before they reach the remote."
+fix = "Add the gitleaks hook to .pre-commit-config.yaml and run pre-commit in CI."
+any = [{ paths = [".pre-commit-config.yaml", ".github/workflows/*.yml", "lefthook.yml"], pattern = '(?i)gitleaks|trufflehog' }]
+
+[[check]]
+id = "deps_update"
+level = "team"
+weight = 2
+title = "Automated dependency updates"
+why = "Small, frequent upgrades instead of a painful yearly migration."
+fix = "Add .github/dependabot.yml or renovate.json."
+any = [{ paths = [".github/dependabot.yml", ".github/dependabot.yaml", "renovate.json", ".renovaterc", ".renovaterc.json", ".github/renovate.json"] }]
+
+[[check]]
+id = "code_scanning"
+level = "team"
+weight = 2
+title = "Vulnerability / code scanning in CI"
+why = "Known-vulnerable dependencies and risky code get flagged automatically."
+fix = "Add .github/workflows/security.yml from the team preset."
+any = [{ paths = [".github/workflows/*.yml", ".github/workflows/*.yaml"], pattern = '(?i)codeql|trivy|semgrep|npm audit|pip-audit|osv-scanner' }]
+
+[[check]]
+id = "coverage_threshold"
+level = "team"
+weight = 2
+title = "Test coverage is measured with a minimum threshold"
+why = "Coverage can only go down by a deliberate decision, not by accident."
+fix = "Vitest: coverage.thresholds in vitest.config.ts. Python: pytest-cov + fail_under in .coveragerc."
+any = [
+  { paths = ["vitest.config.*", "vite.config.*"], pattern = 'thresholds' },
+  { paths = ["jest.config.*", "package.json"], pattern = 'coverageThreshold' },
+  { paths = [".coveragerc", "pyproject.toml", "setup.cfg", "tox.ini"], pattern = 'fail_under' },
+  { paths = [".nycrc", ".nycrc.json", ".c8rc.json"], pattern = '(?i)lines|check-coverage' },
+]
+
+[[check]]
+id = "conventional_commits"
+level = "team"
+weight = 1
+title = "Commit messages / PR titles are checked (Conventional Commits)"
+why = "Automated versioning and changelogs depend on well-formed messages."
+fix = "Add the conventional-pre-commit hook and .github/workflows/pr-title.yml."
+any = [
+  { paths = [".pre-commit-config.yaml", "lefthook.yml"], pattern = 'conventional-pre-commit|commitlint|commitizen' },
+  { paths = [".github/workflows/*.yml"], pattern = 'semantic-pull-request|commitlint' },
+  { paths = ["commitlint.config.*", ".commitlintrc", ".commitlintrc.*"] },
+]
+
+[[check]]
+id = "dev_env"
+level = "team"
+weight = 1
+title = "Reproducible dev environment (dev container / compose / nix)"
+why = "A new laptop — or Windows — is productive in minutes."
+fix = "Add .devcontainer/devcontainer.json (team preset)."
+any = [{ paths = [".devcontainer/devcontainer.json", ".devcontainer/*/devcontainer.json", "compose.yaml", "docker-compose.yml", "flake.nix", "devbox.json"] }]
+
+[[check]]
+id = "codeowners"
+level = "team"
+weight = 1
+title = "CODEOWNERS assigns reviewers automatically"
+why = "Every change is reviewed by someone who knows that area."
+fix = "Add .github/CODEOWNERS."
+any = [{ paths = ["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"] }]
+
+[[check]]
+id = "pr_template"
+level = "team"
+weight = 1
+title = "Pull request template with a checklist"
+why = "Consistent PR descriptions; tests and docs are not forgotten."
+fix = "Add .github/pull_request_template.md."
+any = [{ paths = [".github/pull_request_template.md", ".github/PULL_REQUEST_TEMPLATE.md", ".github/PULL_REQUEST_TEMPLATE/*.md"] }]
+
+[[check]]
+id = "issue_templates"
+level = "team"
+weight = 1
+title = "Issue templates (bug, feature)"
+why = "Bug reports arrive with the information needed to act."
+fix = "Add .github/ISSUE_TEMPLATE/*.md."
+any = [{ paths = [".github/ISSUE_TEMPLATE/*.md", ".github/ISSUE_TEMPLATE/*.yml"] }]
+
+[[check]]
+id = "contributing"
+level = "team"
+weight = 1
+title = "CONTRIBUTING.md: branching, commits, review"
+why = "Shared workflow without tribal knowledge."
+fix = "Add CONTRIBUTING.md."
+any = [{ paths = ["CONTRIBUTING.md", "docs/CONTRIBUTING.md", ".github/CONTRIBUTING.md"] }]
+
+[[check]]
+id = "security_policy"
+level = "team"
+weight = 1
+title = "SECURITY.md: how to report vulnerabilities"
+why = "Researchers and colleagues know where to send reports."
+fix = "Add SECURITY.md."
+any = [{ paths = ["SECURITY.md", ".github/SECURITY.md"] }]
+
+[[check]]
+id = "release"
+level = "team"
+weight = 1
+title = "Changelog and automated releases"
+why = "Versions and release notes come from commit history, not memory."
+fix = "Add CHANGELOG.md and a release-please workflow."
+any = [
+  { paths = [".github/workflows/*.yml"], pattern = '(?i)release-please|semantic-release|changesets' },
+  { paths = [".changeset/config.json", ".releaserc", ".releaserc.*"] },
+]
+
+# ---------------------------------------------------------------- AI-native SDLC
+[[check]]
+id = "agent_permissions"
+level = "starter"
+weight = 2
+title = "Agent permissions: secrets unreadable, CI/governance not editable, risky commands gated"
+why = "Guardrails that hold even when an agent misunderstands the task."
+fix = "Add .claude/settings.json from the core preset (deny .env, workflows, force-push; ask before merge)."
+any = [{ paths = [".claude/settings.json"], pattern = '(?s)"deny".*\.env' }]
+
+[[check]]
+id = "autonomy_policy"
+level = "team"
+weight = 3
+title = "Autonomy policy: which changes agents may merge, which need a human (low/medium/high)"
+why = "Humans stay at the edges by rule, not by habit; the PR pipeline enforces it."
+fix = "Add governance/autonomy.yaml and tools/autonomy.py (team level), then `make codeowners`."
+any = [{ paths = ["governance/autonomy.yaml"], pattern = '(?ms)^high:(?=.*governance/\*\*)(?=.*\.github/\*\*)' }]
+
+[[check]]
+id = "autonomy_codeowners"
+level = "team"
+weight = 2
+type = "command"
+command = ["{python}", "tools/autonomy.py", "--check-codeowners"]
+requires = "tools/autonomy.py"
+title = "CODEOWNERS matches the autonomy policy"
+why = "High-tier paths must request a human reviewer automatically."
+fix = "Run: make codeowners"
+
+[[check]]
+id = "agent_workflows"
+level = "team"
+weight = 2
+title = "Agent workflows: intent issues -> spec -> PR, independent agent review, tier gate"
+why = "Agents pick up work from issues and every PR gets the same gate, without anyone remembering."
+fix = "Add .github/workflows/agent-implement.yml and pr-pipeline.yml (team level)."
+any = [{ paths = [".github/workflows/*.yml"], pattern = '(?s)autonomy\.py.*claude-code-action' }]
+
+[[check]]
+id = "intent_template"
+level = "team"
+weight = 1
+title = "Intent issue form (what / why / acceptance criteria)"
+why = "Agents need testable acceptance criteria; the form asks for them."
+fix = "Add .github/ISSUE_TEMPLATE/intent.yml."
+any = [{ paths = [".github/ISSUE_TEMPLATE/intent.yml", ".github/ISSUE_TEMPLATE/intent.yaml"] }]
+
+# ---------------------------------------------------------------- archetypes, capabilities, deploy
+[[check]]
+id = "api_contract"
+level = "starter"
+weight = 3
+archetypes = ["service-api"]
+title = "API contract generated from the ontology and checked for breaking changes"
+why = "Clients and agents rely on the contract; breaking it silently is the costliest API bug."
+fix = "make gen (writes contracts/openapi.json); keep api-contract and api-compat in make check."
+any = [{ paths = ["Makefile", "mk/*.mk"], pattern = 'api-compat' }]
+
+[[check]]
+id = "api_contract_current"
+level = "starter"
+weight = 2
+archetypes = ["service-api"]
+type = "command"
+command = ["{python}", "tools/openapi_gen.py", "--check"]
+requires = "tools/openapi_gen.py"
+title = "contracts/openapi.json is up to date with ontology/"
+why = "A stale contract misleads every consumer."
+fix = "Run: make gen"
+
+[[check]]
+id = "module_boundaries"
+level = "starter"
+weight = 3
+archetypes = ["modular-monolith"]
+type = "command"
+command = ["{python}", "tools/boundaries.py"]
+requires = "tools/boundaries.py"
+title = "Module boundaries hold (public APIs only, declared dependencies)"
+why = "Boundaries are what keep a monolith changeable, by people and by agents."
+fix = "Run: python3 tools/boundaries.py and fix imports or architecture/modules.yaml."
+
+[[check]]
+id = "mcp_server"
+level = "starter"
+weight = 2
+capabilities = ["mcp"]
+title = "MCP server exposes ontology actions to agents (.mcp.json)"
+why = "Agents operate the system through the same permission-checked actions as the API."
+fix = "Re-run apply with --with mcp."
+any = [{ paths = [".mcp.json"], pattern = 'mcpServers' }]
+
+[[check]]
+id = "container_hardening"
+level = "starter"
+weight = 2
+deploy = ["container"]
+title = "Container image: multi-stage, non-root user, healthcheck"
+why = "Small attack surface and self-healing deployments."
+fix = "Use the Dockerfile from the container deploy layer."
+any = [{ paths = ["Dockerfile"], pattern = '(?s)FROM .* AS .*FROM .*USER .*HEALTHCHECK' }]
+
+# ---------------------------------------------------------------- GitHub (scored with --remote, otherwise reminders)
+[[check]]
+id = "branch_protection"
+level = "team"
+weight = 3
+type = "remote"
+probe = "branch_protection"
+title = "Branch protection on the default branch: PR required, CI must pass, 1+ approval"
+why = "Makes all the checks above mandatory instead of optional."
+fix = "GitHub > Settings > Rules (or Branches); setup-new can do it with gh. Verify: doctor.py --remote"
+
+[[check]]
+id = "ci_green"
+level = "team"
+weight = 2
+type = "remote"
+probe = "ci_green"
+title = "Latest CI runs on the default branch are green"
+why = "A red main blocks everyone and hides new failures."
+fix = "Open the failing run (gh run view --log-failed) and fix it first."
+
+[[check]]
+id = "secrets_store"
+level = "team"
+type = "manual"
+title = "Secrets live in a secret manager / CI secrets, not in files"
+why = "Rotation and access control."
+fix = "Use GitHub Actions secrets, 1Password, Vault, AWS/GCP secret manager."

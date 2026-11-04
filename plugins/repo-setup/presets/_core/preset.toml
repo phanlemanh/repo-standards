@@ -1,0 +1,49 @@
+# Shared by every preset. See scripts/apply.py for the meaning of each key.
+
+# Line-based files: in --adopt mode, missing lines are appended instead of a conflict.
+merge_lines = [".gitignore", ".gitattributes"]
+
+# In --adopt mode a preset file is skipped when the repo already has an equivalent.
+[[equivalents]]
+files = ["README.md"]
+existing = ["README", "README.*", "readme.md", "docs/README.md"]
+
+[[equivalents]]
+files = ["LICENSE"]
+existing = ["LICENSE", "LICENSE.*", "LICENCE", "LICENCE.*", "COPYING", "COPYING.*"]
+
+[[equivalents]]
+files = ["AGENTS.md", "CLAUDE.md"]
+existing = ["AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"]
+
+[[equivalents]]
+files = [".env.example"]
+existing = [".env.example", ".env.sample", ".env.template", ".env.dist"]
+
+[[equivalents]]
+files = ["CHANGELOG.md"]
+existing = ["CHANGELOG", "CHANGELOG.*", "HISTORY.*", "CHANGES.*"]
+
+[[equivalents]]
+files = [".github/pull_request_template.md"]
+existing = [".github/PULL_REQUEST_TEMPLATE.md", ".github/PULL_REQUEST_TEMPLATE/*", "docs/pull_request_template.md"]
+
+[[equivalents]]
+files = [".github/CODEOWNERS"]
+existing = ["CODEOWNERS", "docs/CODEOWNERS"]
+
+[[equivalents]]
+files = [".github/ISSUE_TEMPLATE/bug_report.md", ".github/ISSUE_TEMPLATE/feature_request.md"]
+existing = [".github/ISSUE_TEMPLATE/*"]
+
+[[equivalents]]
+files = ["CONTRIBUTING.md"]
+existing = ["docs/CONTRIBUTING.md", ".github/CONTRIBUTING.md"]
+
+[[equivalents]]
+files = ["SECURITY.md"]
+existing = [".github/SECURITY.md", "docs/SECURITY.md"]
+
+[vars]
+# Extra Dockerfile lines contributed by an archetype (deploy/container uses it).
+docker_extra_copy = ""

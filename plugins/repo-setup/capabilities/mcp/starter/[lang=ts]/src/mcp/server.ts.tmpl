@@ -1,0 +1,111 @@
+/**
+ * MCP server: every ontology action that allows agents becomes a tool.
+ * One definition (ontology/actions.yaml) drives the API, the types and what AI agents may do.
+ *
+ * Safety rules applied here, not left to the agent:
+ *  - the caller runs as role "agent"; actions it may not run are neither listed nor callable;
+ *  - arguments are checked against the action's input schema before the handler runs;
+ *  - personal data (`pii: true`) is redacted from everything returned;
+ *  - actions with `agent: confirm` are marked so MCP clients ask a human first.
+ */
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+import { handlers as defaultHandlers } from "../actions/index.js";
+import {
+  ACTIONS,
+  can,
+  redactPII,
+  type ActionContext,
+  type ActionHandlers,
+  type ActionSpec,
+} from "../generated/ontology.js";
+
+type Json = Record<string, unknown>;
+
+export function agentActions(
+  ctx: ActionContext,
+  actions: readonly ActionSpec[] = ACTIONS,
+): ActionSpec[] {
+  return actions.filter((a) => a.agent !== "forbidden" && can(ctx.role, a));
+}
+
+/** Minimal JSON-schema check: required fields, no unknown fields, primitive types, enums. */
+export function validate(schema: Json, args: Json): string[] {
+  const errors: string[] = [];
+  const props = (schema["properties"] ?? {}) as Record<string, Json>;
+  for (const name of (schema["required"] ?? []) as string[]) {
+    if (!(name in args)) errors.push(`missing '${name}'`);
+  }
+  for (const [name, value] of Object.entries(args)) {
+    const prop = props[name];
+    if (!prop) {
+      errors.push(`unknown field '${name}'`);
+      continue;
+    }
+    const type = prop["type"];
+    const ok =
+      (type === "string" && typeof value === "string") ||
+      (type === "number" && typeof value === "number") ||
+      (type === "integer" && Number.isInteger(value)) ||
+      (type === "boolean" && typeof value === "boolean") ||
+      type === undefined;
+    if (!ok) errors.push(`'${name}' must be ${String(type)}`);
+    const allowed = prop["enum"] as unknown[] | undefined;
+    if (allowed && !allowed.includes(value)) errors.push(`'${name}' must be one of ${allowed.join(", ")}`);
+  }
+  return errors;
+}
+
+/** Personal data removed from an action's output (by its output entity). */
+export function redactOutput(spec: ActionSpec, value: unknown): unknown {
+  const entity = spec.output?.replace("[]", "");
+  if (!entity) return value;
+  if (Array.isArray(value)) return value.map((v: unknown) => redactOutput(spec, v));
+  return value !== null && typeof value === "object" ? redactPII(entity, value) : value;
+}
+
+function text(body: unknown, isError = false) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(body ?? null) }], isError };
+}
+
+export function buildServer(
+  handlers: ActionHandlers = defaultHandlers,
+  ctx: ActionContext = { role: "agent", actor: process.env["MCP_ACTOR"] ?? "mcp-agent" },
+  actions: readonly ActionSpec[] = ACTIONS,
+): Server {
+  const server = new Server(
+    { name: "{{slug}}", version: "0.1.0" },
+    { capabilities: { tools: {} } },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: agentActions(ctx, actions).map((a) => ({
+      name: a.name,
+      description:
+        a.agent === "confirm" ? `${a.description} Requires human confirmation.` : a.description,
+      inputSchema: a.inputSchema as { type: "object" },
+      annotations: {
+        readOnlyHint: a.kind === "query",
+        destructiveHint: a.kind === "delete",
+        idempotentHint: a.idempotent,
+      },
+    })),
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const spec = agentActions(ctx, actions).find((a) => a.name === request.params.name);
+    if (!spec) return text({ error: `unknown or not allowed: ${request.params.name}` }, true);
+    const args = (request.params.arguments ?? {}) as Json;
+    const errors = validate(spec.inputSchema, args);
+    if (errors.length > 0) return text({ error: "invalid input", details: errors }, true);
+    const handler = handlers[spec.name] as (input: unknown, c: ActionContext) => Promise<unknown>;
+    try {
+      return text(redactOutput(spec, await handler(args, ctx)));
+    } catch (error) {
+      return text({ error: error instanceof Error ? error.message : String(error) }, true);
+    }
+  });
+
+  return server;
+}

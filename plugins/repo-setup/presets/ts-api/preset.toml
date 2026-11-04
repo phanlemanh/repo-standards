@@ -1,0 +1,8 @@
+description = "TypeScript web API: Fastify (structured logs, health check), on top of the ts-node preset"
+extends = "ts-node"
+
+[vars]
+stack = "TypeScript web API on Node.js 22 — Fastify, npm, ESLint, Prettier, Vitest"
+
+[starter]
+install = ["npm install fastify"]

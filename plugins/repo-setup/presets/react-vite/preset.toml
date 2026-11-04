@@ -1,0 +1,13 @@
+description = "React single-page app: Vite, React 19, Testing Library + jsdom, on top of the ts-node preset"
+extends = "ts-node"
+# Node-only files from the base preset that a browser app does not use.
+exclude = ["src/index.ts", "tsconfig.build.json"]
+
+[vars]
+stack = "React + TypeScript SPA — Vite, npm, ESLint (react-hooks), Prettier, Vitest + Testing Library"
+
+[starter]
+install = [
+  "npm install react react-dom",
+  "npm install --save-dev vite @vitejs/plugin-react @types/react @types/react-dom jsdom @testing-library/react @testing-library/jest-dom eslint-plugin-react-hooks eslint-plugin-react-refresh globals",
+]

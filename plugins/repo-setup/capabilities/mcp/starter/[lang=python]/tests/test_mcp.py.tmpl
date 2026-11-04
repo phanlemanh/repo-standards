@@ -1,0 +1,125 @@
+import json
+from dataclasses import dataclass
+from typing import Any, cast
+
+import pytest
+from mcp import Client
+from mcp.types import CallToolResult, TextContent
+
+from {{package_name}}.mcp_server import agent_actions, build_server, plain, redact_output, validate
+from {{package_name}}.ontology_types import ActionContext, ActionHandlers, ActionSpec
+
+
+@dataclass(frozen=True, kw_only=True)
+class EchoInput:
+    text: str
+
+
+@dataclass(frozen=True)
+class Thing:
+    text: str
+
+
+class FakeHandlers:
+    """A stand-in action, so the server is tested independently of the real domain."""
+
+    def echo(self, data: EchoInput, ctx: ActionContext) -> list[Thing]:
+        if data.text == "boom":
+            raise RuntimeError("boom")
+        return [Thing(text=data.text)]
+
+
+ECHO = ActionSpec(
+    name="echo",
+    method="echo",
+    description="Echo text back.",
+    entity="Thing",
+    kind="query",
+    roles=("agent",),
+    agent="confirm",
+    idempotent=True,
+    output="Thing[]",
+    input_type=EchoInput,
+    fields={"text": "text"},
+    input_schema={
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"],
+    },
+)
+AGENT = ActionContext(role="agent", actor="test")
+
+
+def fake_server() -> Any:
+    return build_server(cast(ActionHandlers, FakeHandlers()), AGENT, (ECHO,))
+
+
+def body(result: CallToolResult) -> Any:
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    return json.loads(content.text)
+
+
+@pytest.mark.anyio
+async def test_lists_exactly_the_actions_agents_may_run() -> None:
+    async with Client(build_server()) as client:
+        tools = await client.list_tools()
+    assert sorted(t.name for t in tools.tools) == sorted(a.name for a in agent_actions(AGENT))
+
+
+@pytest.mark.anyio
+async def test_marks_confirm_actions_and_queries() -> None:
+    async with Client(fake_server()) as client:
+        tool = (await client.list_tools()).tools[0]
+    assert "human confirmation" in (tool.description or "")
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is True
+
+
+@pytest.mark.anyio
+async def test_runs_an_allowed_action() -> None:
+    async with Client(fake_server()) as client:
+        result = await client.call_tool("echo", {"text": "hi"})
+    assert not result.is_error
+    assert body(result) == [{"text": "hi"}]
+
+
+@pytest.mark.anyio
+async def test_rejects_invalid_input_unknown_tools_and_handler_errors() -> None:
+    async with Client(fake_server()) as client:
+        assert (await client.call_tool("echo", {})).is_error
+        assert (await client.call_tool("nope", {})).is_error
+        failed = await client.call_tool("echo", {"text": "boom"})
+    assert failed.is_error
+    assert body(failed) == {"error": "boom"}
+
+
+def test_hides_actions_the_role_may_not_run() -> None:
+    assert agent_actions(ActionContext(role="nobody", actor="t"), (ECHO,)) == []
+
+
+def test_plain_and_redaction_helpers() -> None:
+    assert plain([Thing(text="x")]) == [{"text": "x"}]
+    assert redact_output(ECHO, [{"text": "x"}]) == [{"text": "x"}]
+    assert redact_output(ECHO, "plain") == "plain"
+
+
+def test_validates_input_against_the_action_schema() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "total": {"type": "number"},
+            "count": {"type": "integer"},
+            "ok": {"type": "boolean"},
+            "channel": {"type": "string", "enum": ["app"]},
+        },
+        "required": ["total"],
+    }
+    assert validate(schema, {"total": 1, "count": 2, "ok": True, "channel": "app"}) == []
+    assert validate(schema, {"channel": "web", "extra": 1, "count": 1.5, "ok": "y"}) == [
+        "missing 'total'",
+        "'channel' must be one of app",
+        "unknown field 'extra'",
+        "'count' must be integer",
+        "'ok' must be boolean",
+    ]

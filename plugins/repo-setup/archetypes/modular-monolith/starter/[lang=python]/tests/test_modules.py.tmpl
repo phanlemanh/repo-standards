@@ -1,0 +1,10 @@
+from {{package_name}}.modules.loyalty import points_for
+from {{package_name}}.modules.sales import OrderLine, order_total
+
+
+def test_sales_computes_the_order_total() -> None:
+    assert order_total([OrderLine(price=25_000, quantity=2)]) == 50_000
+
+
+def test_loyalty_awards_points_through_the_sales_public_api() -> None:
+    assert points_for([OrderLine(price=25_000, quantity=2)]) == 5

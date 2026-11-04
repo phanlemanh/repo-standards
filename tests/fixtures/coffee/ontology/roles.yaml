@@ -1,0 +1,4 @@
+roles:
+  - { name: staff, description: Shop employees }
+  - { name: manager, inherits: [staff], description: Can change loyalty points }
+  - { name: agent, description: AI agents acting through MCP or the API }

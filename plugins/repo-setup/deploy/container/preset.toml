@@ -1,0 +1,3 @@
+description = "Container deployment: multi-stage Dockerfile (non-root, healthcheck), compose for local runs, image push + rollout from CI with a human gate for production"
+stacks = ["ts-api", "fastapi"]
+when = "You run the service on any container platform (Kubernetes, Cloud Run, Fly.io, ECS, a VM with Docker)"

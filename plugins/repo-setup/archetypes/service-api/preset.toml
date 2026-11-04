@@ -1,0 +1,11 @@
+description = "API as a product: contract-first HTTP API generated from ontology actions (OpenAPI), API keys + roles, breaking-change check, MCP for agents"
+stacks = ["ts-api", "fastapi"]
+when = "Other teams, partners, apps or AI agents consume your system through an API"
+complexity = "medium"
+capabilities = ["mcp"]
+
+[vars]
+docker_extra_copy = "COPY contracts ./contracts"
+
+[starter]
+verify = ["make api-compat"]

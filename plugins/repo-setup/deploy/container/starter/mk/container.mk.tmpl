@@ -1,0 +1,13 @@
+# Container (repo-setup deploy layer): build and run the production image locally.
+.PHONY: image up down
+IMAGE ?= {{slug}}
+TAG ?= local
+
+image: ## Build the production image
+	docker build -t $(IMAGE):$(TAG) .
+
+up: ## Run the production image locally (compose.yaml)
+	docker compose up --build -d
+
+down: ## Stop the local containers
+	docker compose down

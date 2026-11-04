@@ -1,0 +1,61 @@
+description = "TypeScript on Node.js: ESLint + Prettier, strict tsc, Vitest, npm"
+# Changed by the install step / the team; never reported as conflicts once they exist.
+user_owned = ["package.json"]
+
+# Example code: not added in --adopt mode.
+sample = ["src/**", "tests/**"]
+
+[vars]
+lang = "ts"
+stack = "TypeScript on Node.js 22 — npm, ESLint, Prettier, Vitest"
+runtime = "Node.js 22 (see .nvmrc)"
+
+[starter]
+# Resolves current versions and writes package-lock.json.
+install = [
+  "npm install --save-dev typescript tsx @types/node eslint @eslint/js typescript-eslint prettier eslint-config-prettier vitest",
+  "make gen",
+  "npm run format",
+]
+verify = ["make check", "npm run build"]
+
+[team]
+install = ["npm install --save-dev @vitest/coverage-v8", "pre-commit install"]
+verify = ["pre-commit run --all-files"]
+
+
+[[equivalents]]
+files = ["eslint.config.js"]
+existing = [".eslintrc", ".eslintrc.*", "eslint.config.*", "biome.json", "biome.jsonc"]
+
+[[equivalents]]
+files = [".prettierrc.json", ".prettierignore"]
+existing = [".prettierrc", ".prettierrc.*", "prettier.config.*", "biome.json", "biome.jsonc"]
+
+[[equivalents]]
+files = [".nvmrc"]
+existing = [".nvmrc", ".node-version", ".tool-versions", "mise.toml", ".mise.toml"]
+
+[[equivalents]]
+files = ["tsconfig.json", "tsconfig.build.json"]
+existing = ["tsconfig.json", "tsconfig.*.json"]
+
+[[equivalents]]
+files = ["Makefile"]
+existing = ["Makefile", "makefile", "justfile", "Justfile", "Taskfile.yml"]
+
+[[equivalents]]
+files = [".github/workflows/ci.yml"]
+existing = [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml", "azure-pipelines.yml"]
+
+[[equivalents]]
+files = [".github/dependabot.yml"]
+existing = ["renovate.json", ".renovaterc", ".renovaterc.*", ".github/renovate.json"]
+
+[[equivalents]]
+files = [".pre-commit-config.yaml"]
+existing = ["lefthook.yml", "lefthook.yaml", ".husky/*"]
+
+[[equivalents]]
+files = [".github/workflows/release.yml", "release-please-config.json", ".release-please-manifest.json"]
+existing = [".releaserc", ".releaserc.*", "release.config.*", ".changeset/*", "release-please-config.json"]

@@ -1,0 +1,16 @@
+# Normalise line endings in the repository; check out LF everywhere.
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+
+# Lockfiles: collapse in diffs on GitHub
+package-lock.json linguist-generated=true -diff
+pnpm-lock.yaml    linguist-generated=true -diff
+uv.lock           linguist-generated=true -diff

@@ -1,0 +1,36 @@
+name: Release
+
+# release-please turns Conventional Commits on main into a release PR (version + CHANGELOG).
+# Merging that PR (a human decision) creates the release, which starts the deploy pipeline:
+# staging automatically, production after a human approves the environment.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          # A PAT or GitHub App token lets CI run on the release PR (GITHUB_TOKEN events do not
+          # start other workflows). Store it as RELEASE_PLEASE_TOKEN; falls back to GITHUB_TOKEN.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml

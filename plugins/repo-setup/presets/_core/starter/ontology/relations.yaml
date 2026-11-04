@@ -1,0 +1,10 @@
+# Relations between entities.
+# from / to must be names of files in ontology/entities/.
+# cardinality: one-to-one | one-to-many | many-to-many
+relations: []
+# Example:
+#  - from: Customer
+#    name: places
+#    to: Order
+#    cardinality: one-to-many
+#    description: A customer places zero or more orders.

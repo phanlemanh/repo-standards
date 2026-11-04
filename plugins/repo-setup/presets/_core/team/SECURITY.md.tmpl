@@ -1,0 +1,17 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Please **do not** open a public issue. Report privately via GitHub
+"Report a vulnerability" (Security tab) or contact the maintainers
+(@{{owner_handle}}). We aim to acknowledge reports within 3 working days.
+
+## Supported versions
+
+Only the latest release on `main` receives security fixes.
+
+## Practices in this repository
+
+- Secrets are never committed; `gitleaks` runs in pre-commit and CI.
+- Dependencies are updated automatically (Dependabot) and scanned in CI.
+- Code scanning (CodeQL) runs on every PR to `main`.

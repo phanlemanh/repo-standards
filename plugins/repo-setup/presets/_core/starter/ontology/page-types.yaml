@@ -1,0 +1,41 @@
+# Wiki page types. Every page in wiki/ starts with YAML front matter:
+#   ---
+#   type: entity | decision | incident | flow | spec | metrics
+#   title: ...
+#   links: [ ... ]      # other wiki pages or ontology entities
+#   sources: [ ... ]    # PRs, issues, docs that back the content
+#   ---
+# and contains the required sections below, as "## <Section>" headings.
+
+entity:
+  folder: wiki/entities
+  must_link: [ontology_entity] # e.g. ontology/entities/Customer.yaml
+  sections: [Definition, Rules, Where in the code, History]
+
+decision:
+  folder: wiki/decisions
+  filename: "NNNN-short-title.md"
+  sections: [Status, Context, Decision, Consequences]
+
+incident:
+  folder: wiki/incidents
+  filename: "YYYY-MM-DD-short-title.md"
+  sections: [Symptoms, Root cause, Fix, Lessons]
+
+flow:
+  folder: wiki/flows
+  must_link: [entity]
+  sections: [Trigger, Steps, Entities involved, Failure modes]
+
+spec:
+  folder: wiki/specs
+  filename: "NNNN-short-title.md"
+  fields: [status, tier]
+  statuses: [draft, needs-approval, approved, implemented, dropped]
+  sections:
+    [Intent, Acceptance criteria, Domain impact, Plan, Test plan, Autonomy tier, Open questions]
+
+metrics:
+  folder: wiki/metrics
+  filename: "YYYY-Www.md"
+  sections: [Summary, Delivery, Agents, Notes]

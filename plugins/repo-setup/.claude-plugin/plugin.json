@@ -1,0 +1,22 @@
+{
+  "name": "repo-setup",
+  "version": "0.3.0",
+  "description": "AI-native SDLC setup: Claude Code does the work, humans stay at the edges. Sets up, adopts and audits repos (top-tier standards, ontology that generates types, API contract and MCP tools, agent-maintained wiki, GitHub agent workflows with autonomy tiers) through a short interview.",
+  "author": {
+    "name": "phanlemanh84"
+  },
+  "license": "MIT",
+  "keywords": [
+    "ai-native",
+    "sdlc",
+    "repo",
+    "scaffold",
+    "standards",
+    "ontology",
+    "mcp",
+    "codegen",
+    "wiki",
+    "agents-md",
+    "governance"
+  ]
+}

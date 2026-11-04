@@ -1,0 +1,12 @@
+# Business modules (bounded contexts) and who may depend on whom.
+# Enforced by tools/boundaries.py in `make check`. Changing this file is a design decision:
+# record it in wiki/decisions/.
+modules:
+  - name: sales
+    description: Orders and checkout
+    owns: []
+    depends_on: []
+  - name: loyalty
+    description: Points and member rewards
+    owns: []
+    depends_on: [sales]

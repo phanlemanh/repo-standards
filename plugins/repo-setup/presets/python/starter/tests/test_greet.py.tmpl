@@ -1,0 +1,9 @@
+from {{package_name}} import greet
+
+
+def test_greets_by_name() -> None:
+    assert greet("Lan") == "Hello, Lan!"
+
+
+def test_falls_back_to_world_for_blank_input() -> None:
+    assert greet("   ") == "Hello, world!"

@@ -1,0 +1,49 @@
+# {{project_name}}
+
+{{description}}
+
+## Quick start
+
+Prerequisites: {{runtime}}, `make`, `git`.
+
+```bash
+git clone <this-repo-url>
+cd {{slug}}
+make setup     # install dependencies
+make check     # lint + typecheck + test — should be green
+make dev       # run locally
+```
+
+## Everyday commands
+
+| Command          | What it does                             |
+| ---------------- | ---------------------------------------- |
+| `make setup`     | Install dependencies (from the lockfile) |
+| `make dev`       | Run the project locally                  |
+| `make format`    | Auto-format the code                     |
+| `make lint`      | Lint and check formatting                |
+| `make typecheck` | Strict type checking                     |
+| `make test`      | Run the tests                            |
+| `make check`     | Everything CI runs — run before every PR |
+
+## Project map
+
+| Path        | Purpose                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| `src/`      | Application code                                                 |
+| `tests/`    | Automated tests                                                  |
+| `ontology/` | Domain model: glossary, entities, relations (source of truth)    |
+| `wiki/`     | Decisions, incidents and domain notes, kept up to date by agents |
+| `CLAUDE.md` | Onboarding guide for AI coding agents                            |
+
+## Stack
+
+{{stack}}
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in the values. Never commit `.env`.
+
+## License
+
+See [LICENSE](LICENSE).

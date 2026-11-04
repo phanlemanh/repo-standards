@@ -1,0 +1,101 @@
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from {{package_name}}.http_actions import build_router, load_api_keys
+from {{package_name}}.main import app as real_app
+from {{package_name}}.ontology_types import ACTIONS, ActionContext, ActionHandlers, ActionSpec
+
+
+@dataclass(frozen=True, kw_only=True)
+class EchoInput:
+    text: str
+
+
+class FakeHandlers:
+    """A stand-in action, so the HTTP layer is tested independently of the real domain."""
+
+    def echo(self, data: EchoInput, ctx: ActionContext) -> dict[str, str]:
+        return {"text": data.text}
+
+
+ECHO = ActionSpec(
+    name="echo",
+    method="echo",
+    description="Echo text back.",
+    entity="Thing",
+    kind="query",
+    roles=("agent",),
+    agent="allowed",
+    idempotent=True,
+    output="Thing",
+    input_type=EchoInput,
+    fields={"text": "text"},
+    input_schema={
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"],
+    },
+)
+
+app = FastAPI()
+app.include_router(
+    build_router(
+        cast(ActionHandlers, FakeHandlers()),
+        {"agent-key": "agent", "other-key": "someone"},
+        actions=(ECHO,),
+    )
+)
+client = TestClient(app)
+
+
+def post(name: str, key: str | None, body: dict[str, object] | None = None) -> int:
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    return client.post(f"/v1/actions/{name}", json=body or {}, headers=headers).status_code
+
+
+def test_health() -> None:
+    response = TestClient(real_app).get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_checks_key_action_role_and_input_in_that_order() -> None:
+    assert post("echo", None) == 401
+    assert post("echo", "wrong") == 401
+    assert post("nope", "agent-key") == 404
+    assert post("echo", "other-key", {"text": "x"}) == 403
+    assert post("echo", "agent-key", {"text": 1}) == 422
+    ok = client.post(
+        "/v1/actions/echo", json={"text": "hi"}, headers={"Authorization": "Bearer agent-key"}
+    )
+    assert ok.status_code == 200
+    assert ok.json() == {"text": "hi"}
+
+
+def test_serves_the_contract() -> None:
+    response = client.get("/contract/openapi.json")
+    assert response.status_code == 200
+    assert response.json()["openapi"] == "3.1.0"
+
+
+def test_missing_contract_is_404() -> None:
+    bare = FastAPI()
+    bare.include_router(build_router(api_keys={}, contract_path="missing.json"))
+    assert TestClient(bare).get("/contract/openapi.json").status_code == 404
+
+
+def test_reads_api_keys_from_json() -> None:
+    assert load_api_keys('{"k": "staff"}') == {"k": "staff"}
+
+
+def test_contract_has_one_operation_per_action() -> None:
+    contract = json.loads(Path("contracts/openapi.json").read_text())
+    operations = sorted(
+        p.removeprefix("/v1/actions/") for p in contract["paths"] if p.startswith("/v1/actions/")
+    )
+    assert operations == sorted(a.name for a in ACTIONS)

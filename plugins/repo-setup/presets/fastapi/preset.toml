@@ -1,0 +1,10 @@
+description = "Python web API: FastAPI + uvicorn, on top of the python preset (uv, Ruff, mypy, pytest)"
+extends = "python"
+exclude = ["src/*/__main__.py"]
+
+[vars]
+stack = "Python 3.12 web API — FastAPI, uvicorn, uv, Ruff, mypy (strict), pytest"
+dev_cmd = "uvicorn $(PKG).main:app --reload"
+
+[starter]
+install = ["uv add fastapi uvicorn[standard]", "uv add --dev httpx"]

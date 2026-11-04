@@ -1,0 +1,42 @@
+description = "Python 3.12+: uv, Ruff (lint+format), mypy strict, pytest"
+# Changed by the install step / the team; never reported as conflicts once they exist.
+user_owned = ["pyproject.toml"]
+
+# Example code: not added in --adopt mode.
+sample = ["src/**", "tests/**"]
+
+[vars]
+lang = "python"
+stack = "Python 3.12 — uv, Ruff, mypy (strict), pytest"
+runtime = "Python 3.12 (see .python-version) and uv"
+dev_cmd = "python -m $(PKG)"
+
+[starter]
+# Resolves current versions, creates .venv and writes uv.lock.
+install = ["uv add --dev ruff mypy pytest", "make gen"]
+verify = ["make check"]
+
+[team]
+install = ["uv add --dev pre-commit pytest-cov", "uv run pre-commit install"]
+verify = ["uv run pre-commit run --all-files"]
+
+
+[[equivalents]]
+files = [".python-version"]
+existing = [".python-version", ".tool-versions", "mise.toml", ".mise.toml"]
+
+[[equivalents]]
+files = ["Makefile"]
+existing = ["Makefile", "makefile", "justfile", "Justfile", "Taskfile.yml", "noxfile.py", "tox.ini"]
+
+[[equivalents]]
+files = [".github/workflows/ci.yml"]
+existing = [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml", "azure-pipelines.yml"]
+
+[[equivalents]]
+files = [".github/dependabot.yml"]
+existing = ["renovate.json", ".renovaterc", ".renovaterc.*", ".github/renovate.json"]
+
+[[equivalents]]
+files = [".github/workflows/release.yml", "release-please-config.json", ".release-please-manifest.json"]
+existing = [".releaserc", ".releaserc.*", ".cz.toml", "release-please-config.json"]

@@ -1,0 +1,7 @@
+name: Order
+description: A purchase made by a customer.
+properties:
+  id: { type: uuid, required: true }
+  customerId: { type: ref, target: Customer, required: true }
+  total: { type: number, required: true }
+  placedOn: { type: date }

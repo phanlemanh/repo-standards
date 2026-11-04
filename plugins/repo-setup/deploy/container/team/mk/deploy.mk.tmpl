@@ -1,0 +1,21 @@
+# Deploy (repo-setup deploy layer "container"), used by .github/workflows/deploy.yml.
+# CI passes ENV, IMAGE_TAG, GITHUB_TOKEN; set repository/environment variables:
+#   DEPLOY_CMD  how to roll the image out, e.g. "fly deploy --image $$IMAGE"
+#               or "kubectl set image deploy/{{slug}} app=$$IMAGE"
+#   APP_URL     base URL of the environment, for the smoke test
+.PHONY: deploy smoke
+ENV ?= staging
+REGISTRY ?= ghcr.io/{{owner_org}}
+IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
+IMAGE := $(REGISTRY)/{{slug}}:$(IMAGE_TAG)
+
+deploy: ## Build, push and roll out the image to ENV (staging|production)
+	@if [ -n "$$GITHUB_TOKEN" ]; then echo "$$GITHUB_TOKEN" | docker login ghcr.io -u "$${GITHUB_ACTOR:-ci}" --password-stdin; fi
+	docker build -t $(IMAGE) .
+	docker push $(IMAGE)
+	@if [ -z "$$DEPLOY_CMD" ]; then echo "Set DEPLOY_CMD for $(ENV) (see mk/deploy.mk)." >&2; exit 1; fi
+	IMAGE=$(IMAGE) ENV=$(ENV) sh -c "$$DEPLOY_CMD"
+
+smoke: ## Smoke-test ENV: /health must answer 200
+	@if [ -z "$$APP_URL" ]; then echo "Set APP_URL for $(ENV)." >&2; exit 1; fi
+	curl -fsS --retry 5 --retry-delay 5 "$$APP_URL/health"

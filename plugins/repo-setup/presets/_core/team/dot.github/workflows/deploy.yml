@@ -1,0 +1,51 @@
+name: Deploy
+
+# Agents ship to staging automatically; production waits for a human:
+# the "production" environment has required reviewers (Settings > Environments,
+# or `python3 tools/github_setup.py --apply`). Enable with repo variable DEPLOY_ENABLED=true.
+# The actual commands are `make deploy` / `make smoke` (see mk/deploy.mk).
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-project
+      - run: make deploy ENV=staging
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ github.sha }}
+          DEPLOY_CMD: ${{ vars.DEPLOY_CMD }}
+      - run: make smoke ENV=staging
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-project
+      - run: make deploy ENV=production
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_TAG: ${{ github.sha }}
+          DEPLOY_CMD: ${{ vars.DEPLOY_CMD }}
+      - run: make smoke ENV=production
+        env:
+          APP_URL: ${{ vars.APP_URL }}

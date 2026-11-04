@@ -1,0 +1,26 @@
+{
+  "name": "repo-standards",
+  "owner": {
+    "name": "phanlemanh84"
+  },
+  "metadata": {
+    "description": "Plugins that set up and keep repositories at a top-tier, AI-agent-ready standard."
+  },
+  "plugins": [
+    {
+      "name": "repo-setup",
+      "source": "./plugins/repo-setup",
+      "description": "AI-native SDLC: interview-driven repo setup (5 stacks, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers and agent workflows on GitHub.",
+      "version": "0.3.0",
+      "category": "development",
+      "keywords": [
+        "ai-native",
+        "sdlc",
+        "repo",
+        "ontology",
+        "mcp",
+        "governance"
+      ]
+    }
+  ]
+}

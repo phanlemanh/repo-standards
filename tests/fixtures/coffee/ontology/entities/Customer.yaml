@@ -1,0 +1,17 @@
+name: Customer
+description: A person who has bought at least once.
+properties:
+  id: { type: uuid, required: true }
+  name: { type: string, required: true }
+  phone: { type: string, pii: true, description: "Used to identify members" }
+  points: { type: integer, min: 0, default: 0 }
+  status: { type: enum, values: [active, blocked], default: active }
+  joinedAt: { type: datetime, required: true }
+subtypes:
+  VIPCustomer:
+    description: Customer with at least 100 points.
+    rule: "points >= 100 and status == 'active'"
+  Member:
+    description: Customer who left a phone number.
+    rule: "phone != ''"
+wiki: wiki/entities/customer.md

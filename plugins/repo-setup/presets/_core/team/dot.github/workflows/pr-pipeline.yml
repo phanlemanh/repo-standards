@@ -1,0 +1,143 @@
+name: PR pipeline
+
+# Human-at-the-edge pipeline for every pull request:
+#   gate      -> autonomy tier (low / medium / high) from governance/autonomy.yaml, as a label
+#   review    -> an independent Claude reviewer (no edit rights) checks spec, tests, ontology
+#   automerge -> only tier "low" from an agent or dependency bot, after the review approved;
+#                medium/high wait for a human (CODEOWNERS + branch protection)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-pipeline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PR: ${{ github.event.pull_request.number }}
+  AUTHOR: ${{ github.event.pull_request.user.login }}
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Load the rules from the base branch (a PR cannot change the rules that judge it)
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          mkdir -p .gate
+          for f in tools/autonomy.py tools/repo_ontology.py governance/autonomy.yaml; do
+            git show "origin/${BASE}:${f}" > ".gate/$(basename "$f")" 2>/dev/null || rm -f ".gate/$(basename "$f")"
+          done
+      - name: Dependency metadata
+        id: dep
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@v3
+      - name: Classify
+        id: tier
+        env:
+          BASE: ${{ github.base_ref }}
+          UPDATE_TYPE: ${{ steps.dep.outputs.update-type }}
+        run: |
+          if [ -f .gate/autonomy.py ] && [ -f .gate/autonomy.yaml ] && [ -f .gate/repo_ontology.py ]; then
+            python3 .gate/autonomy.py --policy .gate/autonomy.yaml --base "origin/${BASE}" --head HEAD \
+              --author "$AUTHOR" --update-type "$UPDATE_TYPE" --github > /dev/null
+          else
+            echo "No policy on the base branch yet: treating as high." >> "$GITHUB_STEP_SUMMARY"
+            echo "tier=high" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TIER: ${{ steps.tier.outputs.tier }}
+        run: |
+          for t in low medium high; do
+            [ "$t" = "$TIER" ] || gh pr edit "$PR" --remove-label "risk:$t" >/dev/null 2>&1 || true
+          done
+          gh pr edit "$PR" --add-label "risk:$TIER"
+
+  review:
+    needs: gate
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-project
+      - name: Reset the verdict (only this review run may set it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit "$PR" --remove-label agent-review:approved --remove-label agent-review:changes >/dev/null 2>&1 || true
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
+          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            AUTONOMY TIER: ${{ needs.gate.outputs.tier }}
+
+            You are the independent reviewer of this pull request. You did not write it.
+            Use the /repo-setup:sdlc-review skill if it is available; otherwise follow the
+            "Review" part of the "AI-native SDLC" section in AGENTS.md.
+            The PR branch is checked out. Post findings with `gh pr comment` and inline comments.
+            Do not approve the PR yourself and do not edit files.
+            Finish by setting exactly one verdict label:
+              gh pr edit ${{ github.event.pull_request.number }} --add-label agent-review:approved --remove-label agent-review:changes
+            or
+              gh pr edit ${{ github.event.pull_request.number }} --add-label agent-review:changes --remove-label agent-review:approved
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Bash(make:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr edit:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
+
+  automerge:
+    needs: [gate, review]
+    if: >-
+      always() && needs.gate.outputs.tier == 'low' &&
+      (needs.review.result == 'success' ||
+       (needs.review.result == 'skipped' && github.event.pull_request.user.login == 'dependabot[bot]'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Only agents and dependency bots merge on their own
+        env:
+          AGENT_AUTHORS: ${{ vars.AGENT_AUTHORS || 'claude[bot] dependabot[bot]' }}
+        run: |
+          case " $AGENT_AUTHORS " in *" $AUTHOR "*) ;; *) echo "Author $AUTHOR merges manually."; exit 0;; esac
+          echo "AUTO=1" >> "$GITHUB_ENV"
+      - name: Require the agent reviewer's approval
+        if: env.AUTO == '1' && github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx 'agent-review:approved' \
+            || { echo "Agent review has not approved."; echo "AUTO=0" >> "$GITHUB_ENV"; }
+      - name: Approve and enable auto-merge (merges when required checks pass)
+        if: env.AUTO == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr review "$PR" --approve --body "Autonomy gate: tier low, agent review approved. Merging when CI passes."
+          gh pr merge "$PR" --auto --squash

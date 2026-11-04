@@ -1,0 +1,133 @@
+"""MCP server: every ontology action that allows agents becomes a tool.
+
+Run with `make mcp` (Claude Code picks it up from .mcp.json). Safety rules applied here:
+the caller runs as role "agent"; actions it may not run are neither listed nor callable;
+arguments are checked against the action's input schema; personal data (`pii: true`) is
+redacted from everything returned; `agent: confirm` actions are marked for human confirmation.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+from typing import Any
+
+import anyio
+import mcp.types as types
+from mcp.server.lowlevel import Server
+from mcp.server.stdio import stdio_server
+
+from .actions import HANDLERS
+from .ontology_types import ACTIONS, ActionContext, ActionHandlers, ActionSpec, can, redact_pii
+
+
+def agent_actions(
+    ctx: ActionContext, actions: tuple[ActionSpec, ...] = ACTIONS
+) -> list[ActionSpec]:
+    return [a for a in actions if a.agent != "forbidden" and can(ctx.role, a)]
+
+
+def validate(schema: dict[str, Any], args: dict[str, Any]) -> list[str]:
+    """Minimal JSON-schema check: required fields, no unknown fields, primitive types, enums."""
+    errors = [f"missing '{n}'" for n in schema.get("required", []) if n not in args]
+    props: dict[str, Any] = schema.get("properties", {})
+    checks = {
+        "string": lambda v: isinstance(v, str),
+        "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+        "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+        "boolean": lambda v: isinstance(v, bool),
+    }
+    for name, value in args.items():
+        prop = props.get(name)
+        if prop is None:
+            errors.append(f"unknown field '{name}'")
+            continue
+        check = checks.get(prop.get("type", ""))
+        if check and not check(value):
+            errors.append(f"'{name}' must be {prop['type']}")
+        if "enum" in prop and value not in prop["enum"]:
+            errors.append(f"'{name}' must be one of {', '.join(prop['enum'])}")
+    return errors
+
+
+def plain(value: Any) -> Any:
+    """Dataclasses (and lists of them) as plain dicts, ready for JSON."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    if isinstance(value, list):
+        return [plain(v) for v in value]
+    return value
+
+
+def redact_output(spec: ActionSpec, value: Any) -> Any:
+    """Personal data removed from an action output (by its output entity)."""
+    entity = (spec.output or "").removesuffix("[]")
+    if isinstance(value, list):
+        return [redact_output(spec, v) for v in value]
+    return redact_pii(entity, value) if entity and isinstance(value, dict) else value
+
+
+def _text(body: Any, is_error: bool = False) -> types.CallToolResult:
+    content: list[types.ContentBlock] = [
+        types.TextContent(type="text", text=json.dumps(body, default=str))
+    ]
+    return types.CallToolResult(content=content, is_error=is_error)
+
+
+def build_server(
+    handlers: ActionHandlers = HANDLERS,
+    ctx: ActionContext | None = None,
+    actions: tuple[ActionSpec, ...] = ACTIONS,
+) -> Server[Any]:
+    who = ctx or ActionContext(role="agent", actor=os.environ.get("MCP_ACTOR", "mcp-agent"))
+
+    async def list_tools(
+        _request: Any, _params: types.PaginatedRequestParams | None
+    ) -> types.ListToolsResult:
+        return types.ListToolsResult(
+            tools=[
+                types.Tool(
+                    name=a.name,
+                    description=(
+                        f"{a.description} Requires human confirmation."
+                        if a.agent == "confirm"
+                        else a.description
+                    ),
+                    input_schema=a.input_schema,
+                    annotations=types.ToolAnnotations(
+                        read_only_hint=a.kind == "query",
+                        destructive_hint=a.kind == "delete",
+                        idempotent_hint=a.idempotent,
+                    ),
+                )
+                for a in agent_actions(who, actions)
+            ]
+        )
+
+    async def call_tool(_request: Any, params: types.CallToolRequestParams) -> types.CallToolResult:
+        spec = next((a for a in agent_actions(who, actions) if a.name == params.name), None)
+        if spec is None:
+            return _text({"error": f"unknown or not allowed: {params.name}"}, is_error=True)
+        arguments = dict(params.arguments or {})
+        errors = validate(spec.input_schema, arguments)
+        if errors:
+            return _text({"error": "invalid input", "details": errors}, is_error=True)
+        data = spec.input_type(**{spec.fields[k]: v for k, v in arguments.items()})
+        try:
+            result = getattr(handlers, spec.method)(data, who)
+        except Exception as exc:  # report to the agent instead of crashing the server
+            return _text({"error": str(exc)}, is_error=True)
+        return _text(redact_output(spec, plain(result)))
+
+    return Server("{{slug}}", on_list_tools=list_tools, on_call_tool=call_tool)
+
+
+async def _main() -> None:  # pragma: no cover - stdio entry point
+    server = build_server()
+    async with stdio_server() as (read, write):
+        await server.run(read, write, server.create_initialization_options())
+
+
+if __name__ == "__main__":
+    anyio.run(_main)

@@ -1,0 +1,49 @@
+# One-command tasks. CI runs `make check`; run it before every PR.
+.DEFAULT_GOAL := help
+PKG := {{package_name}}
+DEV_CMD := {{dev_cmd}}
+GEN_OUT := src/$(PKG)/ontology_types.py
+PYTEST_ARGS :=
+PYTHON ?= uv run python
+CHECK_TARGETS := lint typecheck test ontology
+
+# Extra targets from repo-setup layers (architecture, governance, coverage...) live in mk/*.mk.
+# They append to CHECK_TARGETS / PYTEST_ARGS, so `make check` grows with the setup.
+-include mk/*.mk
+
+.PHONY: help setup dev format lint typecheck test gen ontology check clean
+
+help: ## Show available commands
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-10s %s\n", $$1, $$2}'
+
+setup: ## Install dependencies from the lockfile
+	uv sync --locked
+
+dev: ## Run locally
+	uv run $(DEV_CMD)
+
+format: ## Auto-format and fix lint issues
+	uv run ruff format .
+	uv run ruff check --fix .
+
+lint: ## Lint and check formatting
+	uv run ruff check .
+	uv run ruff format --check .
+
+typecheck: ## Strict type check
+	uv run mypy
+
+test: ## Run tests
+	uv run pytest $(PYTEST_ARGS)
+
+gen: ## Regenerate types from ontology/
+	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT)
+
+ontology: ## Check ontology/ + wiki/ consistency and generated code
+	uv run python tools/wiki_lint.py
+	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check
+
+check: $(CHECK_TARGETS) ## Everything CI runs
+
+clean: ## Remove caches and build output
+	rm -rf .mypy_cache .ruff_cache .pytest_cache dist build

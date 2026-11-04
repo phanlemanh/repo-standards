@@ -1,0 +1,7 @@
+description = "Modular monolith: one deployable app split into business modules with enforced boundaries (public APIs, declared dependencies, entity ownership)"
+stacks = ["ts-node", "python"]
+when = "Default for most products and SaaS: one team or a few teams, one deployment, clear domains"
+complexity = "low"
+
+# Example modules: not added in --adopt mode.
+sample = ["src/modules/**", "src/*/modules/sales/**", "src/*/modules/loyalty/**", "tests/test_modules.py", "tests/modules.test.ts"]

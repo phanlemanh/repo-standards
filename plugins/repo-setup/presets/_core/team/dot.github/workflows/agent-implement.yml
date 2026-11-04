@@ -1,0 +1,60 @@
+name: Agent — work an issue
+
+# The human edge is the issue: a person writes the intent (issue form "Intent") and adds a label.
+#   agent:spec       -> the agent writes the spec and posts it on the issue, then stops
+#   agent:implement  -> spec (if missing) + implementation + pull request;
+#                       stops after the spec when the change is high-risk (ontology, auth, data...)
+#   spec:approved    -> a human approved the posted spec: the agent implements it
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: agent-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  work:
+    if: contains(fromJSON('["agent:spec","agent:implement","spec:approved"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-project
+      - uses: anthropics/claude-code-action@v1
+        env:
+          # A person (not a bot) added spec:approved: high-tier edits are allowed in this run
+          # (the PreToolUse gate of the repo-setup plugin reads this). Otherwise they are refused.
+          REPO_SETUP_APPROVAL: ${{ github.event.label.name == 'spec:approved' && github.event.sender.type == 'User' && format('issue-{0}-by-{1}', github.event.issue.number, github.event.sender.login) || '' }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
+          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            ISSUE: #${{ github.event.issue.number }}
+            TRIGGER LABEL: ${{ github.event.label.name }}
+
+            Work this issue following the AI-native SDLC. Use the /repo-setup:sdlc-implement
+            skill if it is available; otherwise follow the "AI-native SDLC" section of AGENTS.md.
+            - agent:spec: write the spec only, post it on the issue, add label spec:needs-approval.
+            - agent:implement: spec, then implement and open a pull request — but if the spec
+              touches high-tier paths (governance/autonomy.yaml), post the spec, add
+              spec:needs-approval and stop for a human.
+            - spec:approved: implement the approved spec from the issue comments.
+            Open the pull request with `gh pr create`, linking "Closes #${{ github.event.issue.number }}".
+            Never push to the default branch.
+          claude_args: |
+            --max-turns 100
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(make:*),Bash(npm:*),Bash(npx:*),Bash(uv:*),Bash(python3:*),Bash(git:*),Bash(gh issue:*),Bash(gh pr:*)"

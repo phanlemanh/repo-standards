@@ -1,0 +1,71 @@
+# Autonomy policy: what AI agents may change, and who must approve.
+# Source of truth for tools/autonomy.py (CI gate + CODEOWNERS) and for agents.
+#
+#   low     agent may merge on its own once CI is green and the agent reviewer approved
+#   medium  a human approves the pull request
+#   high    a code owner approves (domain / platform); agents propose, never merge
+#
+# The highest tier of any changed file decides the tier of the pull request.
+# Patterns are repo-relative globs ("**/" matches any folder depth).
+# Changing this file is itself "high" and must be done by a human.
+version: 1
+default: medium
+
+# Reviewers requested by tier (rendered into .github/CODEOWNERS by `make codeowners`).
+# Low-tier paths get no owner, so agents can merge them without a human.
+owners:
+  medium: ["@{{owner_handle}}"]
+  high: ["@{{owner_handle}}"]
+
+low:
+  - "wiki/**"
+  - "docs/**"
+  - "tests/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/test_*.py"
+  - "README.md"
+  - "CHANGELOG.md"
+
+high:
+  # meaning of the business
+  - "ontology/**"
+  # the rules of the game: policy, CI, agent config, quality gates
+  - "governance/**"
+  - ".github/**"
+  - "**/.claude/**"
+  - "**/.mcp.json"
+  - "tools/**"
+  - "mk/**"
+  - "Makefile"
+  - "**/AGENTS.md"
+  - "**/CLAUDE.md"
+  - "**/conftest.py"
+  - "eslint.config.*"
+  - "tsconfig*.json"
+  - "vitest.config.*"
+  - ".coveragerc"
+  - ".pre-commit-config.yaml"
+  # data, security and infrastructure
+  - "**/migrations/**"
+  - "**/*.sql"
+  - "**/auth/**"
+  - "**/*auth*.*"
+  - "**/security/**"
+  - "**/permissions*"
+  - "infra/**"
+  - "deploy/**"
+  - "Dockerfile"
+  - "**/Dockerfile"
+  - "compose.yaml"
+  - "docker-compose.yml"
+
+rules:
+  # Deleting or rewriting test code is not "low": it can hide a regression.
+  test_deletions_raise_to: medium
+  # Dependabot updates by semver level.
+  dependency_updates:
+    patch: low
+    minor: medium
+    major: high

@@ -1,0 +1,13 @@
+{
+  "name": "{{project_name}}",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "pip install --user uv && make setup && uv run pre-commit install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["charliermarsh.ruff", "ms-python.python", "ms-python.mypy-type-checker"]
+    }
+  }
+}

@@ -1,0 +1,48 @@
+name: Intent (for the agents)
+description: Describe an outcome you want. An agent turns it into a spec, code and a pull request.
+labels: ["intent"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You are at the edge of the process: say **what** and **why**, and how you will know it
+        is done. Agents handle the **how**. Add the label `agent:implement` (or `agent:spec`)
+        when you want them to start.
+  - type: textarea
+    id: intent
+    attributes:
+      label: Intent
+      description: The outcome and who benefits. One paragraph is enough.
+      placeholder: "Members with 100+ points should get 10% off automatically, so loyal customers feel rewarded."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable checks, ideally Given / When / Then. The agent turns each into a test.
+      placeholder: |
+        - Given a customer with 120 points, when they check out, then a 10% discount is applied.
+        - Given a blocked customer, then no discount is applied.
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What must NOT change or be built now.
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and risks
+      description: Deadlines, performance, compliance (e.g. personal data), systems that must not break.
+  - type: dropdown
+    id: autonomy
+    attributes:
+      label: How far may the agent go?
+      options:
+        - Spec, code and pull request (normal review rules apply)
+        - Spec only — I will decide after reading it
+        - Discuss first — ask me questions in this issue
+    validations:
+      required: true

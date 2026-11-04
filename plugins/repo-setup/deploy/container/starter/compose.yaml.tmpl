@@ -1,0 +1,13 @@
+# Local run of the production image: `make up` / `make down`.
+services:
+  app:
+    build: .
+    image: {{slug}}:local
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    environment:
+      PORT: "${PORT:-8080}"
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped

@@ -1,0 +1,42 @@
+name: Agent — weekly maintenance
+
+# Every Monday the agent checks the health of the wiki/ontology, writes the delivery metrics
+# report and opens a low-tier pull request with the results (merged by the PR pipeline).
+on:
+  schedule:
+    - cron: "23 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-project
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
+          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            Weekly maintenance:
+            1. Run `python3 tools/sdlc_metrics.py --days 7 --write` (writes wiki/metrics/<year>-W<week>.md).
+            2. Run the /repo-setup:wiki-health skill if available, else `python3 tools/wiki_lint.py --strict`,
+               and fix only low-tier issues (wiki/, docs/). List anything else in the PR description.
+            3. On a new branch `chore/weekly-maintenance-<date>`, commit and open a PR titled
+               "docs: weekly wiki health and delivery metrics". Never push to the default branch.
+          claude_args: |
+            --max-turns 50
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(make:*),Bash(python3:*),Bash(git:*),Bash(gh pr:*),Bash(gh api:*),Bash(gh run:*),Bash(gh release:*)"

@@ -1,0 +1,60 @@
+name: Agent — fix a red main
+
+# When CI fails on the default branch, an agent diagnoses it and opens a fix pull request
+# (normal tier rules apply: it never pushes to main and never merges medium/high changes).
+# Only runs for the default branch, whose code is already trusted; never for PR branches.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+  id-token: write
+
+concurrency:
+  group: agent-ci-fix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      github.event.workflow_run.event == 'push' &&
+      vars.AGENT_CI_FIX != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-project
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
+          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            FAILED RUN: ${{ github.event.workflow_run.html_url }} (id ${{ github.event.workflow_run.id }})
+            COMMIT: ${{ github.event.workflow_run.head_sha }}
+
+            CI is red on the default branch. Everyone is blocked until it is green.
+            1. Diagnose: `gh run view ${{ github.event.workflow_run.id }} --log-failed`, then
+               reproduce locally with `make check`.
+            2. If the cause is flaky infrastructure (network, runner), re-run once with
+               `gh run rerun ${{ github.event.workflow_run.id }} --failed` and stop.
+            3. Otherwise fix the root cause on branch `agent/fix-main-${{ github.event.workflow_run.id }}`
+               (never weaken or delete tests to get green), run `make check`, and open a PR titled
+               "fix: <what broke>" that explains cause, fix and evidence. Add a line to wiki/log.md.
+            4. If the fix needs a high-tier change or a human decision, open an issue labeled
+               `incident` with your diagnosis instead, and stop.
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(make:*),Bash(npm:*),Bash(npx:*),Bash(uv:*),Bash(python3:*),Bash(git:*),Bash(gh run:*),Bash(gh pr:*),Bash(gh issue:*)"
