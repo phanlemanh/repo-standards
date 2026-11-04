@@ -155,7 +155,7 @@ echo "ok  hooks"
 for combo in "ts-api:service-api:container" "fastapi:service-api:container" "python:modular-monolith:none" "ts-node:modular-monolith:none:mcp" "python:none:none:mcp"; do
   IFS=: read -r stack arch dep cap <<<"$combo"
   c="$TMP/combo-${stack}-${arch}-${dep}-${cap:-x}"; mkdir -p "$c" && git -C "$c" init -q -b main
-  python3 "$S/apply.py" --target "$c" --preset "$stack" --archetype "$arch" --deploy "$dep" ${cap:+--with "$cap"} --level team \
+  python3 "$S/apply.py" --target "$c" --preset "$stack" --archetype "$arch" --deploy "$dep" --with "github-agents${cap:+,$cap}" --level team \
     --var project_name=Combo --var description=x --var owner=acme/platform >/dev/null || fail "$combo: apply"
   ( cd "$c"
     lang=$(python3 -c "import json; print(json.load(open('.repo-setup.json'))['preset'])")
@@ -308,7 +308,9 @@ grep -q '=== "agent" && action.agent === "forbidden"' "$f/src/generated/ontology
 echo "ok  agent: forbidden (or misses reported above)"
 
 # 21. doctor: a hollow policy or pipeline does not score, and a local score says it is local
-h="$TMP/python-team"
+h="$TMP/python-team-agents"; mkdir -p "$h" && git -C "$h" init -q -b main
+python3 "$S/apply.py" --target "$h" --preset python --level team --with github-agents --var project_name=H --var description=x --var owner=acme >/dev/null
+git -C "$h" add -A
 local_only=$(python3 "$S/doctor.py" --target "$h" --json | json 'd.get("local_only")')
 [ "$local_only" = True ] || miss "doctor does not flag a score without GitHub checks: $local_only"
 python3 "$S/doctor.py" --target "$h" | grep -q 'GitHub protection was not checked' || miss "doctor text does not warn about local-only score"
@@ -340,6 +342,28 @@ leak_cfg "$TMP/fastapi-team" 2>/dev/null || miss "team repo has no narrow gitlea
 tier=$(cd "$g" && python3 tools/autonomy.py --files .gitleaks.toml | json 'd["tier"]')
 [ "$tier" = high ] || miss "tier of .gitleaks.toml: $tier"
 echo "ok  gitleaks allowlist (or misses reported above)"
+
+# 23. github-agents: team alone has no agent workflows; the capability adds them
+n="$TMP/team-no-agents"; mkdir -p "$n" && git -C "$n" init -q -b main
+python3 "$S/apply.py" --target "$n" --preset python --level team --var project_name=N --var description=x --var owner=acme >/dev/null
+[ ! -e "$n/.github/workflows/pr-pipeline.yml" ] || miss "team without agents got pr-pipeline.yml"
+[ ! -e "$n/.github/ISSUE_TEMPLATE/intent.yml" ] || miss "team without agents got intent.yml"
+[ -e "$n/governance/autonomy.yaml" ] || miss "team lost the autonomy policy"
+git -C "$n" add -A
+failed=$(python3 "$S/doctor.py" --target "$n" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+[ "$failed" = lockfile ] || miss "team without agents: doctor failures: $failed"
+y="$TMP/team-agents"; mkdir -p "$y" && git -C "$y" init -q -b main
+python3 "$S/apply.py" --target "$y" --preset python --level team --with github-agents --var project_name=Y --var description=x --var owner=acme >/dev/null
+[ -e "$y/.github/workflows/pr-pipeline.yml" ] || miss "github-agents did not add pr-pipeline.yml"
+rm -f "$y/.github/workflows/agent-implement.yml" "$y/.github/workflows/pr-pipeline.yml"; git -C "$y" add -A
+failed=$(python3 "$S/doctor.py" --target "$y" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+case ",$failed," in *,agent_workflows,*) ;; *) miss "doctor did not notice missing agent workflows: $failed" ;; esac
+if python3 "$S/apply.py" --target "$TMP/bad-agents" --preset python --level starter --with github-agents --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "github-agents accepted at starter"; fi
+o2="$TMP/old-team"; mkdir -p "$o2/.github/workflows" && git -C "$o2" init -q -b main
+printf 'name: PR pipeline\n' > "$o2/.github/workflows/pr-pipeline.yml"
+python3 "$S/apply.py" --target "$o2" --preset python --level team --var project_name=O --var description=x --var owner=a >/dev/null
+[ -e "$o2/.github/workflows/pr-pipeline.yml" ] || miss "apply removed an existing pr-pipeline.yml"
+echo "ok  github-agents (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

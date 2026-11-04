@@ -131,7 +131,11 @@ def units(
 
 
 def check_combination(
-    preset: str, archetype: str, deploy: str, caps: list[str] | None = None
+    preset: str,
+    archetype: str,
+    deploy: str,
+    caps: list[str] | None = None,
+    level: str = "team",
 ) -> None:
     chain = set(preset_chain(preset))
     pairs = [("archetypes", archetype), ("deploy", deploy)]
@@ -143,9 +147,13 @@ def check_combination(
             label = {"archetypes": "archetype", "capabilities": "capability"}.get(kind, kind)
             raise ValueError(f"unknown {label} '{name}'. "
                              f"Available: {', '.join(available(kind)) or 'none'}")
-        allowed = _read_toml(PLUGIN_ROOT / kind / name / "preset.toml").get("stacks", [])
+        meta = _read_toml(PLUGIN_ROOT / kind / name / "preset.toml")
+        allowed = meta.get("stacks", [])
         if allowed and not chain & set(allowed):
             raise ValueError(f"{name} works with stacks: {', '.join(allowed)} (not {preset})")
+        required = meta.get("requires_level")
+        if required and LEVELS.index(level) < LEVELS.index(required):
+            raise ValueError(f"{name} needs level {required} (not {level})")
 
 
 def load_meta(
@@ -424,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         if c.strip() and c.strip() not in caps:
             caps.append(c.strip())
     try:
-        check_combination(preset, archetype, deploy, caps)
+        check_combination(preset, archetype, deploy, caps, level)
     except ValueError as exc:
         ap.error(str(exc))
 

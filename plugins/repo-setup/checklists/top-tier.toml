@@ -377,15 +377,17 @@ fix = "Run: make codeowners"
 [[check]]
 id = "agent_workflows"
 level = "team"
+capabilities = ["github-agents"]
 weight = 2
 title = "Agent workflows: intent issues -> spec -> PR, independent agent review, tier gate"
 why = "Agents pick up work from issues and every PR gets the same gate, without anyone remembering."
-fix = "Add .github/workflows/agent-implement.yml and pr-pipeline.yml (team level)."
+fix = "Re-run apply with --with github-agents."
 any = [{ paths = [".github/workflows/*.yml"], pattern = '(?s)autonomy\.py.*claude-code-action' }]
 
 [[check]]
 id = "intent_template"
 level = "team"
+capabilities = ["github-agents"]
 weight = 1
 title = "Intent issue form (what / why / acceptance criteria)"
 why = "Agents need testable acceptance criteria; the form asks for them."

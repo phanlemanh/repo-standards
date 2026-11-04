@@ -10,9 +10,18 @@ S="$ROOT/plugins/repo-setup/scripts"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# pre-commit refuses to install while a global core.hooksPath is set. Leave that setting alone:
+# skip the install and run the commit-msg stage directly.
+HOOKS_PATH="$(git config core.hooksPath || true)"
+if ! command -v pre-commit >/dev/null; then
+  mkdir -p "$TMP/bin"
+  printf '#!/bin/sh\nexec uvx pre-commit "$@"\n' > "$TMP/bin/pre-commit"; chmod +x "$TMP/bin/pre-commit"
+  PATH="$TMP/bin:$PATH"
+fi
+
 ALL=$(python3 "$S/apply.py" --list-presets --json | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)))")
 # Combinations: stack:archetype:deploy:capabilities
-COMBOS="ts-api:service-api:container fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp"
+COMBOS="ts-api:service-api:container:github-agents fastapi:service-api:container ts-node:modular-monolith:none:mcp python:modular-monolith:none:mcp python:none:none:github-agents"
 for spec in ${PRESETS:-$ALL $COMBOS}; do
   IFS=: read -r preset arch dep cap <<<"$spec"
   extra=(--archetype "${arch:-none}" --deploy "${dep:-none}")
@@ -22,12 +31,22 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
         --var "project_name=Coffee Shop" --var "description=E2E test" --var owner=acme --json)
   install=$(python3 -c 'import json,sys;[print(c) for c in json.load(sys.stdin)["next_commands"]["install"]]' <<<"$out")
   verify=$(python3 -c 'import json,sys;[print(c) for c in json.load(sys.stdin)["next_commands"]["verify"]]' <<<"$out")
-  while IFS= read -r c; do [ -z "$c" ] || { echo "[$spec] \$ $c"; bash -c "$c" >/dev/null </dev/null; }; done <<<"$install"
+  while IFS= read -r c; do
+    case "$c" in "") continue ;; *"pre-commit install"*) [ -z "$HOOKS_PATH" ] || continue ;; esac
+    echo "[$spec] \$ $c"; bash -c "$c" >/dev/null </dev/null
+  done <<<"$install"
   git add -A
   while IFS= read -r c; do [ -z "$c" ] || { echo "[$spec] \$ $c"; bash -c "$c" </dev/null; }; done <<<"$verify"
   python3 "$S/doctor.py" --min-score 100
   # commit-msg hook: bad message rejected, conventional message accepted
-  if git -c user.name=e2e -c user.email=e2e@example.com commit -qm "initial setup" >/dev/null 2>&1; then
+  if [ -n "$HOOKS_PATH" ]; then
+    echo "initial setup" > "$TMP/msg"
+    if pre-commit run --hook-stage commit-msg --commit-msg-filename "$TMP/msg" >/dev/null 2>&1; then
+      echo "FAIL: non-conventional commit message was accepted"; exit 1
+    fi
+    echo "chore: initial setup" > "$TMP/msg"
+    pre-commit run --hook-stage commit-msg --commit-msg-filename "$TMP/msg" >/dev/null
+  elif git -c user.name=e2e -c user.email=e2e@example.com commit -qm "initial setup" >/dev/null 2>&1; then
     echo "FAIL: non-conventional commit message was accepted"; exit 1
   fi
   git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: initial setup" >/dev/null

@@ -1,0 +1,4 @@
+description = "Agents on GitHub: intent issues -> spec -> PR, independent agent review, tier gate and auto-merge of low-tier PRs"
+when = "You want agents to pick up work from issues and open PRs. Needs the Claude GitHub App and one secret, and costs API usage. This layer has not yet run against a real Claude session."
+complexity = "high"
+requires_level = "team"
