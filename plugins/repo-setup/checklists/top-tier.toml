@@ -174,6 +174,15 @@ fix = "Run setup-new, or write CLAUDE.md listing make targets and conventions."
 any = [{ paths = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"], min_lines = 10 }]
 
 [[check]]
+id = "language_policy"
+level = "starter"
+weight = 1
+title = "Agent guide states which language to use where"
+why = "Without a rule, each session guesses, and code, docs and conversation drift apart."
+fix = "Add a ## Language section to AGENTS.md (see the core preset)."
+any = [{ paths = ["AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"], pattern = '(?m)^## Language' }]
+
+[[check]]
 id = "ontology"
 level = "starter"
 weight = 2

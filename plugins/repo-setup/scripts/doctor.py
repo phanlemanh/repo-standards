@@ -10,13 +10,18 @@ Standard library only (Python 3.11+).
 """
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 11):
+    print(f"repo-setup needs Python 3.11 or newer; this is {sys.version.split()[0]}.", file=sys.stderr)
+    sys.exit(2)
+
 import argparse
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 

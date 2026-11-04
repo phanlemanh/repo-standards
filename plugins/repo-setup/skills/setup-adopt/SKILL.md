@@ -56,6 +56,12 @@ Do these by hand, one at a time, each with the user's OK, and keep the repo's to
 - **AGENTS.md / CLAUDE.md**: if one already exists, merge the preset's sections
   (commands, rules, after-a-task) into it instead of replacing it.
 
+## 4b. Decisions
+
+Use the layers in `../setup-new/references/layers/` for anything the user wants to decide, and
+record them in `setup-blueprint.yaml`. The `ai` layer is always `manual` here: do not add the `ai`
+capability, because it would add sample code. Guide the user through adding what they need.
+
 ## 5. Seed the domain model from the real code
 Read the main models/schemas/types (ORM models, DB migrations, API schemas). Propose the
 3–7 core entities with definitions, properties and relations, confirm with the user, then

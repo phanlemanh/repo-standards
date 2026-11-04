@@ -18,7 +18,8 @@ changes what the whole system means, so do it completely and make it easy to rev
 - Business rules and where they are (or will be) implemented.
 
 ## 2. Write the files
-1. `ontology/glossary.md`: one table row `| \`Name\` | definition | not to be confused with |`.
+1. `ontology/glossary.md`: one table row `| \`Name\` | definition | not to be confused with | display name |`.
+   The code name is English. The display name and definition follow the repo's `docs_language`.
 2. `ontology/entities/<Name>.yaml` — same shape as `_template.yaml`:
    - `name` must equal the file name; `description` required.
    - property `type`: `string text integer number boolean date datetime uuid enum ref`

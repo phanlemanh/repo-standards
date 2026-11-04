@@ -33,6 +33,12 @@ Only the Python standard library is used (Python 3.11+).
 
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 11):
+    print(f"repo-setup needs Python 3.11 or newer; this is {sys.version.split()[0]}.", file=sys.stderr)
+    sys.exit(2)
+
 import argparse
 import datetime as _dt
 import difflib
@@ -40,8 +46,8 @@ import hashlib
 import json
 import re
 import stat
-import sys
 import tomllib
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -203,10 +209,12 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         k: " ".join(str(val).replace('"', "'").replace("\\", "/").split())
         for k, val in raw.items()
     }
-    name = v.get("project_name", "").strip()
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "app"
+    # Identifiers are ASCII: accents are removed, so a Vietnamese name gives a readable slug.
+    name = v.get("project_name", "").strip().lower().replace("\u0111", "d")
+    name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-") or "app"
     v.setdefault("slug", slug)
-    pkg = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "app"
+    pkg = re.sub(r"[^a-z0-9]+", "_", name).strip("_") or "app"
     if pkg[0].isdigit():
         pkg = "app_" + pkg
     v.setdefault("package_name", pkg)
@@ -221,6 +229,8 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
     v.setdefault("license_spdx", LICENSES[v["license"]][0])
     v.setdefault("npm_license", LICENSES[v["license"]][1])
     # Tiers of the "ai" capability. A higher tier also gets the files of the lower ones.
+    v.setdefault("conversation_language", "en")
+    v.setdefault("docs_language", "en")
     v.setdefault("ai_tier", "call")
     if v["ai_tier"] not in AI_TIERS:
         raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")

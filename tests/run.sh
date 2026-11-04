@@ -434,5 +434,46 @@ PY
 fi
 echo "ok  blueprint (or misses reported above)"
 
+# 26. setup-new: layers, references, language rule, Vietnamese names, old Python
+SK="$ROOT/plugins/repo-setup/skills/setup-new"
+for l in context repo architecture ai stack domain quality delivery governance; do
+  [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
+  for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
+done
+for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
+grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "setup-new does not use its references"
+grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"
+if grep -q 'make every technical choice for them' "$SK/SKILL.md"; then miss "setup-new still decides everything alone"; fi
+v="$TMP/viet"; mkdir -p "$v"
+slug=$(python3 "$S/apply.py" --target "$v" --preset python --var 'project_name=Quán Cà Phê Đông' --var description=x --var owner=a --dry-run --json | json '[c for c in d["created"] if c.startswith("src/")][0].split("/")[1]')
+[ "$slug" = quan_ca_phe_dong ] || miss "Vietnamese project name gives package: $slug"
+python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "Vietnamese text or non-ASCII path inside the plugin"
+import pathlib, re, sys
+vi = re.compile("[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]", re.I)
+bad = []
+for p in pathlib.Path(sys.argv[1]).rglob("*"):
+    if p.is_file():
+        if not str(p.relative_to(sys.argv[1])).isascii():
+            bad.append(str(p))
+        elif p.name != "README.md" and "__pycache__" not in p.parts and vi.search(p.read_text("utf-8", "ignore")):
+            bad.append(str(p))
+print(*bad, sep="\n")
+sys.exit(1 if bad else 0)
+PY
+la="$TMP/lang"; mkdir -p "$la"
+python3 "$S/apply.py" --target "$la" --preset python --var project_name=L --var description=x --var owner=a --var conversation_language=vi --var docs_language=en >/dev/null
+grep -q '^## Language' "$la/AGENTS.md" && grep -q 'Conversation: vi' "$la/AGENTS.md" && grep -q 'Documents: en' "$la/AGENTS.md" || miss "AGENTS.md lacks the language rule"
+grep -q 'Display name' "$la/ontology/glossary.md" || miss "glossary lacks a display name column"
+git -C "$la" init -q -b main; git -C "$la" add -A
+python3 "$S/doctor.py" --target "$la" --json | json '",".join(r["id"] for r in d["failed"])' | grep -q language_policy && miss "doctor rejects the language section"
+old=/usr/bin/python3
+if [ -x "$old" ] && ! "$old" -c 'import tomllib' 2>/dev/null; then
+  for script in apply doctor; do
+    msg=$("$old" "$S/$script.py" --help 2>&1 || true)
+    case "$msg" in *"Python 3.11"*) ;; *) miss "old Python: unfriendly error from $script: $msg" ;; esac
+  done
+fi
+echo "ok  setup-new layers (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
