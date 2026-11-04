@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-05
 
 ### Breaking
 - The plugin now stops at setup. Removed the skills `sdlc-run`, `sdlc-spec`, `sdlc-implement` and
@@ -37,6 +37,13 @@
 - `doctor` rejects hollow policies and pipelines and flags local-only scores.
 - Python bytecode ignored in TypeScript presets; `.gitleaks.toml` allows manifest hashes; no
   credentials in the `.env.example` sample; tests run on macOS.
+
+### Verified
+- Offline suite, manifest validation and the end-to-end combinations in CI on the merged code; run
+  by hand: `fastapi:service-api:container:github-agents`. A repo generated before the split picks up
+  the five project skills and updated workflows on re-apply, with no conflicts.
+- Not yet run: the agent workflows on GitHub, the renamed skills in a live Claude Code session, and
+  the scenarios in `tests/scenarios/guided-setup.md`.
 
 ## 0.3.0 — 2026-11-04
 
