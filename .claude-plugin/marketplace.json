@@ -11,7 +11,7 @@
       "name": "repo-setup",
       "source": "./plugins/repo-setup",
       "description": "Repository setup through decision layers (5 stacks, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers. Stops at setup.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "development",
       "keywords": [
         "ai-native",
