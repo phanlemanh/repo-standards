@@ -1,0 +1,14 @@
+description = "AI in the product: a Claude call, a code-driven workflow or an agent (ai_tier), with evals kept out of make check"
+stacks = ["ts-node", "python"]
+not_stacks = ["react-vite"]
+when = "The product itself calls an LLM. Start at the simplest tier that does the job: most features need one call."
+complexity = "medium"
+
+# Example code: not added in --adopt mode.
+sample = ["evals/**", "mk/ai.mk", "src/ai/**", "src/*/llm.py", "src/*/feedback.py", "tests/test_llm.py", "tests/llm.test.ts", "src/*/triage.py", "src/*/agent.py", "src/*/actions.py", "src/actions/**", "tests/test_agent.py", "tests/agent.test.ts", "tests/test_triage.py", "tests/triage.test.ts", "ontology/actions.yaml", "ontology/roles.yaml", "ontology/entities/Note.yaml"]
+
+[starter]
+install = [
+  "[lang=ts] npm install @anthropic-ai/sdk zod",
+  "[lang=python] uv add anthropic",
+]

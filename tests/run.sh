@@ -155,7 +155,7 @@ echo "ok  hooks"
 for combo in "ts-api:service-api:container" "fastapi:service-api:container" "python:modular-monolith:none" "ts-node:modular-monolith:none:mcp" "python:none:none:mcp"; do
   IFS=: read -r stack arch dep cap <<<"$combo"
   c="$TMP/combo-${stack}-${arch}-${dep}-${cap:-x}"; mkdir -p "$c" && git -C "$c" init -q -b main
-  python3 "$S/apply.py" --target "$c" --preset "$stack" --archetype "$arch" --deploy "$dep" ${cap:+--with "$cap"} --level team \
+  python3 "$S/apply.py" --target "$c" --preset "$stack" --archetype "$arch" --deploy "$dep" --with "github-agents${cap:+,$cap}" --level team \
     --var project_name=Combo --var description=x --var owner=acme/platform >/dev/null || fail "$combo: apply"
   ( cd "$c"
     lang=$(python3 -c "import json; print(json.load(open('.repo-setup.json'))['preset'])")
@@ -308,7 +308,9 @@ grep -q '=== "agent" && action.agent === "forbidden"' "$f/src/generated/ontology
 echo "ok  agent: forbidden (or misses reported above)"
 
 # 21. doctor: a hollow policy or pipeline does not score, and a local score says it is local
-h="$TMP/python-team"
+h="$TMP/python-team-agents"; mkdir -p "$h" && git -C "$h" init -q -b main
+python3 "$S/apply.py" --target "$h" --preset python --level team --with github-agents --var project_name=H --var description=x --var owner=acme >/dev/null
+git -C "$h" add -A
 local_only=$(python3 "$S/doctor.py" --target "$h" --json | json 'd.get("local_only")')
 [ "$local_only" = True ] || miss "doctor does not flag a score without GitHub checks: $local_only"
 python3 "$S/doctor.py" --target "$h" | grep -q 'GitHub protection was not checked' || miss "doctor text does not warn about local-only score"
@@ -340,6 +342,185 @@ leak_cfg "$TMP/fastapi-team" 2>/dev/null || miss "team repo has no narrow gitlea
 tier=$(cd "$g" && python3 tools/autonomy.py --files .gitleaks.toml | json 'd["tier"]')
 [ "$tier" = high ] || miss "tier of .gitleaks.toml: $tier"
 echo "ok  gitleaks allowlist (or misses reported above)"
+
+# 23. github-agents: team alone has no agent workflows; the capability adds them
+n="$TMP/team-no-agents"; mkdir -p "$n" && git -C "$n" init -q -b main
+python3 "$S/apply.py" --target "$n" --preset python --level team --var project_name=N --var description=x --var owner=acme >/dev/null
+[ ! -e "$n/.github/workflows/pr-pipeline.yml" ] || miss "team without agents got pr-pipeline.yml"
+[ ! -e "$n/.github/ISSUE_TEMPLATE/intent.yml" ] || miss "team without agents got intent.yml"
+[ -e "$n/governance/autonomy.yaml" ] || miss "team lost the autonomy policy"
+git -C "$n" add -A
+failed=$(python3 "$S/doctor.py" --target "$n" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+[ "$failed" = lockfile ] || miss "team without agents: doctor failures: $failed"
+y="$TMP/team-agents"; mkdir -p "$y" && git -C "$y" init -q -b main
+python3 "$S/apply.py" --target "$y" --preset python --level team --with github-agents --var project_name=Y --var description=x --var owner=acme >/dev/null
+[ -e "$y/.github/workflows/pr-pipeline.yml" ] || miss "github-agents did not add pr-pipeline.yml"
+rm -f "$y/.github/workflows/agent-implement.yml" "$y/.github/workflows/pr-pipeline.yml"; git -C "$y" add -A
+failed=$(python3 "$S/doctor.py" --target "$y" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+case ",$failed," in *,agent_workflows,*) ;; *) miss "doctor did not notice missing agent workflows: $failed" ;; esac
+if python3 "$S/apply.py" --target "$TMP/bad-agents" --preset python --level starter --with github-agents --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "github-agents accepted at starter"; fi
+o2="$TMP/old-team"; mkdir -p "$o2/.github/workflows" && git -C "$o2" init -q -b main
+printf 'name: PR pipeline\n' > "$o2/.github/workflows/pr-pipeline.yml"
+python3 "$S/apply.py" --target "$o2" --preset python --level team --var project_name=O --var description=x --var owner=a >/dev/null
+[ -e "$o2/.github/workflows/pr-pipeline.yml" ] || miss "apply removed an existing pr-pipeline.yml"
+steps() { ( cd "$1" && python3 -B -c "
+import json,sys; sys.path.insert(0,'tools')
+import github_setup as g
+print(json.dumps(g.plan('o/r','main','@a','m',agents=$2)))" ); }
+steps "$n" False | python3 -c "import json,sys; d=json.load(sys.stdin); w=[x['what'] for x in d]; r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check'],c; assert not any('label' in a for a in w),w; assert not any('approve' in a for a in w),w; assert not any('REPO_SETUP_MARKETPLACE' in a for a in w),w" || miss "github_setup without agents"
+steps "$n" True | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check','gate'],c" || miss "github_setup with agents"
+( cd "$o2" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert g.has_agents(pathlib.Path('.'))" ) || miss "old team repo not detected as having agents"
+( cd "$n" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert not g.has_agents(pathlib.Path('.'))" ) || miss "team repo wrongly detected as having agents"
+echo "ok  github-agents (or misses reported above)"
+
+# 24. capability ai: env keys, evals outside make check, valid tiers, no browser stacks
+for stack in python ts-node; do
+  a="$TMP/ai-$stack"; mkdir -p "$a" && git -C "$a" init -q -b main
+  python3 "$S/apply.py" --target "$a" --preset "$stack" --with ai --var project_name=Ai --var description=x --var owner=acme >/dev/null 2>&1 || miss "ai: apply failed on $stack"
+  grep -q '^CLAUDE_MODEL=' "$a/.env.example" 2>/dev/null && grep -q '^ANTHROPIC_API_KEY=$' "$a/.env.example" && grep -q '^APP_ENV=' "$a/.env.example" || miss "ai: .env.example on $stack"
+  [ -f "$a/evals/tasks.json" ] && grep -q '^eval:' "$a/mk/ai.mk" 2>/dev/null || miss "ai: eval parts on $stack"
+  if grep -qE '^CHECK_TARGETS.*eval' "$a/mk/ai.mk" 2>/dev/null; then miss "ai: eval joined make check on $stack"; fi
+  [ "$(python3 -c "import json;print(len(json.load(open('$a/evals/tasks.json'))))" 2>/dev/null || echo 0)" -ge 5 ] || miss "ai: fewer than 5 eval tasks on $stack"
+done
+if python3 "$S/apply.py" --target "$TMP/bad-tier" --preset python --with ai --var ai_tier=magic --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "bad ai_tier accepted"; fi
+if python3 "$S/apply.py" --target "$TMP/ai-browser" --preset react-vite --with ai --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "ai accepted on a browser stack"; fi
+for tier in call workflow agent; do
+  t="$TMP/ai-tier-$tier"; mkdir -p "$t" && git -C "$t" init -q -b main
+  python3 "$S/apply.py" --target "$t" --preset python --with ai --var ai_tier=$tier --var project_name=T --var description=x --var owner=acme >/dev/null || miss "ai: tier $tier failed"
+  if [ "$tier" = call ]; then [ ! -e "$t/src/t/triage.py" ] || miss "tier call got triage.py"; else [ -e "$t/src/t/triage.py" ] || miss "tier $tier lacks triage.py"; fi
+done
+g2="$TMP/ai-tier-agent"
+python3 -c "import json;d=json.load(open('$g2/.repo-setup.json'));assert 'mcp' in d['capabilities'],d['capabilities']" || miss "agent tier did not bring mcp"
+( cd "$g2" && python3 tools/wiki_lint.py >/dev/null ) || miss "agent tier sample ontology fails wiki-lint"
+[ ! -e "$TMP/ai-tier-call/ontology/actions.yaml" ] || miss "call tier got the sample ontology"
+grep -q 'purgeNotes' "$g2/ontology/actions.yaml" 2>/dev/null || miss "agent tier lacks the sample ontology"
+echo '{}' > "$g2/uv.lock"; git -C "$g2" add -A
+python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep -q ai_agent_bounded && miss "doctor rejects an intact agent"
+subst 's/MAX_ITERATIONS/MAX_TURNS/g' "$g2/src/t/agent.py" 2>/dev/null || true; git -C "$g2" add -A
+python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep -q ai_agent_bounded || miss "doctor missed an agent without a turn limit"
+python3 "$S/doctor.py" --target "$TMP/ai-tier-call" --json | json '[r["id"] for r in d["failed"]+d["passed"] if isinstance(r,dict)]+d["passed"]' | grep -q ai_agent_bounded && miss "call tier is checked for an agent limit"
+echo "ok  ai capability (or misses reported above)"
+
+# 25. blueprint: checked, mapped to apply.py, blocks unfinished work, drift only warns
+B="$ROOT/tests/fixtures/blueprints"
+bp="$S/blueprint.py"
+python3 "$bp" check "$B/ok.yaml" >/dev/null 2>&1 || miss "blueprint: ok rejected"
+if python3 "$bp" check "$B/bad-value.yaml" >/dev/null 2>&1; then miss "blueprint: bad value accepted"; fi
+deps=$(python3 "$bp" dependents ai 2>/dev/null || true)
+case " $deps " in *stack*domain*) ;; *) miss "blueprint: dependents of ai: $deps" ;; esac
+x="$TMP/bp-ok"; mkdir -p "$x" && git -C "$x" init -q -b main
+mapped=$(python3 "$S/apply.py" --target "$x" --from-blueprint "$B/ok.yaml" --json 2>/dev/null | json 'd["preset"]+"/"+d["level"]+"/"+",".join(d["capabilities"])' 2>/dev/null || true)
+[ "$mapped" = python/starter/ai ] || miss "blueprint: wrong mapping: $mapped"
+y2="$TMP/bp-pending"; mkdir -p "$y2"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/pending.yaml" >/dev/null 2>&1; then miss "blueprint: pending applied"; fi
+[ -z "$(ls -A "$y2")" ] || miss "blueprint: pending wrote files"
+python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok-designing.yaml" --dry-run >/dev/null 2>&1 || miss "blueprint: designing dry-run refused"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok-designing.yaml" >/dev/null 2>&1; then miss "blueprint: designing applied"; fi
+[ -z "$(ls -A "$y2")" ] || miss "blueprint: designing wrote files"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok.yaml" --preset fastapi >/dev/null 2>&1; then miss "blueprint: mixed with preset flags"; fi
+if [ -f "$x/.repo-setup.json" ]; then
+  cp "$B/ok.yaml" "$x/setup-blueprint.yaml"; git -C "$x" add -A
+  drift=$(python3 "$S/doctor.py" --target "$x" --json | json 'd.get("blueprint_drift")')
+  [ "$drift" = "[]" ] || miss "blueprint: false drift: $drift"
+  python3 "$S/doctor.py" --target "$x" --json | json 'd["manual_steps"]' | grep -q 'Add a database' || miss "blueprint: manual steps not listed"
+  before=$(python3 "$S/doctor.py" --target "$x" --json | json 'd["score"]')
+  python3 - "$x/.repo-setup.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["level"]="team"; json.dump(d,open(p,"w"))
+PY
+  python3 "$S/doctor.py" --target "$x" --json | json 'len(d["blueprint_drift"])' | grep -qv '^0$' || miss "blueprint: drift not reported"
+  printf 'status: [' > "$x/setup-blueprint.yaml"
+  python3 "$S/doctor.py" --target "$x" --json >/dev/null 2>&1 || miss "blueprint: broken file crashed doctor"
+fi
+echo "ok  blueprint (or misses reported above)"
+
+# 26. setup-new: layers, references, language rule, Vietnamese names, old Python
+SK="$ROOT/plugins/repo-setup/skills/setup-new"
+for l in context repo architecture ai stack domain quality delivery governance; do
+  [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
+  for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
+done
+for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
+grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "setup-new does not use its references"
+grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"
+if grep -q 'make every technical choice for them' "$SK/SKILL.md"; then miss "setup-new still decides everything alone"; fi
+v="$TMP/viet"; mkdir -p "$v"
+slug=$(python3 "$S/apply.py" --target "$v" --preset python --var 'project_name=Quán Cà Phê Đông' --var description=x --var owner=a --dry-run --json | json '[c for c in d["created"] if c.startswith("src/")][0].split("/")[1]')
+[ "$slug" = quan_ca_phe_dong ] || miss "Vietnamese project name gives package: $slug"
+python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "Vietnamese text or non-ASCII path inside the plugin"
+import pathlib, re, sys
+vi = re.compile("[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]", re.I)
+bad = []
+for p in pathlib.Path(sys.argv[1]).rglob("*"):
+    if p.is_file():
+        if not str(p.relative_to(sys.argv[1])).isascii():
+            bad.append(str(p))
+        elif "__pycache__" not in p.parts and vi.search(p.read_text("utf-8", "ignore")):
+            bad.append(str(p))
+print(*bad, sep="\n")
+sys.exit(1 if bad else 0)
+PY
+la="$TMP/lang"; mkdir -p "$la"
+python3 "$S/apply.py" --target "$la" --preset python --var project_name=L --var description=x --var owner=a --var conversation_language=vi --var docs_language=en >/dev/null
+grep -q '^## Language' "$la/AGENTS.md" && grep -q 'Conversation: vi' "$la/AGENTS.md" && grep -q 'Documents: en' "$la/AGENTS.md" || miss "AGENTS.md lacks the language rule"
+grep -q 'Display name' "$la/ontology/glossary.md" || miss "glossary lacks a display name column"
+git -C "$la" init -q -b main; git -C "$la" add -A
+python3 "$S/doctor.py" --target "$la" --json | json '",".join(r["id"] for r in d["failed"])' | grep -q language_policy && miss "doctor rejects the language section"
+old=/usr/bin/python3
+if [ -x "$old" ] && ! "$old" -c 'import tomllib' 2>/dev/null; then
+  for script in apply doctor; do
+    msg=$("$old" "$S/$script.py" --help 2>&1 || true)
+    case "$msg" in *"Python 3.11"*) ;; *) miss "old Python: unfriendly error from $script: $msg" ;; esac
+  done
+fi
+echo "ok  setup-new layers (or misses reported above)"
+
+# 27. docs: real marketplace name, Vietnamese README, honest wording, plugin folder validated
+if grep -q 'your-org/repo-standards' "$ROOT/README.md"; then miss "README still says your-org"; fi
+grep -q 'phanlemanh/repo-standards' "$ROOT/README.md" || miss "README lacks the real marketplace"
+[ -f "$ROOT/README.vi.md" ] || miss "README.vi.md missing"
+grep -q 'README.vi.md' "$ROOT/README.md" || miss "README does not link the Vietnamese version"
+E="$ROOT/plugins/repo-setup/skills/setup-explain/SKILL.md"
+for t in pyproject.toml .coveragerc .gitleaks.toml setup-blueprint.yaml evals/ START-HERE.md; do grep -q "$t" "$E" || miss "setup-explain lacks: $t"; done
+if grep -q 'hidden from logs and from AI agents automatically' "$E"; then miss "setup-explain overclaims pii"; fi
+if grep -qi 'real guardrails\|Rào chắn thật' "$ROOT/plugins/repo-setup/README.md"; then miss "plugin README overclaims guardrails"; fi
+grep -q 'plugin validate plugins/repo-setup' "$ROOT/.github/workflows/test.yml" || miss "CI does not validate the plugin folder"
+echo "ok  docs (or misses reported above)"
+
+# 28. review findings: old team repos keep agents, blueprint values, labels, auto-merge
+r1="$TMP/old-with-agents"; mkdir -p "$r1" && git -C "$r1" init -q -b main
+python3 "$S/apply.py" --target "$r1" --preset python --level team --with github-agents --var project_name=R --var description=x --var owner=a >/dev/null
+python3 - "$r1/.repo-setup.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["capabilities"]=[]; json.dump(d,open(p,"w"))
+PY
+out=$(python3 "$S/apply.py" --target "$r1" --json)
+echo "$out" | json '"\n".join(d["notes"])' | grep -q github-agents || miss "re-apply: no notice about kept agents"
+grep -q '## AI-native SDLC' "$r1/AGENTS.md" || miss "re-apply dropped the agent rules while workflows remain"
+python3 -c "import json;assert 'github-agents' in json.load(open('$r1/.repo-setup.json'))['capabilities']" || miss "re-apply did not record github-agents"
+variant() { python3 - "$B/ok.yaml" "$TMP/variant.yaml" "$1" "$2" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+assert old in t, old
+open(dst, "w", encoding="utf-8").write(t.replace(old, new, 1))
+PY
+}
+variant '{ai_tier: call}' '{ai_tier: magic}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: unknown ai_tier accepted"; fi
+variant '{ai_tier: call}' '{ai_tier: agent, agent_runtime: agent-sdk}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: agent-sdk marked automated"; fi
+variant '{ai_tier: call}' '{ai_tier: agent, agent_runtime: tool-runner}'
+python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1 || miss "blueprint: tool-runner rejected"
+variant '    automation: automated
+    choice: {level: starter}' '    choice: {level: starter}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: decided layer without automation accepted"; fi
+grep -E 'coverage threshold' "$SK/references/layers/quality.md" | grep -q '`partial`' || miss "quality: mixed option must be partial"
+grep -E '^\| Monorepo' "$SK/references/layers/repo.md" | grep -q '`partial`' || miss "repo: monorepo must be partial"
+grep -E 'Custom tiers' "$SK/references/layers/governance.md" | grep -q '`partial`' || miss "governance: custom tiers must be partial"
+grep -q 'tests' "$SK/SKILL.md" && grep -qi 'sample tests' "$SK/SKILL.md" || miss "setup-new forgets the sample tests when replacing the ontology"
+steps "$n" False | grep -q allow_auto_merge && miss "github_setup changes auto-merge without agents"
+echo "ok  review findings (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

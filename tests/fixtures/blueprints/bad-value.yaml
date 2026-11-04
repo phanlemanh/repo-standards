@@ -1,0 +1,52 @@
+version: 1
+status: approved
+depth: review
+conversation_language: vi
+docs_language: en
+layers:
+  context:
+    status: decided
+    source: user
+    automation: automated
+    choice: {project_name: Shop, description: "Orders and regulars", owner: acme}
+    why: "Named by the user"
+  repo:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {license: MIT}
+    why: "One product, one repo"
+    rejected:
+      - {option: monorepo, why: "Only one package"}
+  architecture:
+    status: not_applicable
+  ai:
+    status: decided
+    source: user
+    automation: automated
+    choice: {ai_tier: call}
+    why: "Classification only"
+  stack:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {preset: python}
+    why: "Small tool"
+  domain:
+    status: maybe
+    source: proposed
+    automation: manual
+    choice: {database: postgres}
+    why: "Later"
+    manual_steps:
+      - "Add a database"
+  quality:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {level: starter}
+    why: "Working alone"
+  delivery:
+    status: not_applicable
+  governance:
+    status: not_applicable

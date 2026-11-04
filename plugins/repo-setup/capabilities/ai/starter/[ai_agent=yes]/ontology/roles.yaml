@@ -1,0 +1,3 @@
+roles:
+  - { name: staff, description: People running the service }
+  - { name: agent, description: AI agents acting through the agent loop or MCP }

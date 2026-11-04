@@ -1,135 +1,100 @@
 ---
 name: setup-new
-description: Set up a new (or empty) repository to a top-tier standard — README, lint/format, strict types, tests, CI, security, CLAUDE.md, ontology/ and wiki/ — through a short interview, with no prior expertise needed. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
+description: Set up a new or empty repository through decision layers — repo strategy, architecture, AI in the product, stack, domain, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
 ---
 
-# Set up a repository to a top-tier standard
+# Set up a repository through decision layers
 
-You are guiding someone who may NOT know what a linter, lockfile or CI is.
-Your job: ask a few plain-language questions, make every technical choice for them
-using the presets, show the plan, apply it safely, prove it works, and explain the result.
+One flow for everyone; only the number of stops differs. A newcomer may not know what a linter is.
+A professional may arrive with half the design done and wants gaps found and choices challenged.
 
-Talk to the user in their language. Keep technical words to a minimum and explain any you use.
+Scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/` (if the variable is not expanded, use the `scripts/`
+folder two levels above this file): `detect.py`, `apply.py`, `doctor.py`, `blueprint.py`.
 
-## Where the tools are
+## Language
 
-Scripts live in `${CLAUDE_PLUGIN_ROOT}/scripts/` (if the variable is not expanded,
-use the `scripts/` folder two levels above this SKILL.md). All need only Python 3.11+.
+Code, file names, commits and identifiers are always English. Set `conversation_language` from the
+language the user writes in, and talk in it, translating option labels. Set `docs_language` to the
+same unless the user says otherwise. Keep technical words such as repo, commit, CI as they are and
+explain each one the first time you talk to a newcomer.
 
-- `detect.py --target DIR` — what is in the folder, which tools are installed (JSON)
-- `apply.py --target DIR --preset P --level L --var k=v ... [--dry-run] [--diff] [--json]`
-- `doctor.py --target DIR [--level L] [--json]` — score against `checklists/top-tier.toml`
+## 1. Check the machine
 
-Never write the scaffold files by hand: always go through `apply.py`, so results are
-consistent and re-runnable.
+Run `python3 --version` first. Below 3.11, the scripts cannot run: say so in plain words, offer to
+install a newer Python (the old one stays), and ask before installing. Then run
+`detect.py --target <repo>`.
 
-## Steps
+- `setup-blueprint.yaml` exists and its `status` is not `applied`: resume from the first layer that
+  is `pending` or `needs_review`.
+- The folder has code and no `previous_setup`: switch to **setup-adopt**.
 
-### 1. Detect
-Run `detect.py --target <repo>` (default: current directory). Note:
-- `is_empty`, `has_git`, `previous_setup` (already set up before → this is an upgrade),
-- `suggested_preset`, `unsupported_stack`,
-- missing tools (`node`/`npm` for ts-node, `uv` for python, `pre-commit` for team level).
+## 2. Show the whole picture
 
-If the folder already has code (not `is_empty`, no `previous_setup`), switch to the
-**setup-adopt** skill: it avoids sample code and duplicate tool configs.
+List the layers from `references/layers.toml` with their state (already known, to decide, nothing
+to decide) in a short list. Invite the user to paste anything they have already decided, in any
+form. Mark what they give as `source: user`.
 
-### 2. Interview (purpose first; at most two rounds of up to 4 questions)
-Use AskUserQuestion when available; otherwise ask in one short message. Ask about **needs**,
-never about architecture names; map the answers yourself with `apply.py --list-options`
-(each option has `description`, `stacks`, `when`, `complexity`). Skip what detection answered.
+## 3. Choose the depth
 
-Round 1 — what is being built:
-1. **Name and one-sentence description** (free text).
-2. **Who uses it?** people through a UI / other apps, partners or AI agents through an API /
-   it runs as a tool, library or job.
-3. **How big will it get?** one small team and one deployable app / several domains that
-   should stay independent / not sure.
-4. **Level**: `starter` (solo, small) or `team` (shared, long-lived: pre-commit, security
-   scans, coverage, dev container, CODEOWNERS, releases, and the **AI-native SDLC**: autonomy
-   policy, agent workflows on GitHub, independent agent review). Recommend `team` when more
-   than one person, or any AI agent on GitHub, will work on it.
+Infer it; ask only if unclear. It can change at any layer.
 
-Map the answers (explain the choice in one line each):
-- **stack**: Python API → `fastapi`; TypeScript API → `ts-api`; web front-end → `react-vite`;
-  library/CLI/worker → `python` or `ts-node` (pre-select `suggested_preset`).
-- **archetype**: consumed through an API (incl. agents) → `service-api`; several domains in
-  one app → `modular-monolith`; small single-purpose app → none. Do not pick an archetype the
-  answers do not justify; say it can be added later by re-running apply.
-- **capabilities**: AI agents should operate the system → `--with mcp` (service-api has it).
-- **deploy**: a service that will run on a server or cloud → `--deploy container`.
+- **Hand it to Claude**: no technical preferences stated. Take the recommendation at every layer and
+  stop only at the final review. Default level is `starter`. Do not ask the user to choose a level.
+- **Review each layer**: stop at every layer with a real choice.
+- **Bring a design**: fill the layers from what they pasted, and ask only about gaps and conflicts.
 
-Round 2 — only what is still missing:
-- **Owner** (GitHub user/org/`org/team`; propose it from the git remote) and **license**:
-  `Proprietary` (usual for company code), `MIT` or `Apache-2.0` → `--var license=...`.
-- Team level: the **marketplace** git URL of this plugin, so every clone and every CI agent
-  gets it → `--var marketplace=<owner/repo or URL>` (skip if unknown).
+## 4. Go through the layers
 
-Pass the choices as `--preset P --level L [--archetype A] [--deploy D] [--with mcp]`.
+For each layer, read `references/layers/<id>.md` and run this loop:
 
-If the stack is unsupported (Go, Rust, Java…): say there is no preset yet, run
-`doctor.py` to show what a top-tier repo needs, and offer to add the items by hand.
+1. **Framing**: one sentence on what this layer decides and what earlier layers imply.
+2. **Analysis**: two or three options, each with why, trade-off, when it is wrong, and its label.
+   Recommended option first. Use AskUserQuestion when available. Never offer an option without its
+   label, and never imply that a `manual` option will be built.
+3. **Refine**: the user picks, edits or asks. Name what the choice leaves undecided.
+4. **Decide**: write it to `setup-blueprint.yaml`, then run `blueprint.py dependents <layer>` and mark
+   any decided layer in that list as `needs_review`. Revisit those layers.
 
-### 3. Show the plan
-Run `apply.py ... --dry-run --diff`. Summarise for a non-expert in 5–8 lines:
-what groups of files will be created and what each group gives them
-(e.g. "CI: every push is checked automatically on GitHub"), plus any `conflict` files
-(existing files that differ — they will be left untouched). Ask for a go-ahead.
+A layer with only one sensible answer gets one line, no question. Keep the blueprint `status` at
+`designing`. Check it with `blueprint.py check setup-blueprint.yaml`.
 
-### 4. Apply
-Run `apply.py` without `--dry-run`. Report created / kept / conflict counts.
-For each `conflict`, show the diff only if the user wants it; offer to merge the useful
-parts by hand, and only with their approval.
+## 5. Final review
 
-### 5. Install
-Run the `next_commands.install` list from the apply output (`--json` makes it easy),
-in order, from the repo root. If a tool is missing, install it or tell the user exactly how:
-- uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (or `brew install uv`)
-- pre-commit (ts-node team): `uv tool install pre-commit` or `pipx install pre-commit`
-- Node.js 22: via nvm / fnm / the official installer.
-- Windows: the Makefile needs `make` and a POSIX shell. Recommend WSL2 (best), or Git Bash
-  plus `winget install GnuWin32.Make` / `choco install make`. The dev container
-  (team level) avoids all of this.
+1. Get an independent critique using `references/critic.md`.
+2. Show a summary by layer, the critique, and `apply.py --from-blueprint setup-blueprint.yaml
+   --dry-run`, including any `manual` items and `conflict` files.
+3. On approval, set `status: approved`.
 
-### 6. Verify — do not skip
-Run the `next_commands.verify` list. Everything must pass.
-- Formatting failures: run `make format`, then verify again.
-- `gitleaks` may need a first-time download/build; if the network blocks it, say so and
-  continue — CI will run it.
-- Anything else: fix it (max 2 attempts), otherwise report precisely what is failing.
+## 6. Build without stopping
 
-Then run `doctor.py`. Expected: 100/100 at the chosen level. Explain any gap.
+1. `apply.py --from-blueprint setup-blueprint.yaml --json`.
+2. Run `next_commands.install` in order. A missing tool: install it or say exactly how.
+   Windows needs WSL2, Git Bash with make, or the dev container.
+3. If the user described their domain, write it with **ontology-add**, replacing the sample ontology
+   if there is one, then write the handlers, and update the sample tests and `evals/` that name the
+   sample actions. `make gen`.
+4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
+   most 2 fixes, then report exactly what fails.
+5. Run `doctor.py`. Explain what the score does and does not measure.
+6. For each decided layer with rejected options, add a record in `wiki/decisions/`. With "Hand it to
+   Claude", write one record for the whole setup.
+7. Set `status: applied`.
+8. Write the tour using `references/tour.md`.
 
-### 7. Seed the domain model (optional, recommended)
-Ask: "What are the 3–5 most important things your project deals with?"
-(e.g. Customer, Order, Drink). For each: one-sentence definition and key properties.
-Follow the **ontology-add** skill to write them (glossary, entity YAML, relations,
-wiki entity pages), then `make gen` and `make check`. Keep it small — it can grow later.
+Stop and ask for anything outside the folder: creating a GitHub repo, pushing, the GitHub App,
+secrets, or running `make eval`, which spends API credit. Follow **sdlc-github-setup** for GitHub.
 
-### 7b. Domain actions (if archetype service-api or capability mcp)
-Ask which 2–4 things users or agents must be able to **do** (place an order, award points…),
-who may do each (roles) and whether agents may do it alone, with confirmation, or never.
-Write them with **ontology-add** (`ontology/actions.yaml`, `roles.yaml`, `pii: true` on
-personal data), `make gen`, then implement the handlers or leave them as the first issue.
+## 7. Finish
 
-### 7c. GitHub and the AI-native SDLC (team level)
-Follow **sdlc-github-setup**: labels, environments, ruleset, the Claude GitHub App and one
-secret. Then `doctor.py --remote` confirms branch protection and CI.
-
-### 8. Commit (ask first)
-If the repo has git, offer one commit: `chore: set up repository (repo-setup <preset>/<level>)`.
-Do not push and do not create a GitHub repo unless asked.
-
-### 9. Wrap up for a non-expert
-Short summary:
-- score from doctor, and the 3 commands they will use daily: `make dev`, `make check`, `make format`;
-- what will now happen automatically (CI on every push, Dependabot PRs, secret scan…);
-- the manual steps doctor lists (branch protection) with one line on how;
-- that `/repo-setup:setup-explain` answers "what is this file / why did it block my commit?".
+Offer one commit: `chore: set up repository (repo-setup <preset>/<level>)`. Then give a short
+summary: score and what it means, the three daily commands, what is not done, where the tour is.
 
 ## Rules
-- Never overwrite or delete existing files; never `--force` anything.
+
+- Never overwrite or delete existing files; never `--force`.
 - Never commit secrets; never put real values in `.env.example`.
-- Do not invent tool choices outside the preset; presets are the team standard.
-- Re-running is safe: to upgrade starter → team, run `apply.py --level team` (vars are
-  remembered in `.repo-setup.json`).
+- `apply.py` is the only way to create files from presets.
+- Do not present options outside the presets as automated.
+- Never turn on `github-agents` unless the user asked.
+- Never change a choice the user stated without asking.
+- Later changes to the architecture or AI tier are manual: `apply.py` only adds files.

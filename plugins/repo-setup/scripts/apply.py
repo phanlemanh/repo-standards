@@ -33,6 +33,12 @@ Only the Python standard library is used (Python 3.11+).
 
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 11):
+    print(f"repo-setup needs Python 3.11 or newer; this is {sys.version.split()[0]}.", file=sys.stderr)
+    sys.exit(2)
+
 import argparse
 import datetime as _dt
 import difflib
@@ -40,11 +46,12 @@ import hashlib
 import json
 import re
 import stat
-import sys
 import tomllib
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import blueprint  # noqa: E402
 from doctor import Repo, glob_to_regex  # noqa: E402
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -54,6 +61,7 @@ LEVELS = ["starter", "team"]
 PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 CONDITION = re.compile(r"^\[([a-zA-Z_][a-zA-Z0-9_]*)=([^\]]+)\]$")
 REQUIRED_VARS = ["project_name", "description", "owner"]
+AI_TIERS = ("call", "workflow", "agent")
 LICENSES = {
     # license var -> (SPDX for pyproject, value for package.json)
     "MIT": ("MIT", "MIT"),
@@ -131,7 +139,11 @@ def units(
 
 
 def check_combination(
-    preset: str, archetype: str, deploy: str, caps: list[str] | None = None
+    preset: str,
+    archetype: str,
+    deploy: str,
+    caps: list[str] | None = None,
+    level: str = "team",
 ) -> None:
     chain = set(preset_chain(preset))
     pairs = [("archetypes", archetype), ("deploy", deploy)]
@@ -143,9 +155,16 @@ def check_combination(
             label = {"archetypes": "archetype", "capabilities": "capability"}.get(kind, kind)
             raise ValueError(f"unknown {label} '{name}'. "
                              f"Available: {', '.join(available(kind)) or 'none'}")
-        allowed = _read_toml(PLUGIN_ROOT / kind / name / "preset.toml").get("stacks", [])
+        meta = _read_toml(PLUGIN_ROOT / kind / name / "preset.toml")
+        allowed = meta.get("stacks", [])
         if allowed and not chain & set(allowed):
             raise ValueError(f"{name} works with stacks: {', '.join(allowed)} (not {preset})")
+        refused = set(meta.get("not_stacks", []))
+        if chain & refused:
+            raise ValueError(f"{name} does not work with: {', '.join(sorted(chain & refused))}")
+        required = meta.get("requires_level")
+        if required and LEVELS.index(level) < LEVELS.index(required):
+            raise ValueError(f"{name} needs level {required} (not {level})")
 
 
 def load_meta(
@@ -190,10 +209,12 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         k: " ".join(str(val).replace('"', "'").replace("\\", "/").split())
         for k, val in raw.items()
     }
-    name = v.get("project_name", "").strip()
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "app"
+    # Identifiers are ASCII: accents are removed, so a Vietnamese name gives a readable slug.
+    name = v.get("project_name", "").strip().lower().replace("\u0111", "d")
+    name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-") or "app"
     v.setdefault("slug", slug)
-    pkg = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "app"
+    pkg = re.sub(r"[^a-z0-9]+", "_", name).strip("_") or "app"
     if pkg[0].isdigit():
         pkg = "app_" + pkg
     v.setdefault("package_name", pkg)
@@ -207,6 +228,14 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         raise ValueError(f"license must be one of: {', '.join(LICENSES)}")
     v.setdefault("license_spdx", LICENSES[v["license"]][0])
     v.setdefault("npm_license", LICENSES[v["license"]][1])
+    # Tiers of the "ai" capability. A higher tier also gets the files of the lower ones.
+    v.setdefault("conversation_language", "en")
+    v.setdefault("docs_language", "en")
+    v.setdefault("ai_tier", "call")
+    if v["ai_tier"] not in AI_TIERS:
+        raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")
+    v["ai_workflow"] = "yes" if v["ai_tier"] in ("workflow", "agent") else "no"
+    v["ai_agent"] = "yes" if v["ai_tier"] == "agent" else "no"
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
     market = v.get("marketplace", "").strip()
     if market:
@@ -355,6 +384,15 @@ def merge_lines(current: bytes, template: bytes) -> bytes | None:
     return (text + "\n# Added by repo-setup\n" + "\n".join(missing) + "\n").encode("utf-8")
 
 
+def _keep(args: argparse.Namespace) -> list[str]:
+    """The flags that still apply next to a blueprint."""
+    kept = ["--target", args.target]
+    for name in ("dry_run", "diff", "json", "adopt"):
+        if getattr(args, name):
+            kept.append("--" + name.replace("_", "-"))
+    return kept
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -376,6 +414,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deploy", default=None, help="Deployment target, e.g. container (default: none)")
     ap.add_argument("--with", dest="caps", default=None,
                     help="Extra capabilities, comma-separated (e.g. mcp). Archetypes add their own.")
+    ap.add_argument("--from-blueprint", metavar="FILE", default=None,
+                    help="Take the choices from a setup-blueprint.yaml; not with --preset and co.")
     ap.add_argument("--adopt", action="store_true", help="Existing codebase: see module docs")
     ap.add_argument("--dry-run", action="store_true", help="Show the plan, write nothing")
     ap.add_argument("--diff", action="store_true", help="Print unified diffs for conflicts")
@@ -384,6 +424,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--list-options", action="store_true",
                     help="List stacks, archetypes and deploy targets with descriptions")
     args = ap.parse_args(argv)
+
+    if args.from_blueprint:
+        mixed = [args.preset, args.level, args.archetype, args.deploy, args.caps, args.var]
+        if any(mixed):
+            ap.error("--from-blueprint carries all the choices: do not add --preset and the like")
+        try:
+            plan_file = blueprint.load(Path(args.from_blueprint))
+        except (OSError, ValueError) as exc:
+            ap.error(f"cannot read the blueprint: {exc}")
+        problems = blueprint.errors(plan_file)
+        if problems:
+            ap.error("the blueprint has problems: " + "; ".join(problems))
+        waiting = blueprint.blocking(plan_file)
+        if waiting:
+            ap.error("these layers still need a decision: " + ", ".join(waiting))
+        if not args.dry_run and plan_file.get("status") not in ("approved", "applied"):
+            ap.error("the blueprint is not approved yet: use --dry-run to preview it")
+        args = ap.parse_args([*blueprint.to_apply_args(plan_file), *_keep(args)])
+        args.from_blueprint = None
 
     if args.list_options:
         def describe(kind: str) -> dict[str, dict]:
@@ -423,10 +482,13 @@ def main(argv: list[str] | None = None) -> int:
     for c in (args.caps or "").split(","):
         if c.strip() and c.strip() not in caps:
             caps.append(c.strip())
-    try:
-        check_combination(preset, archetype, deploy, caps)
-    except ValueError as exc:
-        ap.error(str(exc))
+    notes: list[str] = []
+    # Repos from before github-agents was split out still have the agent workflows. Keep the
+    # capability, or a re-apply would drop the agent rules from AGENTS.md and leave them running.
+    agent_pipeline = ".github/workflows/pr-pipeline.yml"
+    if agent_pipeline in previous.get("files", {}) and "github-agents" not in caps:
+        caps.append("github-agents")
+        notes.append("kept capability github-agents: this repo has agent workflows")
 
     raw_vars: dict[str, str] = dict(previous.get("vars", {}))
     for item in args.var:
@@ -439,6 +501,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("Missing required --var: " + ", ".join(missing))
     try:
         variables = derive_vars(raw_vars)
+    except ValueError as exc:
+        ap.error(str(exc))
+    # The agent tier builds on the MCP layer (same permission checks), which must come first.
+    if "ai" in caps and variables["ai_tier"] == "agent" and "mcp" not in capabilities_for(archetype):
+        if "mcp" in caps:
+            caps.remove("mcp")
+        caps.insert(caps.index("ai"), "mcp")
+    try:
+        check_combination(preset, archetype, deploy, caps, level)
     except ValueError as exc:
         ap.error(str(exc))
     meta = load_meta(preset, level, archetype, deploy, caps)
@@ -581,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
         "dry_run": args.dry_run,
         **results,
         "skip_reasons": reasons,
+        "notes": notes,
         "next_commands": {"install": meta["install"], "verify": meta["verify"]},
         "diffs": diffs,
     }
@@ -591,6 +663,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{mode}: preset={preset} level={level}{' adopt' if adopt else ''} target={target}"
         )
+        for note in notes:
+            print(f"Note: {note}")
         for label in results:
             items = results[label]
             if items:

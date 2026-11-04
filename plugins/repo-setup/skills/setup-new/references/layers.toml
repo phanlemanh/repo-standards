@@ -1,0 +1,38 @@
+# The decision layers of setup-new, in the order they are visited. Source of truth for
+# scripts/blueprint.py. Details of each layer: layers/<id>.md.
+
+[[layer]]
+id = "context"
+depends_on = []
+
+[[layer]]
+id = "repo"
+depends_on = ["context"]
+
+[[layer]]
+id = "architecture"
+depends_on = ["context"]
+
+[[layer]]
+id = "ai"
+depends_on = ["architecture"]
+
+[[layer]]
+id = "stack"
+depends_on = ["architecture", "ai"]
+
+[[layer]]
+id = "domain"
+depends_on = ["architecture", "ai"]
+
+[[layer]]
+id = "quality"
+depends_on = ["repo"]
+
+[[layer]]
+id = "delivery"
+depends_on = ["architecture", "stack"]
+
+[[layer]]
+id = "governance"
+depends_on = ["ai", "quality"]

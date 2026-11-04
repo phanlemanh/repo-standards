@@ -2,7 +2,8 @@
  * HTTP API generated from the ontology: `POST /v1/actions/{name}` for every action in
  * ontology/actions.yaml (contract: contracts/openapi.json, served at /contract/openapi.json).
  *
- * Order of checks: API key -> action exists -> role may run it -> input valid -> handler.
+ * Order of checks: API key -> action exists -> role may run it -> not an agent on a confirm
+ * action -> input valid -> handler.
  * Responses to role "agent" have personal data redacted. Logs never contain request bodies.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -56,6 +57,10 @@ export function registerActionRoutes(app: FastifyInstance, options: ActionRoutes
       if (!spec) return reply.code(404).send({ error: `unknown action ${request.params.name}` });
       if (!can(role, spec)) {
         return reply.code(403).send({ error: `role ${role} may not run ${spec.name}` });
+      }
+      if (role === "agent" && spec.agent === "confirm") {
+        // No approval queue yet: an API call has no person to ask, so this stays closed.
+        return reply.code(403).send({ error: `${spec.name} needs human confirmation` });
       }
       const body = request.body ?? {};
       const errors = validate(spec.inputSchema, body);

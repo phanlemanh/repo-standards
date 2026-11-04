@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+- Level `team` no longer includes agent workflows. New repos enable them with
+  `--with github-agents`. Repos whose manifest lists the agent workflows keep the capability
+  automatically on re-apply, with a note.
+- `agent: confirm`: over HTTP, role `agent` now gets 403. MCP tools carry
+  `_meta["anthropic/requiresUserInteraction"]`, which Claude Code enforces; other clients may not.
+- `agent: forbidden` now also holds in `can()`, and wiki-lint rejects it combined with role `agent`.
+
+### Guided setup
+- `setup-new` goes through nine decision layers at three depths, with labelled options
+  (`automated`, `partial`, `manual`), an independent critique and a tour file.
+- `setup-blueprint.yaml` and `apply.py --from-blueprint`; `doctor` reports drift and manual steps.
+- Generated repos state a language rule in `AGENTS.md`; the glossary has a display name column.
+
+### AI in the product
+- Capability `ai` with tiers `call`, `workflow` and `agent`, using the official Anthropic SDK.
+  `make eval` is separate from `make check`. The agent tier builds tools from the ontology.
+
+### Fixes
+- Tier classification: renames judge the old path, non-ASCII paths match, added skip markers count
+  as weakening tests; nested agent config and `conftest.py` are high tier.
+- PreToolUse gate: uses the plugin's own code, only in repo-setup repos, closed when the policy is
+  unusable. Stop hook works in linked worktrees.
+- Project names with accents give ASCII slugs. Clear error on Python below 3.11.
+- `doctor` rejects hollow policies and pipelines and flags local-only scores.
+- Python bytecode ignored in TypeScript presets; `.gitleaks.toml` allows manifest hashes; no
+  credentials in the `.env.example` sample; tests run on macOS.
+
 ## 0.3.0 — 2026-11-04
 
 ### AI-native SDLC (humans at the edges)

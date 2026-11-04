@@ -4,10 +4,12 @@
   python3 tools/github_setup.py              # show what would be done (dry run)
   python3 tools/github_setup.py --apply      # do it (needs admin rights on the repository)
 
-Sets up: labels used by agents and the autonomy gate; squash-only merges with auto-merge;
-GitHub Actions allowed to approve pull requests (for low-tier auto-merge); environments
-"staging" and "production" (production requires a human reviewer); a ruleset on the default
-branch (pull request + code-owner review + required checks); repository variables.
+Always: squash-only merges; environments "staging" and "production" (production requires a
+human reviewer); a ruleset on the default branch (pull request + code-owner review + required
+checks).
+With agent workflows (--with github-agents at apply time): labels used by agents and the
+autonomy gate, auto-merge, GitHub Actions allowed to approve low-tier pull requests, the "gate"
+required check, and repository variables.
 It never prints or sets secret values: it only tells you which secrets are missing.
 """
 
@@ -36,7 +38,12 @@ LABELS = [
     ("agent-review:approved", "0e8a16", "Independent agent review found no blockers"),
     ("agent-review:changes", "d93f0b", "Independent agent review requested changes"),
 ]
-REQUIRED_CHECKS = ["check", "gate"]
+AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
+
+
+def has_agents(root: Path) -> bool:
+    """Agent workflows are on when the PR pipeline exists (also true for older repositories)."""
+    return (root / AGENT_WORKFLOW).exists()
 
 
 def gh(args: list[str], input_text: str | None = None) -> tuple[bool, str]:
@@ -64,9 +71,12 @@ def reviewer_entity(handle: str) -> dict[str, Any] | None:
     return {"type": "User", "id": int(out)} if ok and out.isdigit() else None
 
 
-def plan(repo: str, branch: str, reviewer: str, marketplace: str) -> list[dict[str, Any]]:
+def plan(
+    repo: str, branch: str, reviewer: str, marketplace: str, agents: bool
+) -> list[dict[str, Any]]:
     steps: list[dict[str, Any]] = []
-    for name, color, desc in LABELS:
+    required_checks = ["check", "gate"] if agents else ["check"]
+    for name, color, desc in LABELS if agents else []:
         steps.append(
             {
                 "what": f"label {name}",
@@ -84,14 +94,14 @@ def plan(repo: str, branch: str, reviewer: str, marketplace: str) -> list[dict[s
         )
     steps.append(
         {
-            "what": "squash-only merges, auto-merge, delete merged branches",
+            "what": "squash-only merges, delete merged branches"
+            + (", auto-merge" if agents else ""),
             "args": [
                 "api",
                 "-X",
                 "PATCH",
                 f"repos/{repo}",
-                "-F",
-                "allow_auto_merge=true",
+                *(["-F", "allow_auto_merge=true"] if agents else []),
                 "-F",
                 "delete_branch_on_merge=true",
                 "-F",
@@ -103,21 +113,22 @@ def plan(repo: str, branch: str, reviewer: str, marketplace: str) -> list[dict[s
             ],
         }
     )
-    steps.append(
-        {
-            "what": "GitHub Actions may approve PRs (needed for low-tier auto-merge)",
-            "args": [
-                "api",
-                "-X",
-                "PUT",
-                f"repos/{repo}/actions/permissions/workflow",
-                "-f",
-                "default_workflow_permissions=read",
-                "-F",
-                "can_approve_pull_request_reviews=true",
-            ],
-        }
-    )
+    if agents:
+        steps.append(
+            {
+                "what": "GitHub Actions may approve PRs (needed for low-tier auto-merge)",
+                "args": [
+                    "api",
+                    "-X",
+                    "PUT",
+                    f"repos/{repo}/actions/permissions/workflow",
+                    "-f",
+                    "default_workflow_permissions=read",
+                    "-F",
+                    "can_approve_pull_request_reviews=true",
+                ],
+            }
+        )
     steps.append(
         {
             "what": "environment staging",
@@ -153,7 +164,7 @@ def plan(repo: str, branch: str, reviewer: str, marketplace: str) -> list[dict[s
                 "type": "required_status_checks",
                 "parameters": {
                     "strict_required_status_checks_policy": False,
-                    "required_status_checks": [{"context": c} for c in REQUIRED_CHECKS],
+                    "required_status_checks": [{"context": c} for c in required_checks],
                 },
             },
         ],
@@ -161,12 +172,12 @@ def plan(repo: str, branch: str, reviewer: str, marketplace: str) -> list[dict[s
     steps.append(
         {
             "what": f"ruleset on {branch}: PR + code-owner review + checks "
-            f"{', '.join(REQUIRED_CHECKS)}",
+            f"{', '.join(required_checks)}",
             "ruleset": ruleset,
             "args": ["api", "-X", "POST", f"repos/{repo}/rulesets", "--input", "-"],
         }
     )
-    if marketplace:
+    if agents and marketplace:
         steps.append(
             {
                 "what": "variable REPO_SETUP_MARKETPLACE (agents install repo-setup in CI)",
@@ -204,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     owners = (policy.get("owners") or {}).get("high") or []
     reviewer = args.reviewer or (owners[0] if owners else "")
 
-    steps = plan(repo, branch, reviewer, args.marketplace)
+    agents = has_agents(root)
+    steps = plan(repo, branch, reviewer, args.marketplace, agents)
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     failures = 0
     for step in steps:
@@ -232,7 +244,9 @@ def main(argv: list[str] | None = None) -> int:
     ok, out = gh(["secret", "list", "--json", "name", "--jq", ".[].name"])
     names = set(out.splitlines()) if ok else set()
     print("\nSecrets (values are never read):")
-    if names & {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}:
+    if not agents:
+        print("  - agent workflows are off (apply.py --with github-agents): no agent secret needed")
+    elif names & {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}:
         print("  + agent credential present")
     else:
         print(

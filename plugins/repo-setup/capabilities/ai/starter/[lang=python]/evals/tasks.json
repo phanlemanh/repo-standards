@@ -1,0 +1,7 @@
+[
+  {"id": "praise", "input": "The coffee was wonderful and the staff were kind.", "expect": "positive"},
+  {"id": "complaint", "input": "My order was wrong and nobody answered the phone.", "expect": "negative"},
+  {"id": "fact", "input": "I visited on Tuesday at around noon.", "expect": "neutral"},
+  {"id": "short-praise", "input": "Love it, will come back!", "expect": "positive"},
+  {"id": "refund", "input": "Terrible experience, I want a refund.", "expect": "negative"}
+]

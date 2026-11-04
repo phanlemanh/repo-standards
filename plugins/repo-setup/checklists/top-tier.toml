@@ -174,6 +174,15 @@ fix = "Run setup-new, or write CLAUDE.md listing make targets and conventions."
 any = [{ paths = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"], min_lines = 10 }]
 
 [[check]]
+id = "language_policy"
+level = "starter"
+weight = 1
+title = "Agent guide states which language to use where"
+why = "Without a rule, each session guesses, and code, docs and conversation drift apart."
+fix = "Add a ## Language section to AGENTS.md (see the core preset)."
+any = [{ paths = ["AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md"], pattern = '(?m)^## Language' }]
+
+[[check]]
 id = "ontology"
 level = "starter"
 weight = 2
@@ -377,15 +386,17 @@ fix = "Run: make codeowners"
 [[check]]
 id = "agent_workflows"
 level = "team"
+capabilities = ["github-agents"]
 weight = 2
 title = "Agent workflows: intent issues -> spec -> PR, independent agent review, tier gate"
 why = "Agents pick up work from issues and every PR gets the same gate, without anyone remembering."
-fix = "Add .github/workflows/agent-implement.yml and pr-pipeline.yml (team level)."
+fix = "Re-run apply with --with github-agents."
 any = [{ paths = [".github/workflows/*.yml"], pattern = '(?s)autonomy\.py.*claude-code-action' }]
 
 [[check]]
 id = "intent_template"
 level = "team"
+capabilities = ["github-agents"]
 weight = 1
 title = "Intent issue form (what / why / acceptance criteria)"
 why = "Agents need testable acceptance criteria; the form asks for them."
@@ -446,6 +457,47 @@ title = "Container image: multi-stage, non-root user, healthcheck"
 why = "Small attack surface and self-healing deployments."
 fix = "Use the Dockerfile from the container deploy layer."
 any = [{ paths = ["Dockerfile"], pattern = '(?s)FROM .* AS .*FROM .*USER .*HEALTHCHECK' }]
+
+[[check]]
+id = "ai_evals"
+level = "starter"
+weight = 2
+capabilities = ["ai"]
+title = "Evals exist for the AI features"
+why = "You cannot tell whether a prompt or model change helped without a repeatable set of tasks."
+fix = "Add evals/tasks.json, starting from real failures."
+any = [{ paths = ["evals/tasks.json"] }]
+
+[[check]]
+id = "ai_eval_target"
+level = "starter"
+weight = 1
+capabilities = ["ai"]
+title = "make eval runs the evals, outside make check"
+why = "Evals cost money, so they run on purpose rather than on every check."
+fix = "Add an eval target in mk/ai.mk."
+any = [{ paths = ["mk/ai.mk"], pattern = '(?m)^eval:' }]
+
+[[check]]
+id = "ai_agent_bounded"
+level = "starter"
+weight = 2
+capabilities = ["ai"]
+vars = { ai_tier = "agent" }
+title = "The agent has a limit on turns"
+why = "A loop without a limit can run up cost and keep acting after it should have stopped."
+fix = "Set MAX_ITERATIONS and pass it to the tool runner."
+any = [{ paths = ["src/**/agent.py", "src/ai/agent.ts"], pattern = 'MAX_ITERATIONS' }]
+
+[[check]]
+id = "ai_env_example"
+level = "starter"
+weight = 1
+capabilities = ["ai"]
+title = ".env.example documents the Claude settings"
+why = "New machines know which variables to set, without sharing the key."
+fix = "Add ANTHROPIC_API_KEY= and CLAUDE_MODEL= to .env.example."
+any = [{ paths = [".env.example"], pattern = 'ANTHROPIC_API_KEY' }]
 
 # ---------------------------------------------------------------- GitHub (scored with --remote, otherwise reminders)
 [[check]]

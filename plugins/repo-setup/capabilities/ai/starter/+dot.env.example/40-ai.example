@@ -1,0 +1,4 @@
+
+# Claude API. Leave the key empty here; set the real value in .env or your secret manager.
+ANTHROPIC_API_KEY=
+CLAUDE_MODEL=claude-opus-5-5

@@ -1,0 +1,6 @@
+name: Note
+description: A short note kept by the team. Replace this sample with your own domain.
+properties:
+  id: { type: string, required: true }
+  text: { type: string, required: true }
+  author: { type: string, pii: true }

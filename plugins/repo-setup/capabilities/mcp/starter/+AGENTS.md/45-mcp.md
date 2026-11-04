@@ -5,5 +5,7 @@
   that role `agent` may run; nothing else is reachable by agents.
 - Implement actions in the `actions` module (generated `ActionHandlers` type lists what is
   missing). Never bypass `can()`, input validation or PII redaction in the server.
-- `agent: confirm` actions must be confirmed by a human in the MCP client: do not add them to
-  auto-approved tools. New actions or a wider `agent:` setting are domain changes (high tier).
+- `agent: confirm` tools carry `_meta["anthropic/requiresUserInteraction"]`: Claude Code asks a
+  person before each call. Other MCP clients may ignore it, and the server cannot tell whether
+  anyone approved. Over HTTP, role `agent` gets 403 on these actions.
+- New actions or a wider `agent:` setting are domain changes (high tier).
