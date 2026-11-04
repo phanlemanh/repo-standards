@@ -1,0 +1,51 @@
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from {{package_name}}.feedback import Feedback
+from {{package_name}}.llm import LLMRefusedError
+from {{package_name}}.triage import triage
+
+
+class FakeClient:
+    """Stands in for anthropic.Anthropic: no test here calls the API."""
+
+    def __init__(self, label: str, reply: str = "", stop_reason: str = "end_turn") -> None:
+        self.label, self.reply, self.stop_reason = label, reply, stop_reason
+        self.calls = 0
+
+    @property
+    def messages(self) -> Any:
+        return self
+
+    def parse(self, **_: Any) -> Any:
+        self.calls += 1
+        return SimpleNamespace(
+            stop_reason="end_turn",
+            parsed_output=Feedback(label=self.label),  # type: ignore[arg-type]
+            usage=None,
+        )
+
+    def create(self, **_: Any) -> Any:
+        self.calls += 1
+        return SimpleNamespace(
+            stop_reason=self.stop_reason,
+            content=[SimpleNamespace(type="text", text=self.reply)],
+            usage=None,
+        )
+
+
+def test_negative_gets_a_reply() -> None:
+    assert triage("awful", FakeClient(label="negative", reply="Sorry")).reply == "Sorry"
+
+
+def test_positive_skips_the_second_call() -> None:
+    client = FakeClient(label="positive", reply="must not be used")
+    assert triage("great", client).reply is None
+    assert client.calls == 1
+
+
+def test_refusal_in_the_second_step_raises() -> None:
+    with pytest.raises(LLMRefusedError):
+        triage("awful", FakeClient(label="negative", stop_reason="refusal"))
