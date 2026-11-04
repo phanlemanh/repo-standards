@@ -4,7 +4,7 @@
 
 **Depends on:** architecture, ai. Say how those decisions constrain this layer.
 
-**Only one sensible answer when:** the project has no real domain yet: say it can be added later with `ontology-add`. Then say it in one line and move on.
+**Only one sensible answer when:** the project has no real domain yet: say it can be added later with `/ontology-add`. Then say it in one line and move on.
 
 ## Options
 
@@ -28,4 +28,4 @@ Write the result to `layers.domain` in `setup-blueprint.yaml`: `status`, `source
 `proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
 not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
 and put the rest in `manual_steps`.
-Choice keys: `seed` (list of concepts), `database`; seeded concepts are written with `ontology-add` after apply.
+Choice keys: `seed` (list of concepts), `database`; seeded concepts are written with `.claude/skills/ontology-add/SKILL.md` after apply.

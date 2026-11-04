@@ -1,4 +1,4 @@
-# Sample actions for the agent tier: replace them with your own domain (/repo-setup:ontology-add).
+# Sample actions for the agent tier: replace them with your own domain (/ontology-add).
 actions:
   - name: searchNotes
     description: Find notes whose text contains the query.

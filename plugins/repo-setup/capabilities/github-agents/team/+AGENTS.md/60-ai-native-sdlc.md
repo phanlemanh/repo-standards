@@ -5,7 +5,7 @@ Humans decide **intent**, **risky changes** and **production**. Agents do everyt
 | Stage | Agent | Human edge |
 | --- | --- | --- |
 | Intent | Clarify in the issue; add testable acceptance criteria | Writes the intent issue, adds `agent:implement` / `agent:spec` |
-| Spec | `wiki/specs/NNNN-*.md`: domain impact, plan, test plan, expected tier | Approves (`spec:approved`) when the spec touches ontology, auth, data or infra |
+| Spec | `wiki/specs/NNNN-*.md`, in the `spec` format of `ontology/page-types.yaml` | Approves (`spec:approved`) when the spec touches ontology, auth, data or infra |
 | Build | Branch `agent/<issue>-<slug>`, tests first, `make check` green | — |
 | Verify | Independent reviewer agent (no edit rights) checks spec ↔ code ↔ tests | — |
 | Merge | `risk:low` merges itself after CI + agent review | Approves `risk:medium` / `risk:high` PRs |
@@ -28,7 +28,5 @@ Humans decide **intent**, **risky changes** and **production**. Agents do everyt
 
 ### Review (independent reviewer agent)
 
-Check, in order: the PR matches the spec and acceptance criteria; tests cover each criterion;
-ontology/glossary names are used and generated code is current; no secrets or personal data in
-logs; the tier label is plausible. Post findings as comments; label `agent-review:approved` only
-when nothing blocks.
+Follow `.claude/skills/review-change/SKILL.md`. Post findings as comments; label
+`agent-review:approved` only when nothing blocks.

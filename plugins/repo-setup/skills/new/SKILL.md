@@ -1,5 +1,5 @@
 ---
-name: setup-new
+name: new
 description: Set up a new or empty repository through decision layers — repo strategy, architecture, AI in the product, stack, domain, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
 ---
 
@@ -26,7 +26,7 @@ install a newer Python (the old one stays), and ask before installing. Then run
 
 - `setup-blueprint.yaml` exists and its `status` is not `applied`: resume from the first layer that
   is `pending` or `needs_review`.
-- The folder has code and no `previous_setup`: switch to **setup-adopt**.
+- The folder has code and no `previous_setup`: switch to `/repo-setup:adopt`.
 
 ## 2. Show the whole picture
 
@@ -70,7 +70,8 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
 1. `apply.py --from-blueprint setup-blueprint.yaml --json`.
 2. Run `next_commands.install` in order. A missing tool: install it or say exactly how.
    Windows needs WSL2, Git Bash with make, or the dev container.
-3. If the user described their domain, write it with **ontology-add**, replacing the sample ontology
+3. If the user described their domain, write it following
+   `.claude/skills/ontology-add/SKILL.md`, replacing the sample ontology
    if there is one, then write the handlers, and update the sample tests and `evals/` that name the
    sample actions. `make gen`.
 4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
@@ -82,7 +83,7 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
 8. Write the tour using `references/tour.md`.
 
 Stop and ask for anything outside the folder: creating a GitHub repo, pushing, the GitHub App,
-secrets, or running `make eval`, which spends API credit. Follow **sdlc-github-setup** for GitHub.
+secrets, or running `make eval`, which spends API credit. Follow `/repo-setup:github` for GitHub.
 
 ## 7. Finish
 

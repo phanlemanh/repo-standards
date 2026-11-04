@@ -1,5 +1,5 @@
 ---
-name: setup-adopt
+name: adopt
 description: Bring an existing codebase up to the top-tier standard step by step — without breaking it, replacing its tools, or adding sample code — including AGENTS.md/CLAUDE.md, ontology/ and wiki/ seeded from the real code. Use when the user wants to standardise, modernise, clean up or make AI-ready a repo that already has code.
 ---
 
@@ -18,14 +18,14 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
 - Suggest a branch: `chore/adopt-repo-standard`.
 
 ## 2. Interview (short)
-Same as setup-new (name, description, owner, license — read them from package.json /
+Same as `/repo-setup:new` (name, description, owner, license — read them from package.json /
 pyproject / README / git remote first and only confirm), plus:
 - Which level (`starter` / `team`)?
 - Anything that must not change (deploy pipeline, a custom lint config, a release tool)?
 
 If the stack has no preset (Go, Rust, Java…), skip to step 5 and work from the doctor list.
 
-Pick archetype / capabilities / deploy target the same way as setup-new (purpose questions,
+Pick archetype / capabilities / deploy target the same way as `/repo-setup:new` (purpose questions,
 `apply.py --list-options`), but only when the existing code already has that shape — e.g. do
 not add `modular-monolith` to a codebase without modules; propose it as a later refactor.
 
@@ -58,14 +58,14 @@ Do these by hand, one at a time, each with the user's OK, and keep the repo's to
 
 ## 4b. Decisions
 
-Use the layers in `../setup-new/references/layers/` for anything the user wants to decide, and
+Use the layers in `../new/references/layers/` for anything the user wants to decide, and
 record them in `setup-blueprint.yaml`. The `ai` layer is always `manual` here: do not add the `ai`
 capability, because it would add sample code. Guide the user through adding what they need.
 
 ## 5. Seed the domain model from the real code
 Read the main models/schemas/types (ORM models, DB migrations, API schemas). Propose the
 3–7 core entities with definitions, properties and relations, confirm with the user, then
-write them with the ontology-add procedure (glossary, `ontology/entities/*.yaml`,
+write them following `.claude/skills/ontology-add/SKILL.md` (glossary, `ontology/entities/*.yaml`,
 `relations.yaml`, `wiki/entities/*.md`). Record the adoption itself as
 `wiki/decisions/0002-adopt-repo-standard.md` and a line in `wiki/log.md`.
 Do not replace existing hand-written types with generated ones in this PR — note it as a

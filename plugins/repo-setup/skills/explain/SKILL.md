@@ -1,5 +1,5 @@
 ---
-name: setup-explain
+name: explain
 description: Explain, in plain language, any file, tool or rule that repo-setup added (Makefile, lockfile, pre-commit, gitleaks, CODEOWNERS, ontology, wiki, CI…) and help when a check blocks a commit or a PR. Use when the user asks what something in the repo setup is, why it exists, or why their commit/CI failed.
 ---
 
@@ -46,7 +46,6 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | coverage threshold | Tests must exercise at least ~80% of the code, or CI fails |
 | commit-msg hook / PR title check | Messages must look like `feat: ...` / `fix: ...` (for automatic versions) |
 | `.devcontainer/` | A ready-made dev environment (VS Code / Codespaces), handy on Windows |
-| Stop hook "make check fails" | The plugin re-checks the code before Claude finishes; fix the listed errors |
 | `ontology/` | The dictionary + map of business concepts (one meaning for everyone) |
 | `wiki/` | Why things are the way they are: decisions, incidents, notes |
 | `.repo-setup.json` | Remembers how the repo was set up, so upgrades are safe |

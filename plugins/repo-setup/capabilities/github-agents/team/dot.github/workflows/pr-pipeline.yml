@@ -90,16 +90,13 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
-          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
             AUTONOMY TIER: ${{ needs.gate.outputs.tier }}
 
             You are the independent reviewer of this pull request. You did not write it.
-            Use the /repo-setup:sdlc-review skill if it is available; otherwise follow the
-            "Review" part of the "AI-native SDLC" section in AGENTS.md.
+            Follow .claude/skills/review-change/SKILL.md.
             The PR branch is checked out. Post findings with `gh pr comment` and inline comments.
             Do not approve the PR yourself and do not edit files.
             Finish by setting exactly one verdict label:

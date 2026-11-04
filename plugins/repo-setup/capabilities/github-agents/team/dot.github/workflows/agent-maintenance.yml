@@ -27,13 +27,11 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
-          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
           prompt: |
             REPO: ${{ github.repository }}
             Weekly maintenance:
             1. Run `python3 tools/sdlc_metrics.py --days 7 --write` (writes wiki/metrics/<year>-W<week>.md).
-            2. Run the /repo-setup:wiki-health skill if available, else `python3 tools/wiki_lint.py --strict`,
+            2. Follow .claude/skills/wiki-health/SKILL.md,
                and fix only low-tier issues (wiki/, docs/). List anything else in the PR description.
             3. On a new branch `chore/weekly-maintenance-<date>`, commit and open a PR titled
                "docs: weekly wiki health and delivery metrics". Never push to the default branch.

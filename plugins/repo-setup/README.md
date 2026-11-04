@@ -57,19 +57,26 @@ This layer has not yet been run against a real Claude session.
 
 | Command | Use it for |
 | --- | --- |
-| `/repo-setup:setup-new` | A new repo, through the decision layers |
-| `/repo-setup:setup-adopt` | A repo that already has code, in small safe steps |
-| `/repo-setup:setup-doctor` | A 0-100 score (`--remote` also checks GitHub) |
-| `/repo-setup:setup-explain` | What a file or tool is, and why something was blocked |
-| `/repo-setup:sdlc-run` | From intent to PR: spec, risk gate, tests first, code, review, wiki |
-| `/repo-setup:sdlc-spec` | A spec with acceptance criteria and a tier |
-| `/repo-setup:sdlc-implement` | Implement an approved spec on its own branch |
-| `/repo-setup:sdlc-review` | Review a PR you did not write |
-| `/repo-setup:sdlc-github-setup` | GitHub settings, and agents on GitHub if enabled |
-| `/repo-setup:ontology-add` | Add or change a concept, action, role or personal data |
-| `/repo-setup:wiki-ingest`, `wiki-query`, `wiki-health` | Record, look up and review project knowledge |
+| `/repo-setup:new` | A new repo, through the decision layers |
+| `/repo-setup:adopt` | A repo that already has code, in small safe steps |
+| `/repo-setup:doctor` | A 0-100 score (`--remote` also checks GitHub) |
+| `/repo-setup:explain` | What a file or tool is, and why something was blocked |
+| `/repo-setup:github` | GitHub settings, and agents on GitHub if enabled |
 
-Subagents: `code-reviewer`, `security-reviewer`.
+The plugin stops at setup. It runs when you call it and has no hooks. To build features with an
+agent loop and acceptance gates, use a separate tool such as
+[Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit).
+
+## Procedures generated into the repo
+
+These live in `.claude/skills/` of each generated repo, next to the tools they use, and work without
+this plugin:
+
+| Command | Use it for |
+| --- | --- |
+| `/ontology-add` | Add or change a concept, action, role or personal data |
+| `/wiki-ingest`, `/wiki-query`, `/wiki-health` | Record, look up and review project knowledge |
+| `/review-change` | Independent review: intent, tests, domain, security, tier |
 
 ## What actually protects the repo
 
@@ -77,24 +84,13 @@ Two groups, with different strength:
 
 - **Enforced by GitHub**, regardless of what an agent does, once `tools/github_setup.py --apply` has
   run: the ruleset, CODEOWNERS and required checks.
-- **Enforced per tool call, inside a Claude session**: `.claude/settings.json` deny rules and the
-  PreToolUse hook. They prevent mistakes but are not a security boundary. A deny rule on `.env` does
-  not stop a script from reading it, and the hook does not see edits made through Bash. Use
-  Claude Code's sandbox if you need operating-system level isolation.
+- **Enforced per tool call, inside a Claude session**: `.claude/settings.json` deny rules. They
+  prevent mistakes but are not a security boundary. A deny rule on `.env` does not stop a script from
+  reading it. Use Claude Code's sandbox if you need operating-system level isolation.
 
 The risk gate in `pr-pipeline.yml` reads its rules from the base branch. The `doctor` score covers
 local files unless you pass `--remote`, and it measures whether checks are in place, not whether the
 code is right.
-
-## Hooks (only in repos with `.repo-setup.json`)
-
-- **SessionStart**: adds the repo map (wiki, glossary, skills) to the context.
-- **PreToolUse**: asks a person before editing a high-tier file (in CI, only a person adding
-  `spec:approved` allows it).
-- **Stop**: when code changed, runs `make check` and asks Claude to fix failures, at most 3 rounds;
-  reminds once about the wiki.
-- Turn off in `.repo-setup.json`: `"hooks": {"stop_check": false, "wiki_reminder": false}`; for one
-  session: `REPO_SETUP_HOOKS=off`.
 
 ## Ontology
 
@@ -124,7 +120,6 @@ scripts/apply.py      composes layers: core, stack, archetype, capability, deplo
                       "[var=value]/" is a conditional folder; never overwrites; safe to re-run
 scripts/blueprint.py  reads and checks setup-blueprint.yaml
 scripts/doctor.py     scores against checklists/top-tier.toml
-scripts/hook_*.py     Claude Code hooks
 presets/ archetypes/ capabilities/ deploy/   each folder: preset.toml + starter/ + team/
 ```
 

@@ -1,6 +1,6 @@
 ---
-name: sdlc-github-setup
-description: Connect a repo-setup repository to GitHub — merge settings, staging/production environments, branch ruleset and, when agent workflows are enabled, labels, variables, the Claude GitHub App and secrets — showing every change before applying it. Use after setup-new/setup-adopt at team level, or when agent workflows on GitHub do not start.
+name: github
+description: Connect a repo-setup repository to GitHub — merge settings, staging/production environments, branch ruleset and, when agent workflows are enabled, labels, variables, the Claude GitHub App and secrets — showing every change before applying it. Use after `/repo-setup:new` or `/repo-setup:adopt` at team level, or when agent workflows on GitHub do not start.
 ---
 
 # Set up the repository on GitHub
@@ -34,7 +34,6 @@ Things only the human can do (give exact steps):
   https://github.com/apps/claude).
 - Add **one** secret: `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`
   (`gh secret set ANTHROPIC_API_KEY`). Never ask the user to paste a secret into the chat.
-- Variable `REPO_SETUP_MARKETPLACE` = the marketplace git URL so CI agents load this plugin.
 
 Smoke test: create a small intent issue with the "Intent" form (e.g. "add a log line to
 wiki/log.md"), add `agent:implement`, and follow the run (`gh run watch`). Expected: a low-tier PR

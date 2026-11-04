@@ -38,8 +38,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
-          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
           prompt: |
             REPO: ${{ github.repository }}
             FAILED RUN: ${{ github.event.workflow_run.html_url }} (id ${{ github.event.workflow_run.id }})

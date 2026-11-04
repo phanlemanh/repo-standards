@@ -1,5 +1,5 @@
 ---
-name: setup-doctor
+name: doctor
 description: Check any repository against the team's top-tier checklist, give a 0-100 score, explain gaps in plain language and fix them safely. Use when the user asks to audit, review, check the health of, or standardise an existing repo.
 ---
 

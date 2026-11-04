@@ -22,7 +22,7 @@ from typing import Any
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 CORE_TOOLS = PLUGIN_ROOT / "presets" / "_core" / "starter" / "tools"
-LAYERS_FILE = PLUGIN_ROOT / "skills" / "setup-new" / "references" / "layers.toml"
+LAYERS_FILE = PLUGIN_ROOT / "skills" / "new" / "references" / "layers.toml"
 
 STATUSES = {"designing", "approved", "applied"}
 LAYER_STATUSES = {"pending", "decided", "needs_review", "not_applicable"}

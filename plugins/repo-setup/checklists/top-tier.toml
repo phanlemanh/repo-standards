@@ -21,7 +21,7 @@ level = "starter"
 weight = 3
 title = "README explains what the project is and how to run it"
 why = "A newcomer (or an AI agent) should get running in 5 minutes."
-fix = "Run setup-new, or write README.md with a Quick start section."
+fix = "Run /repo-setup:new, or write README.md with a Quick start section."
 any = [{ paths = ["README.md", "README.rst", "README"], min_lines = 10 }]
 
 [[check]]
@@ -30,7 +30,7 @@ level = "starter"
 weight = 1
 title = "License file"
 why = "Makes usage rights explicit, even for internal code."
-fix = "Add LICENSE (setup-new adds MIT by default; change if your company requires another)."
+fix = "Add LICENSE (/repo-setup:new adds MIT by default; change if your company requires another)."
 any = [{ paths = ["LICENSE", "LICENSE.*", "LICENCE", "COPYING"] }]
 
 [[check]]
@@ -170,7 +170,7 @@ level = "starter"
 weight = 3
 title = "Agent guide (CLAUDE.md / AGENTS.md) with commands and rules"
 why = "AI agents start every session from zero; this is their onboarding doc."
-fix = "Run setup-new, or write CLAUDE.md listing make targets and conventions."
+fix = "Run /repo-setup:new, or write CLAUDE.md listing make targets and conventions."
 any = [{ paths = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"], min_lines = 10 }]
 
 [[check]]
@@ -188,7 +188,7 @@ level = "starter"
 weight = 2
 title = "Domain ontology: glossary + entity definitions"
 why = "One shared meaning for business concepts, for people, code and agents."
-fix = "Add ontology/glossary.md and ontology/entities/*.yaml (setup-new creates the skeleton)."
+fix = "Add ontology/glossary.md and ontology/entities/*.yaml (/repo-setup:new creates the skeleton)."
 any = [{ paths = ["ontology/glossary.md"] }]
 
 [[check]]
@@ -212,7 +212,7 @@ command = ["{python}", "tools/wiki_lint.py"]
 requires = "tools/wiki_lint.py"
 title = "ontology/ and wiki/ are consistent (wiki-lint passes)"
 why = "A wrong map is worse than no map: broken links and unknown entities mislead agents."
-fix = "Run: python3 tools/wiki_lint.py and fix the errors (or run setup-new to add the tool)."
+fix = "Run: python3 tools/wiki_lint.py and fix the errors (or run /repo-setup:new to add the tool)."
 
 [[check]]
 id = "ontology_in_check"
@@ -508,7 +508,7 @@ type = "remote"
 probe = "branch_protection"
 title = "Branch protection on the default branch: PR required, CI must pass, 1+ approval"
 why = "Makes all the checks above mandatory instead of optional."
-fix = "GitHub > Settings > Rules (or Branches); setup-new can do it with gh. Verify: doctor.py --remote"
+fix = "GitHub > Settings > Rules (or Branches); /repo-setup:github can do it with gh. Verify: doctor.py --remote"
 
 [[check]]
 id = "ci_green"

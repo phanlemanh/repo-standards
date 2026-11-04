@@ -9,7 +9,7 @@ description: Health-check the repo's ontology and wiki — structural lint plus 
 Run `python3 tools/wiki_lint.py --strict --json`. Group the results: errors first
 (broken links, unknown entities, missing sections), then warnings (orphans, glossary gaps,
 missing entity pages). If `tools/wiki_lint.py` is missing, the repo predates it: offer
-`/repo-setup:setup-doctor` to add it.
+`/repo-setup:doctor` to add it, if that plugin is installed.
 
 Also run the generated-code check (`make ontology`) to see if code generation is stale.
 

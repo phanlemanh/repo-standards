@@ -8,7 +8,7 @@ Keep the file name in English. Sections:
 2. **Three everyday commands**: `make dev`, `make format`, `make check`.
 3. **What is in the repo**: a table of path, what it is, what you need to do. Group paths and list
    only what exists.
-4. **What happens automatically**: CI on push; the Stop hook running `make check`, at most 3 rounds.
+4. **What happens automatically**: CI on push, and `make check` in that CI. Nothing runs by itself inside Claude Code.
 5. **What to know about safety**:
    - What the `doctor` score measures (files and checks are in place) and what it does not (whether
      the code is right).

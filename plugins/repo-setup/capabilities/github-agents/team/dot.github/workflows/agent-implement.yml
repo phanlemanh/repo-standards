@@ -31,23 +31,18 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-project
       - uses: anthropics/claude-code-action@v1
-        env:
-          # A person (not a bot) added spec:approved: high-tier edits are allowed in this run
-          # (the PreToolUse gate of the repo-setup plugin reads this). Otherwise they are refused.
-          REPO_SETUP_APPROVAL: ${{ github.event.label.name == 'spec:approved' && github.event.sender.type == 'User' && format('issue-{0}-by-{1}', github.event.issue.number, github.event.sender.login) || '' }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: ${{ vars.REPO_SETUP_MARKETPLACE }}
-          plugins: ${{ vars.REPO_SETUP_MARKETPLACE && 'repo-setup@repo-standards' || '' }}
           track_progress: true
           prompt: |
             REPO: ${{ github.repository }}
             ISSUE: #${{ github.event.issue.number }}
             TRIGGER LABEL: ${{ github.event.label.name }}
 
-            Work this issue following the AI-native SDLC. Use the /repo-setup:sdlc-implement
-            skill if it is available; otherwise follow the "AI-native SDLC" section of AGENTS.md.
+            Work this issue following the "AI-native SDLC" section of AGENTS.md. Write specs in
+            the `spec` format of ontology/page-types.yaml. For domain changes follow
+            .claude/skills/ontology-add/SKILL.md.
             - agent:spec: write the spec only, post it on the issue, add label spec:needs-approval.
             - agent:implement: spec, then implement and open a pull request — but if the spec
               touches high-tier paths (governance/autonomy.yaml), post the spec, add

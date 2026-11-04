@@ -1,4 +1,4 @@
-# The decision layers of setup-new, in the order they are visited. Source of truth for
+# The decision layers of /repo-setup:new, in the order they are visited. Source of truth for
 # scripts/blueprint.py. Details of each layer: layers/<id>.md.
 
 [[layer]]

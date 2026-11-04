@@ -1,6 +1,6 @@
 # Bản thiết kế mẫu có mâu thuẫn cố ý
 
-Dán nội dung bên dưới vào `setup-new`.
+Dán nội dung bên dưới vào `/repo-setup:new`.
 
 Tôi dựng dịch vụ hỗ trợ khách hàng tên Support Desk.
 
