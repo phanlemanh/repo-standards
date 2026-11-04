@@ -10,7 +10,7 @@
     {
       "name": "repo-setup",
       "source": "./plugins/repo-setup",
-      "description": "AI-native SDLC: interview-driven repo setup (5 stacks, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers and agent workflows on GitHub.",
+      "description": "Repository setup through decision layers (5 stacks, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers. Stops at setup.",
       "version": "0.3.0",
       "category": "development",
       "keywords": [

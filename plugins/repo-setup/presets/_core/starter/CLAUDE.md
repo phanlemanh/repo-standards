@@ -4,10 +4,9 @@
 
 ## Claude Code specifics
 
-- With the `repo-setup` plugin installed, use its skills instead of improvising:
-  `/repo-setup:ontology-add` (new or changed business concept),
-  `/repo-setup:wiki-ingest` (record a change, decision or incident),
-  `/repo-setup:wiki-query` (answer "why" questions from the wiki),
-  `/repo-setup:wiki-health` and `/repo-setup:setup-doctor` (periodic checks).
-- The plugin's hooks run `make check` and remind you about the wiki before you finish.
-  Fix what they report; do not try to bypass them.
+- This repo keeps its procedures in `.claude/skills/`. Use them instead of improvising:
+  `/ontology-add` (new or changed business concept),
+  `/wiki-ingest` (record a change, decision or incident),
+  `/wiki-query` (answer "why" questions from the wiki),
+  `/wiki-health` (periodic check),
+  `/review-change` (review a change you did not write).

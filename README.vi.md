@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Marketplace này chứa một plugin là **repo-setup**. Plugin dựng, chuẩn hoá và kiểm tra repo theo từng tầng quyết định, dùng được cho cả người mới giao hết cho Claude lẫn người chuyên nghiệp đã có sẵn lựa chọn. Ontology sinh ra types, API contract và tool cho agent; agent duy trì wiki; các thay đổi được phân tầng theo rủi ro. Chi tiết: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
+Marketplace này chứa một plugin là **repo-setup**. Plugin dựng, chuẩn hoá và kiểm tra repo theo từng tầng quyết định, dùng được cho cả người mới giao hết cho Claude lẫn người chuyên nghiệp đã có sẵn lựa chọn. Ontology sinh ra types, API contract và tool cho agent; mỗi repo có wiki và quy trình cho agent của riêng nó. Plugin dừng ở việc setup: muốn làm tính năng theo vòng có agent và cổng nghiệm thu, hãy dùng công cụ riêng như [Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit). Chi tiết: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
 
 ## Cài đặt
 
@@ -17,13 +17,12 @@ Bạn cần [Claude Code](https://code.claude.com) và Python 3.11 trở lên ch
 
 Mở Claude Code trong thư mục dự án:
 
-- Repo mới hoặc trống: `/repo-setup:setup-new`
-- Repo đã có code: `/repo-setup:setup-adopt`
-- Kiểm tra sức khoẻ: `/repo-setup:setup-doctor`
-- "Tệp này là gì, vì sao commit bị chặn?": `/repo-setup:setup-explain`
-- Làm một tính năng từ ý định đến PR: `/repo-setup:sdlc-run`
-- Cài đặt GitHub: `/repo-setup:sdlc-github-setup`
-- Hằng ngày: `/repo-setup:ontology-add`, `/repo-setup:wiki-ingest`, `/repo-setup:wiki-query`, `/repo-setup:wiki-health`
+- Repo mới hoặc trống: `/repo-setup:new`
+- Repo đã có code: `/repo-setup:adopt`
+- Kiểm tra sức khoẻ: `/repo-setup:doctor`
+- "Tệp này là gì, vì sao commit bị chặn?": `/repo-setup:explain`
+- Cài đặt GitHub: `/repo-setup:github`
+- Hằng ngày, trong repo đã sinh, không cần plugin: `/ontology-add`, `/wiki-ingest`, `/wiki-query`, `/wiki-health`, `/review-change`
 
 Mã nguồn, tên tệp và commit của repo được dựng luôn bằng tiếng Anh. Claude trò chuyện theo ngôn ngữ của bạn, và tài liệu cho người đọc theo `docs_language`.
 

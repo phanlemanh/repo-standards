@@ -143,14 +143,6 @@ errs=$( cd "$o" && { python3 tools/wiki_lint.py --json || true; } | json 'len(d[
 [ "$errs" -ge 3 ] || fail "wiki-lint: bad decision page gave only $errs errors"
 echo "ok  ontology tools (wiki-lint, codegen)"
 
-# 12. hooks: silent outside repo-setup repos; SessionStart adds context inside
-H="$ROOT/plugins/repo-setup/scripts"
-[ -z "$(echo '{"cwd":"'"$TMP"'"}' | python3 "$H/hook_stop.py")" ] || fail "stop hook not silent outside"
-[ -z "$(echo '{"cwd":"'"$TMP"'"}' | python3 "$H/hook_session_start.py")" ] || fail "session hook not silent outside"
-echo '{"cwd":"'"$o"'"}' | python3 "$H/hook_session_start.py" | json '"wiki/index.md" in d["hookSpecificOutput"]["additionalContext"]' | grep -q True || fail "session context"
-python3 -c "import json; json.load(open('$ROOT/plugins/repo-setup/hooks/hooks.json'))" || fail "hooks.json"
-echo "ok  hooks"
-
 # 13. archetype / deploy / capability combinations (offline: generate code with the tools)
 for combo in "ts-api:service-api:container" "fastapi:service-api:container" "python:modular-monolith:none" "ts-node:modular-monolith:none:mcp" "python:none:none:mcp"; do
   IFS=: read -r stack arch dep cap <<<"$combo"
@@ -203,12 +195,7 @@ tier=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md src/app.ts ontol
 low=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md docs/x.md | json 'd["tier"]')
 [ "$low" = low ] || fail "autonomy low tier: $low"
 ( cd "$g" && python3 tools/autonomy.py --check-codeowners >/dev/null ) || fail "codeowners out of sync"
-gate() { echo "{\"cwd\":\"$g\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$g/$1\"}}" | python3 "$H/hook_pretool_gate.py"; }
-gate ontology/actions.yaml | grep -q '"permissionDecision": "ask"' || fail "gate did not ask for a high-tier file"
-[ -z "$(gate src/app.ts)" ] || fail "gate asked for a medium-tier file"
-approved=$(REPO_SETUP_APPROVAL=issue-1 gate ontology/actions.yaml)
-[ -z "$approved" ] || fail "gate ignored approval"
-echo "ok  autonomy tiers and edit gate"
+echo "ok  autonomy tiers"
 
 # 17. tiers on real git history: renames, weakened tests, agent config, non-ASCII names
 r="$TMP/tiers"; mkdir -p "$r/ontology" "$r/src" "$r/tests/a" "$r/wiki" "$r/docs"
@@ -246,41 +233,6 @@ expect_tier "non-ASCII high-tier path" high
 start c10; mkdir -p "$r/docs"; echo x > "$r/docs/new.md"; printf 'def test_new(): ...\n' >> "$r/tests/a/test_x.py"; commit c10
 expect_tier "plain docs and an added test" low
 echo "ok  tiers on git history (or misses reported above)"
-
-# 18. PreToolUse gate: fails closed, only in repo-setup repos, never runs the repo's code
-expect_ask() { gate ontology/actions.yaml 2>/dev/null | grep -q '"permissionDecision": "ask"' || miss "gate did not ask: $1"; }
-cp "$g/governance/autonomy.yaml" "$TMP/policy.bak"
-printf ': : : [\n' > "$g/governance/autonomy.yaml"; expect_ask "malformed policy"
-: > "$g/governance/autonomy.yaml"; expect_ask "empty policy"
-printf 'version: 1\n' > "$g/governance/autonomy.yaml"; expect_ask "policy without high paths"
-cp "$TMP/policy.bak" "$g/governance/autonomy.yaml"
-planted() {  # a repo whose tools/autonomy.py leaves a marker when it is executed
-  mkdir -p "$1/governance" "$1/tools"
-  cp "$g/governance/autonomy.yaml" "$1/governance/autonomy.yaml"
-  printf 'open("%s","w").write("ran")\n' "$1/RAN" > "$1/tools/autonomy.py"
-}
-p1="$TMP/planted-no-manifest"; planted "$p1"
-out=$(g="$p1" gate ontology/x.yaml)
-[ -z "$out" ] || miss "gate spoke outside a repo-setup repo"
-[ ! -e "$p1/RAN" ] || miss "gate ran tools/autonomy.py of a repo without .repo-setup.json"
-p2="$TMP/planted-manifest"; planted "$p2"; echo '{}' > "$p2/.repo-setup.json"
-out=$(g="$p2" gate ontology/x.yaml)
-[ ! -e "$p2/RAN" ] || miss "gate ran tools/autonomy.py from the repository"
-echo "$out" | grep -q '"permissionDecision": "ask"' || miss "gate did not classify with the plugin's own code"
-echo "ok  edit gate safety (or misses reported above)"
-
-# 19. Stop hook blocks on a red `make check`, also in a linked git worktree
-w="$TMP/stop"; mkdir -p "$w/src"; git -C "$w" init -q -b main
-echo '{}' > "$w/.repo-setup.json"; printf 'check:\n\t@echo boom; exit 1\n' > "$w/Makefile"; echo a > "$w/src/a.ts"
-git -C "$w" add -A; git -C "$w" -c user.name=t -c user.email=t@example.com commit -qm init
-git -C "$w" worktree add -q "$TMP/stop-wt" -b wt
-stop_blocks() {
-  echo x > "$1/src/new.ts"
-  echo "{\"cwd\":\"$1\"}" | CLAUDE_PROJECT_DIR="$1" python3 "$H/hook_stop.py" 2>/dev/null | grep -q '"decision": "block"' || miss "stop hook did not block: $2"
-}
-stop_blocks "$w" "normal checkout"
-stop_blocks "$TMP/stop-wt" "linked worktree"
-echo "ok  stop hook (or misses reported above)"
 
 # 20. `agent: forbidden` holds in can() itself, so every entry point honours it; lint rejects the mix
 f="$TMP/forbidden"; mkdir -p "$f" && git -C "$f" init -q -b main
@@ -366,7 +318,7 @@ python3 "$S/apply.py" --target "$o2" --preset python --level team --var project_
 steps() { ( cd "$1" && python3 -B -c "
 import json,sys; sys.path.insert(0,'tools')
 import github_setup as g
-print(json.dumps(g.plan('o/r','main','@a','m',agents=$2)))" ); }
+print(json.dumps(g.plan('o/r','main','@a',agents=$2)))" ); }
 steps "$n" False | python3 -c "import json,sys; d=json.load(sys.stdin); w=[x['what'] for x in d]; r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check'],c; assert not any('label' in a for a in w),w; assert not any('approve' in a for a in w),w; assert not any('REPO_SETUP_MARKETPLACE' in a for a in w),w" || miss "github_setup without agents"
 steps "$n" True | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check','gate'],c" || miss "github_setup with agents"
 ( cd "$o2" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert g.has_agents(pathlib.Path('.'))" ) || miss "old team repo not detected as having agents"
@@ -434,16 +386,16 @@ PY
 fi
 echo "ok  blueprint (or misses reported above)"
 
-# 26. setup-new: layers, references, language rule, Vietnamese names, old Python
-SK="$ROOT/plugins/repo-setup/skills/setup-new"
+# 26. new: layers, references, language rule, Vietnamese names, old Python
+SK="$ROOT/plugins/repo-setup/skills/new"
 for l in context repo architecture ai stack domain quality delivery governance; do
   [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
 for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
-grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "setup-new does not use its references"
+grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "new does not use its references"
 grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"
-if grep -q 'make every technical choice for them' "$SK/SKILL.md"; then miss "setup-new still decides everything alone"; fi
+if grep -q 'make every technical choice for them' "$SK/SKILL.md"; then miss "new still decides everything alone"; fi
 v="$TMP/viet"; mkdir -p "$v"
 slug=$(python3 "$S/apply.py" --target "$v" --preset python --var 'project_name=Quán Cà Phê Đông' --var description=x --var owner=a --dry-run --json | json '[c for c in d["created"] if c.startswith("src/")][0].split("/")[1]')
 [ "$slug" = quan_ca_phe_dong ] || miss "Vietnamese project name gives package: $slug"
@@ -473,16 +425,16 @@ if [ -x "$old" ] && ! "$old" -c 'import tomllib' 2>/dev/null; then
     case "$msg" in *"Python 3.11"*) ;; *) miss "old Python: unfriendly error from $script: $msg" ;; esac
   done
 fi
-echo "ok  setup-new layers (or misses reported above)"
+echo "ok  new layers (or misses reported above)"
 
 # 27. docs: real marketplace name, Vietnamese README, honest wording, plugin folder validated
 if grep -q 'your-org/repo-standards' "$ROOT/README.md"; then miss "README still says your-org"; fi
 grep -q 'phanlemanh/repo-standards' "$ROOT/README.md" || miss "README lacks the real marketplace"
 [ -f "$ROOT/README.vi.md" ] || miss "README.vi.md missing"
 grep -q 'README.vi.md' "$ROOT/README.md" || miss "README does not link the Vietnamese version"
-E="$ROOT/plugins/repo-setup/skills/setup-explain/SKILL.md"
-for t in pyproject.toml .coveragerc .gitleaks.toml setup-blueprint.yaml evals/ START-HERE.md; do grep -q "$t" "$E" || miss "setup-explain lacks: $t"; done
-if grep -q 'hidden from logs and from AI agents automatically' "$E"; then miss "setup-explain overclaims pii"; fi
+E="$ROOT/plugins/repo-setup/skills/explain/SKILL.md"
+for t in pyproject.toml .coveragerc .gitleaks.toml setup-blueprint.yaml evals/ START-HERE.md; do grep -q "$t" "$E" || miss "explain lacks: $t"; done
+if grep -q 'hidden from logs and from AI agents automatically' "$E"; then miss "explain overclaims pii"; fi
 if grep -qi 'real guardrails\|Rào chắn thật' "$ROOT/plugins/repo-setup/README.md"; then miss "plugin README overclaims guardrails"; fi
 grep -q 'plugin validate plugins/repo-setup' "$ROOT/.github/workflows/test.yml" || miss "CI does not validate the plugin folder"
 echo "ok  docs (or misses reported above)"
@@ -518,9 +470,40 @@ if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint
 grep -E 'coverage threshold' "$SK/references/layers/quality.md" | grep -q '`partial`' || miss "quality: mixed option must be partial"
 grep -E '^\| Monorepo' "$SK/references/layers/repo.md" | grep -q '`partial`' || miss "repo: monorepo must be partial"
 grep -E 'Custom tiers' "$SK/references/layers/governance.md" | grep -q '`partial`' || miss "governance: custom tiers must be partial"
-grep -q 'tests' "$SK/SKILL.md" && grep -qi 'sample tests' "$SK/SKILL.md" || miss "setup-new forgets the sample tests when replacing the ontology"
+grep -q 'tests' "$SK/SKILL.md" && grep -qi 'sample tests' "$SK/SKILL.md" || miss "new forgets the sample tests when replacing the ontology"
 steps "$n" False | grep -q allow_auto_merge && miss "github_setup changes auto-merge without agents"
 echo "ok  review findings (or misses reported above)"
+
+# 29. setup only: the plugin stops at setup; generated repos own their procedures
+PL="$ROOT/plugins/repo-setup"
+actual=$(ls "$PL/skills" | sort | tr '\n' ' ')
+[ "$actual" = "adopt doctor explain github new " ] || miss "plugin skills are not setup only: $actual"
+for s in adopt doctor explain github new; do grep -q "^name: $s$" "$PL/skills/$s/SKILL.md" 2>/dev/null || miss "skill folder and name differ: $s"; done
+old=$(grep -rIlE 'setup-(new|adopt|doctor|explain)|sdlc-github-setup' "$PL" "$ROOT/README.md" "$ROOT/README.vi.md" "$ROOT/tests/fixtures" || true)
+[ -z "$old" ] || miss "old skill names remain: $old"
+[ ! -e "$PL/hooks" ] || miss "plugin still ships hooks"
+[ ! -e "$PL/agents" ] || miss "plugin still ships subagents"
+ls "$PL"/scripts/hook_*.py >/dev/null 2>&1 && miss "plugin still ships hook scripts"
+stale=$(grep -rIlE 'repo-setup:(sdlc-(run|spec|implement|review)|ontology-add|wiki-)|sdlc-(run|spec|implement|review)|code-reviewer|security-reviewer|hook_(stop|session|pretool)|Stop hook|PreToolUse|REPO_SETUP_(APPROVAL|MARKETPLACE|HOOKS)|plugin_marketplaces' "$PL" "$ROOT/README.md" "$ROOT/README.vi.md" || true)
+[ -z "$stale" ] || miss "references to removed runtime: $stale"
+v="$TMP/setup-only"; mkdir -p "$v" && git -C "$v" init -q -b main
+python3 "$S/apply.py" --target "$v" --preset python --var project_name=V --var description=x --var owner=acme >/dev/null
+for s in ontology-add wiki-ingest wiki-query wiki-health review-change; do
+  grep -q "^name: $s$" "$v/.claude/skills/$s/SKILL.md" 2>/dev/null || miss "generated repo lacks the $s procedure"
+done
+for word in 'pii: true' 'gitleaks' 'pull_request_target' 'autonomy.py' 'Do not edit'; do
+  grep -q "$word" "$v/.claude/skills/review-change/SKILL.md" 2>/dev/null || miss "review-change does not cover: $word"
+done
+grep -q '/review-change' "$v/CLAUDE.md" || miss "CLAUDE.md does not point to the generated procedures"
+if grep -qi 'hook' "$v/CLAUDE.md"; then miss "CLAUDE.md still promises hooks"; fi
+u="$TMP/setup-only-agents"; mkdir -p "$u" && git -C "$u" init -q -b main
+python3 "$S/apply.py" --target "$u" --preset python --level team --with github-agents --var project_name=U --var description=x --var owner=acme >/dev/null
+grep -q '.claude/skills/review-change/SKILL.md' "$u/.github/workflows/pr-pipeline.yml" || miss "pr-pipeline does not use the repo's review procedure"
+if grep -qE '^ +plugins:' "$u"/.github/workflows/*.yml; then miss "agent workflows still install the plugin"; fi
+grep -q 'page-types.yaml' "$u/AGENTS.md" || miss "AGENTS.md lost the spec format"
+if python3 "$u/tools/github_setup.py" --help | grep -q marketplace; then miss "github_setup still sets a marketplace for CI"; fi
+grep -q 'acceptance-gate-kit' "$ROOT/README.md" || miss "README does not say where the feature loop lives"
+echo "ok  setup only (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

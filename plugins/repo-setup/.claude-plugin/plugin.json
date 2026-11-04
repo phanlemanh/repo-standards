@@ -1,7 +1,7 @@
 {
   "name": "repo-setup",
   "version": "0.3.0",
-  "description": "AI-native SDLC setup: Claude Code does the work, humans stay at the edges. Sets up, adopts and audits repos (top-tier standards, ontology that generates types, API contract and MCP tools, agent-maintained wiki, GitHub agent workflows with autonomy tiers) through a short interview.",
+  "description": "Repository setup for Claude Code: guided decision layers, top-tier standards, an ontology that generates types, API contract and MCP tools, and procedures generated into each repo. Stops at setup.",
   "author": {
     "name": "phanlemanh84"
   },

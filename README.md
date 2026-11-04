@@ -4,8 +4,10 @@
 
 This marketplace holds one plugin, **repo-setup**. It sets up, adopts and audits repositories
 through decision layers, for newcomers who hand everything to Claude and for professionals who bring
-their own choices. An ontology generates types, the API contract and agent tools, agents maintain a
-wiki, and changes are tiered by risk. Details: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
+their own choices. An ontology generates types, the API contract and agent tools, and each repo gets
+its own wiki and agent procedures. It stops at setup: to build features with an agent loop and
+acceptance gates, use a separate tool such as
+[Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit). Details: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
 
 ## Install
 
@@ -21,14 +23,13 @@ scripts, and a GitHub account only if you want to push code. In Claude Code:
 
 Open Claude Code in your project folder:
 
-- New or empty repo: `/repo-setup:setup-new`
-- Repo that already has code: `/repo-setup:setup-adopt`
-- Health check: `/repo-setup:setup-doctor`
-- "What is this file, why was my commit blocked?": `/repo-setup:setup-explain`
-- A feature from intent to PR: `/repo-setup:sdlc-run`
-- GitHub settings: `/repo-setup:sdlc-github-setup`
-- Day to day: `/repo-setup:ontology-add`, `/repo-setup:wiki-ingest`, `/repo-setup:wiki-query`,
-  `/repo-setup:wiki-health`
+- New or empty repo: `/repo-setup:new`
+- Repo that already has code: `/repo-setup:adopt`
+- Health check: `/repo-setup:doctor`
+- "What is this file, why was my commit blocked?": `/repo-setup:explain`
+- GitHub settings: `/repo-setup:github`
+- Day to day, in the generated repo, without the plugin: `/ontology-add`, `/wiki-ingest`,
+  `/wiki-query`, `/wiki-health`, `/review-change`
 
 ## Share with a team
 
@@ -55,7 +56,7 @@ bash tests/run.sh                        # fast tests, no network
 bash tests/e2e.sh                        # real installs + make check for each combination (network)
 PRESETS="fastapi:service-api:container" bash tests/e2e.sh   # stack:archetype:deploy:caps:ai_tier
 claude plugin validate .                 # marketplace manifest
-claude plugin validate plugins/repo-setup  # skills, agents and hooks
+claude plugin validate plugins/repo-setup  # skills
 python3 tools/bump_version.py minor      # bump the version everywhere + a CHANGELOG entry
 ```
 

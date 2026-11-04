@@ -71,9 +71,7 @@ def reviewer_entity(handle: str) -> dict[str, Any] | None:
     return {"type": "User", "id": int(out)} if ok and out.isdigit() else None
 
 
-def plan(
-    repo: str, branch: str, reviewer: str, marketplace: str, agents: bool
-) -> list[dict[str, Any]]:
+def plan(repo: str, branch: str, reviewer: str, agents: bool) -> list[dict[str, Any]]:
     steps: list[dict[str, Any]] = []
     required_checks = ["check", "gate"] if agents else ["check"]
     for name, color, desc in LABELS if agents else []:
@@ -177,13 +175,6 @@ def plan(
             "args": ["api", "-X", "POST", f"repos/{repo}/rulesets", "--input", "-"],
         }
     )
-    if agents and marketplace:
-        steps.append(
-            {
-                "what": "variable REPO_SETUP_MARKETPLACE (agents install repo-setup in CI)",
-                "args": ["variable", "set", "REPO_SETUP_MARKETPLACE", "--body", marketplace],
-            }
-        )
     return steps
 
 
@@ -197,7 +188,6 @@ def main(argv: list[str] | None = None) -> int:
         help="production approver, e.g. @alice or @org/team "
         "(default: first high-tier owner in governance/autonomy.yaml)",
     )
-    ap.add_argument("--marketplace", default="", help="git URL of the repo-standards marketplace")
     args = ap.parse_args(argv)
 
     if not shutil.which("gh"):
@@ -216,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     reviewer = args.reviewer or (owners[0] if owners else "")
 
     agents = has_agents(root)
-    steps = plan(repo, branch, reviewer, args.marketplace, agents)
+    steps = plan(repo, branch, reviewer, agents)
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     failures = 0
     for step in steps:

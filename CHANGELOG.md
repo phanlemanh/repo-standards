@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Breaking
+- The plugin now stops at setup. Removed the skills `sdlc-run`, `sdlc-spec`, `sdlc-implement` and
+  `sdlc-review`, the subagents `code-reviewer` and `security-reviewer`, and all three hooks.
+- `ontology-add`, `wiki-ingest`, `wiki-query` and `wiki-health` moved into each generated repo's
+  `.claude/skills/`, with a new `review-change`. Run `apply.py` again to get them in an existing repo;
+  they are called as `/ontology-add`, no longer `/repo-setup:ontology-add`.
+- Agent workflows no longer install the plugin in CI, and `github_setup.py` has no `--marketplace`.
+  High-tier edits in CI now rest on the agent's instructions and the merge gate, because the edit
+  gate left with the hooks. The variable `REPO_SETUP_MARKETPLACE` can be deleted.
+- Skills renamed: `/repo-setup:new`, `adopt`, `doctor`, `explain` and `github` replace `setup-new`,
+  `setup-adopt`, `setup-doctor`, `setup-explain` and `sdlc-github-setup`.
 - Level `team` no longer includes agent workflows. New repos enable them with
   `--with github-agents`. Repos whose manifest lists the agent workflows keep the capability
   automatically on re-apply, with a note.
@@ -11,7 +21,7 @@
 - `agent: forbidden` now also holds in `can()`, and wiki-lint rejects it combined with role `agent`.
 
 ### Guided setup
-- `setup-new` goes through nine decision layers at three depths, with labelled options
+- `new` goes through nine decision layers at three depths, with labelled options
   (`automated`, `partial`, `manual`), an independent critique and a tour file.
 - `setup-blueprint.yaml` and `apply.py --from-blueprint`; `doctor` reports drift and manual steps.
 - Generated repos state a language rule in `AGENTS.md`; the glossary has a display name column.
@@ -23,8 +33,6 @@
 ### Fixes
 - Tier classification: renames judge the old path, non-ASCII paths match, added skip markers count
   as weakening tests; nested agent config and `conftest.py` are high tier.
-- PreToolUse gate: uses the plugin's own code, only in repo-setup repos, closed when the policy is
-  unusable. Stop hook works in linked worktrees.
 - Project names with accents give ASCII slugs. Clear error on Python below 3.11.
 - `doctor` rejects hollow policies and pipelines and flags local-only scores.
 - Python bytecode ignored in TypeScript presets; `.gitleaks.toml` allows manifest hashes; no
