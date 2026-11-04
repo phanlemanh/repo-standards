@@ -45,6 +45,7 @@ import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import blueprint  # noqa: E402
 from doctor import Repo, glob_to_regex  # noqa: E402
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -373,6 +374,15 @@ def merge_lines(current: bytes, template: bytes) -> bytes | None:
     return (text + "\n# Added by repo-setup\n" + "\n".join(missing) + "\n").encode("utf-8")
 
 
+def _keep(args: argparse.Namespace) -> list[str]:
+    """The flags that still apply next to a blueprint."""
+    kept = ["--target", args.target]
+    for name in ("dry_run", "diff", "json", "adopt"):
+        if getattr(args, name):
+            kept.append("--" + name.replace("_", "-"))
+    return kept
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -394,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deploy", default=None, help="Deployment target, e.g. container (default: none)")
     ap.add_argument("--with", dest="caps", default=None,
                     help="Extra capabilities, comma-separated (e.g. mcp). Archetypes add their own.")
+    ap.add_argument("--from-blueprint", metavar="FILE", default=None,
+                    help="Take the choices from a setup-blueprint.yaml; not with --preset and co.")
     ap.add_argument("--adopt", action="store_true", help="Existing codebase: see module docs")
     ap.add_argument("--dry-run", action="store_true", help="Show the plan, write nothing")
     ap.add_argument("--diff", action="store_true", help="Print unified diffs for conflicts")
@@ -402,6 +414,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--list-options", action="store_true",
                     help="List stacks, archetypes and deploy targets with descriptions")
     args = ap.parse_args(argv)
+
+    if args.from_blueprint:
+        mixed = [args.preset, args.level, args.archetype, args.deploy, args.caps, args.var]
+        if any(mixed):
+            ap.error("--from-blueprint carries all the choices: do not add --preset and the like")
+        try:
+            plan_file = blueprint.load(Path(args.from_blueprint))
+        except (OSError, ValueError) as exc:
+            ap.error(f"cannot read the blueprint: {exc}")
+        problems = blueprint.errors(plan_file)
+        if problems:
+            ap.error("the blueprint has problems: " + "; ".join(problems))
+        waiting = blueprint.blocking(plan_file)
+        if waiting:
+            ap.error("these layers still need a decision: " + ", ".join(waiting))
+        if not args.dry_run and plan_file.get("status") not in ("approved", "applied"):
+            ap.error("the blueprint is not approved yet: use --dry-run to preview it")
+        args = ap.parse_args([*blueprint.to_apply_args(plan_file), *_keep(args)])
+        args.from_blueprint = None
 
     if args.list_options:
         def describe(kind: str) -> dict[str, dict]:

@@ -401,5 +401,38 @@ python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed
 python3 "$S/doctor.py" --target "$TMP/ai-tier-call" --json | json '[r["id"] for r in d["failed"]+d["passed"] if isinstance(r,dict)]+d["passed"]' | grep -q ai_agent_bounded && miss "call tier is checked for an agent limit"
 echo "ok  ai capability (or misses reported above)"
 
+# 25. blueprint: checked, mapped to apply.py, blocks unfinished work, drift only warns
+B="$ROOT/tests/fixtures/blueprints"
+bp="$S/blueprint.py"
+python3 "$bp" check "$B/ok.yaml" >/dev/null 2>&1 || miss "blueprint: ok rejected"
+if python3 "$bp" check "$B/bad-value.yaml" >/dev/null 2>&1; then miss "blueprint: bad value accepted"; fi
+deps=$(python3 "$bp" dependents ai 2>/dev/null || true)
+case " $deps " in *stack*domain*) ;; *) miss "blueprint: dependents of ai: $deps" ;; esac
+x="$TMP/bp-ok"; mkdir -p "$x" && git -C "$x" init -q -b main
+mapped=$(python3 "$S/apply.py" --target "$x" --from-blueprint "$B/ok.yaml" --json 2>/dev/null | json 'd["preset"]+"/"+d["level"]+"/"+",".join(d["capabilities"])' 2>/dev/null || true)
+[ "$mapped" = python/starter/ai ] || miss "blueprint: wrong mapping: $mapped"
+y2="$TMP/bp-pending"; mkdir -p "$y2"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/pending.yaml" >/dev/null 2>&1; then miss "blueprint: pending applied"; fi
+[ -z "$(ls -A "$y2")" ] || miss "blueprint: pending wrote files"
+python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok-designing.yaml" --dry-run >/dev/null 2>&1 || miss "blueprint: designing dry-run refused"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok-designing.yaml" >/dev/null 2>&1; then miss "blueprint: designing applied"; fi
+[ -z "$(ls -A "$y2")" ] || miss "blueprint: designing wrote files"
+if python3 "$S/apply.py" --target "$y2" --from-blueprint "$B/ok.yaml" --preset fastapi >/dev/null 2>&1; then miss "blueprint: mixed with preset flags"; fi
+if [ -f "$x/.repo-setup.json" ]; then
+  cp "$B/ok.yaml" "$x/setup-blueprint.yaml"; git -C "$x" add -A
+  drift=$(python3 "$S/doctor.py" --target "$x" --json | json 'd.get("blueprint_drift")')
+  [ "$drift" = "[]" ] || miss "blueprint: false drift: $drift"
+  python3 "$S/doctor.py" --target "$x" --json | json 'd["manual_steps"]' | grep -q 'Add a database' || miss "blueprint: manual steps not listed"
+  before=$(python3 "$S/doctor.py" --target "$x" --json | json 'd["score"]')
+  python3 - "$x/.repo-setup.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["level"]="team"; json.dump(d,open(p,"w"))
+PY
+  python3 "$S/doctor.py" --target "$x" --json | json 'len(d["blueprint_drift"])' | grep -qv '^0$' || miss "blueprint: drift not reported"
+  printf 'status: [' > "$x/setup-blueprint.yaml"
+  python3 "$S/doctor.py" --target "$x" --json >/dev/null 2>&1 || miss "blueprint: broken file crashed doctor"
+fi
+echo "ok  blueprint (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

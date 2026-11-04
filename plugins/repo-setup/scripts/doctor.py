@@ -175,6 +175,20 @@ class Remote:
         return "pass", ", ".join(sorted(latest))
 
 
+def blueprint_report(root: Path, setup: dict) -> dict[str, list[str]]:
+    """Warnings from setup-blueprint.yaml. They never change the score."""
+    path = root / "setup-blueprint.yaml"
+    if not path.exists():
+        return {"blueprint_drift": [], "manual_steps": []}
+    import blueprint
+
+    try:
+        bp = blueprint.load(path)
+    except Exception as exc:  # noqa: BLE001 - a broken blueprint must not stop the health report
+        return {"blueprint_drift": [f"setup-blueprint.yaml cannot be read: {exc}"], "manual_steps": []}
+    return {"blueprint_drift": blueprint.drift(bp, setup), "manual_steps": blueprint.manual_steps(bp)}
+
+
 def run_check(repo: Repo, check: dict, remote: Remote | None = None) -> dict:
     ctype = check.get("type", "exists")
     res = {k: check.get(k) for k in ("id", "level", "title", "why", "fix")}
@@ -293,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
         "failed": sorted([r for r in results if r["status"] == "fail"], key=lambda r: -r["weight"]),
         "manual": [r for r in results if r["status"] == "manual"],
         "skipped": [r for r in results if r["status"] == "skipped"],
+        **blueprint_report(root, setup),
     }
 
     if args.json:
@@ -316,6 +331,14 @@ def main(argv: list[str] | None = None) -> int:
             print("\nCheck manually (or run with --remote):")
             for r in report["manual"]:
                 print(f"  [ ] {r['title']}  ({r['fix']})")
+        if report["blueprint_drift"]:
+            print("\nDiffers from setup-blueprint.yaml (not scored):")
+            for line in report["blueprint_drift"]:
+                print(f"  - {line}")
+        if report["manual_steps"]:
+            print("\nManual steps from setup-blueprint.yaml (not scored):")
+            for line in report["manual_steps"]:
+                print(f"  [ ] {line}")
         if report["skipped"]:
             print("\nSkipped: " + ", ".join(f"{r['id']} ({r.get('detail', '')})" for r in report["skipped"]))
 
