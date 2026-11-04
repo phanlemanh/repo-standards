@@ -15,7 +15,7 @@ recommend it. Say when each option would be wrong.
 |---|---|---|---|---|
 | `starter` | Lint, types, tests, CI | No pre-commit or secret scan | Several people share the repo | `automated` |
 | `team` | Shared, long-lived repo | More to learn and configure | Solo experiment | `automated` |
-| A different coverage threshold or scanner | A team standard already exists | Edit the generated files by hand | The defaults are acceptable | `manual` |
+| A different coverage threshold or scanner | A team standard already exists | Edit the generated files by hand | The defaults are acceptable | `partial` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and
 the manual steps are listed), `manual` (only recorded, with guidance; `doctor` does not score it).
@@ -25,5 +25,7 @@ the manual steps are listed), `manual` (only recorded, with guidance; `doctor` d
 ## Recording
 
 Write the result to `layers.quality` in `setup-blueprint.yaml`: `status`, `source` (`user` or
-`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`.
+`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
+not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
+and put the rest in `manual_steps`.
 Choice keys: `level`.

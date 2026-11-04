@@ -3,9 +3,9 @@
 ## Unreleased
 
 ### Breaking
-- Level `team` no longer includes agent workflows. To keep them, run apply with
-  `--with github-agents`. Existing files stay in place, but `doctor` only scores them with the
-  capability recorded.
+- Level `team` no longer includes agent workflows. New repos enable them with
+  `--with github-agents`. Repos whose manifest lists the agent workflows keep the capability
+  automatically on re-apply, with a note.
 - `agent: confirm`: over HTTP, role `agent` now gets 403. MCP tools carry
   `_meta["anthropic/requiresUserInteraction"]`, which Claude Code enforces; other clients may not.
 - `agent: forbidden` now also holds in `can()`, and wiki-lint rejects it combined with role `agent`.

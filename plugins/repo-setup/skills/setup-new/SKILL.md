@@ -71,7 +71,8 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
 2. Run `next_commands.install` in order. A missing tool: install it or say exactly how.
    Windows needs WSL2, Git Bash with make, or the dev container.
 3. If the user described their domain, write it with **ontology-add**, replacing the sample ontology
-   if there is one, then write the handlers and update `evals/`. `make gen`.
+   if there is one, then write the handlers, and update the sample tests and `evals/` that name the
+   sample actions. `make gen`.
 4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
    most 2 fixes, then report exactly what fails.
 5. Run `doctor.py`. Explain what the score does and does not measure.

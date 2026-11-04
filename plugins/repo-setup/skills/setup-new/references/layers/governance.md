@@ -16,7 +16,7 @@ recommend it. Say when each option would be wrong.
 | Local Claude Code only | Edits ask a person; nothing runs on GitHub | No agent picks up issues | The team wants agents on GitHub | `automated` |
 | Add `github-agents` (level `team`) | Agents work from issues and open PRs | Needs the GitHub App, one secret and API spend. Not yet run against a real Claude session | No one will review the results | `automated` |
 | Add `mcp` | Agents use the system through checked actions | Another surface to secure | Nothing outside needs the actions | `automated` |
-| Custom tiers or approvers | An existing team policy | `governance/` is blocked for agents, so a person edits it | The sample policy fits | `manual` |
+| Custom tiers or approvers | An existing team policy | `governance/` is blocked for agents, so a person edits it | The sample policy fits | `partial` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and
 the manual steps are listed), `manual` (only recorded, with guidance; `doctor` does not score it).
@@ -26,5 +26,7 @@ the manual steps are listed), `manual` (only recorded, with guidance; `doctor` d
 ## Recording
 
 Write the result to `layers.governance` in `setup-blueprint.yaml`: `status`, `source` (`user` or
-`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`.
+`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
+not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
+and put the rest in `manual_steps`.
 Choice keys: `capabilities` (list), `marketplace`.

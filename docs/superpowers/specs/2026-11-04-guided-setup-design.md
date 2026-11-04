@@ -267,7 +267,7 @@ Hệ quả cần làm cùng:
 - Check `agent_workflows` và `intent_template` chỉ áp dụng khi bật capability.
 - `github_setup.py` chỉ yêu cầu check `gate` và tạo nhãn agent khi repo có `pr-pipeline.yml`; nếu không thì required check chỉ còn `check`.
 - `sdlc-github-setup` chia hai phần: làm việc nhóm, và agent trên GitHub cần App và secret. Phần sau nêu rõ lớp CI chưa chạy với Claude thật, và phương án này mặc định là không bật.
-- Đây là thay đổi phá vỡ của level `team`, ghi vào `CHANGELOG`. Repo cũ giữ nguyên các tệp đã có vì `apply.py` không xoá tệp; người dùng cũ cần thêm `--with github-agents` để `doctor` tiếp tục chấm phần agent.
+- Đây là thay đổi phá vỡ của level `team`, ghi vào `CHANGELOG`. Repo cũ có workflow agent trong manifest được tự giữ capability này khi chạy lại `apply.py`, kèm một ghi chú, để không mất mục SDLC trong `AGENTS.md`.
 - Capability này không sửa các lỗi CI trong báo cáo đối chiếu. Chúng vẫn thuộc đợt riêng, nhưng nay chỉ ảnh hưởng tới người chủ động bật.
 
 ## 9. Tệp bị ảnh hưởng

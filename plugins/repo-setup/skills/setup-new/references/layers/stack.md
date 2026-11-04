@@ -26,5 +26,7 @@ the manual steps are listed), `manual` (only recorded, with guidance; `doctor` d
 ## Recording
 
 Write the result to `layers.stack` in `setup-blueprint.yaml`: `status`, `source` (`user` or
-`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`.
+`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
+not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
+and put the rest in `manual_steps`.
 Choice keys: `preset`; for an unsupported stack record it and run `doctor.py` to list what a repo needs.

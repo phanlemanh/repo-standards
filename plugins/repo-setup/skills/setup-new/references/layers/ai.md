@@ -42,5 +42,7 @@ agent-to-agent protocols and multi-agent orchestration are recorded as `manual`.
 ## Recording
 
 Write the result to `layers.ai` in `setup-blueprint.yaml`: `status`, `source` (`user` or
-`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`.
+`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
+not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
+and put the rest in `manual_steps`.
 Choice keys: `ai_tier` (`none`, `call`, `workflow`, `agent`), `agent_runtime`.

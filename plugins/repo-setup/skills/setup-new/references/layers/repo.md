@@ -14,7 +14,7 @@ recommend it. Say when each option would be wrong.
 | Option | Why | Trade-off | Wrong when | Label |
 |---|---|---|---|---|
 | One repo, one app | Least to run | Splitting later takes work | Several products ship independently | `automated` |
-| Monorepo | Shared code, one change across packages | Tooling and CI get more complex | A small team with one package | `manual` |
+| Monorepo | Shared code, one change across packages | The workspace layout is manual: one package is generated | A small team with one package | `partial` |
 | Several repos | Teams and releases stay independent | Changes across repos are slow | The parts always change together | `partial` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and
@@ -28,5 +28,7 @@ release rules are `manual`: the generated `CONTRIBUTING.md` describes the defaul
 ## Recording
 
 Write the result to `layers.repo` in `setup-blueprint.yaml`: `status`, `source` (`user` or
-`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`.
+`proposed`), `automation`, `choice`, `why`, `rejected`, `manual_steps`. A layer marked `manual` is
+not applied at all, so when a layer mixes both, use `partial`: keep what `apply.py` can do in `choice`
+and put the rest in `manual_steps`.
 Choice keys: `license`; for manual options record the decision in `why` and list `manual_steps`.

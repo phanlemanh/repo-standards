@@ -487,5 +487,40 @@ if grep -qi 'real guardrails\|Rào chắn thật' "$ROOT/plugins/repo-setup/READ
 grep -q 'plugin validate plugins/repo-setup' "$ROOT/.github/workflows/test.yml" || miss "CI does not validate the plugin folder"
 echo "ok  docs (or misses reported above)"
 
+# 28. review findings: old team repos keep agents, blueprint values, labels, auto-merge
+r1="$TMP/old-with-agents"; mkdir -p "$r1" && git -C "$r1" init -q -b main
+python3 "$S/apply.py" --target "$r1" --preset python --level team --with github-agents --var project_name=R --var description=x --var owner=a >/dev/null
+python3 - "$r1/.repo-setup.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["capabilities"]=[]; json.dump(d,open(p,"w"))
+PY
+out=$(python3 "$S/apply.py" --target "$r1" --json)
+echo "$out" | json '"\n".join(d["notes"])' | grep -q github-agents || miss "re-apply: no notice about kept agents"
+grep -q '## AI-native SDLC' "$r1/AGENTS.md" || miss "re-apply dropped the agent rules while workflows remain"
+python3 -c "import json;assert 'github-agents' in json.load(open('$r1/.repo-setup.json'))['capabilities']" || miss "re-apply did not record github-agents"
+variant() { python3 - "$B/ok.yaml" "$TMP/variant.yaml" "$1" "$2" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+assert old in t, old
+open(dst, "w", encoding="utf-8").write(t.replace(old, new, 1))
+PY
+}
+variant '{ai_tier: call}' '{ai_tier: magic}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: unknown ai_tier accepted"; fi
+variant '{ai_tier: call}' '{ai_tier: agent, agent_runtime: agent-sdk}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: agent-sdk marked automated"; fi
+variant '{ai_tier: call}' '{ai_tier: agent, agent_runtime: tool-runner}'
+python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1 || miss "blueprint: tool-runner rejected"
+variant '    automation: automated
+    choice: {level: starter}' '    choice: {level: starter}'
+if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: decided layer without automation accepted"; fi
+grep -E 'coverage threshold' "$SK/references/layers/quality.md" | grep -q '`partial`' || miss "quality: mixed option must be partial"
+grep -E '^\| Monorepo' "$SK/references/layers/repo.md" | grep -q '`partial`' || miss "repo: monorepo must be partial"
+grep -E 'Custom tiers' "$SK/references/layers/governance.md" | grep -q '`partial`' || miss "governance: custom tiers must be partial"
+grep -q 'tests' "$SK/SKILL.md" && grep -qi 'sample tests' "$SK/SKILL.md" || miss "setup-new forgets the sample tests when replacing the ontology"
+steps "$n" False | grep -q allow_auto_merge && miss "github_setup changes auto-merge without agents"
+echo "ok  review findings (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

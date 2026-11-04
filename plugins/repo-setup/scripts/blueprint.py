@@ -27,6 +27,8 @@ LAYERS_FILE = PLUGIN_ROOT / "skills" / "setup-new" / "references" / "layers.toml
 STATUSES = {"designing", "approved", "applied"}
 LAYER_STATUSES = {"pending", "decided", "needs_review", "not_applicable"}
 AUTOMATION = {"automated", "partial", "manual"}
+AI_TIERS = {"none", "call", "workflow", "agent"}
+AGENT_RUNTIMES = {"tool-runner", "manual-loop", "agent-sdk", "managed-agents"}
 
 
 def _layers() -> list[dict[str, Any]]:
@@ -65,8 +67,26 @@ def errors(bp: dict[str, Any]) -> list[str]:
             problems.append(f"{name}: status must be one of {sorted(LAYER_STATUSES)}")
         if "automation" in layer and layer["automation"] not in AUTOMATION:
             problems.append(f"{name}: automation must be one of {sorted(AUTOMATION)}")
-        if layer.get("status") == "decided" and not layer.get("why"):
-            problems.append(f"{name}: a decided layer needs a why")
+        if layer.get("status") == "decided":
+            if not layer.get("why"):
+                problems.append(f"{name}: a decided layer needs a why")
+            if "automation" not in layer:
+                problems.append(f"{name}: a decided layer needs automation")
+        if name == "ai":
+            problems += _ai_errors(layer)
+    return problems
+
+
+def _ai_errors(layer: dict[str, Any]) -> list[str]:
+    choice = layer.get("choice") or {}
+    tier, runtime = choice.get("ai_tier"), choice.get("agent_runtime")
+    problems = []
+    if tier is not None and tier not in AI_TIERS:
+        problems.append(f"ai: ai_tier must be one of {sorted(AI_TIERS)}")
+    if runtime is not None and runtime not in AGENT_RUNTIMES:
+        problems.append(f"ai: agent_runtime must be one of {sorted(AGENT_RUNTIMES)}")
+    if runtime not in (None, "tool-runner") and layer.get("automation") != "manual":
+        problems.append(f"ai: agent_runtime {runtime} is not generated, so automation must be manual")
     return problems
 
 

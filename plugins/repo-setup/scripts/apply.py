@@ -482,6 +482,14 @@ def main(argv: list[str] | None = None) -> int:
     for c in (args.caps or "").split(","):
         if c.strip() and c.strip() not in caps:
             caps.append(c.strip())
+    notes: list[str] = []
+    # Repos from before github-agents was split out still have the agent workflows. Keep the
+    # capability, or a re-apply would drop the agent rules from AGENTS.md and leave them running.
+    agent_pipeline = ".github/workflows/pr-pipeline.yml"
+    if agent_pipeline in previous.get("files", {}) and "github-agents" not in caps:
+        caps.append("github-agents")
+        notes.append("kept capability github-agents: this repo has agent workflows")
+
     raw_vars: dict[str, str] = dict(previous.get("vars", {}))
     for item in args.var:
         if "=" not in item:
@@ -644,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
         "dry_run": args.dry_run,
         **results,
         "skip_reasons": reasons,
+        "notes": notes,
         "next_commands": {"install": meta["install"], "verify": meta["verify"]},
         "diffs": diffs,
     }
@@ -654,6 +663,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{mode}: preset={preset} level={level}{' adopt' if adopt else ''} target={target}"
         )
+        for note in notes:
+            print(f"Note: {note}")
         for label in results:
             items = results[label]
             if items:
