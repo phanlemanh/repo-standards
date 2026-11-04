@@ -455,7 +455,7 @@ for p in pathlib.Path(sys.argv[1]).rglob("*"):
     if p.is_file():
         if not str(p.relative_to(sys.argv[1])).isascii():
             bad.append(str(p))
-        elif p.name != "README.md" and "__pycache__" not in p.parts and vi.search(p.read_text("utf-8", "ignore")):
+        elif "__pycache__" not in p.parts and vi.search(p.read_text("utf-8", "ignore")):
             bad.append(str(p))
 print(*bad, sep="\n")
 sys.exit(1 if bad else 0)
@@ -474,6 +474,18 @@ if [ -x "$old" ] && ! "$old" -c 'import tomllib' 2>/dev/null; then
   done
 fi
 echo "ok  setup-new layers (or misses reported above)"
+
+# 27. docs: real marketplace name, Vietnamese README, honest wording, plugin folder validated
+if grep -q 'your-org/repo-standards' "$ROOT/README.md"; then miss "README still says your-org"; fi
+grep -q 'phanlemanh/repo-standards' "$ROOT/README.md" || miss "README lacks the real marketplace"
+[ -f "$ROOT/README.vi.md" ] || miss "README.vi.md missing"
+grep -q 'README.vi.md' "$ROOT/README.md" || miss "README does not link the Vietnamese version"
+E="$ROOT/plugins/repo-setup/skills/setup-explain/SKILL.md"
+for t in pyproject.toml .coveragerc .gitleaks.toml setup-blueprint.yaml evals/ START-HERE.md; do grep -q "$t" "$E" || miss "setup-explain lacks: $t"; done
+if grep -q 'hidden from logs and from AI agents automatically' "$E"; then miss "setup-explain overclaims pii"; fi
+if grep -qi 'real guardrails\|Rào chắn thật' "$ROOT/plugins/repo-setup/README.md"; then miss "plugin README overclaims guardrails"; fi
+grep -q 'plugin validate plugins/repo-setup' "$ROOT/.github/workflows/test.yml" || miss "CI does not validate the plugin folder"
+echo "ok  docs (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

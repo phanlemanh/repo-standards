@@ -55,8 +55,16 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | "needs approval" when an agent edits a file | The gate hook: that file is high-tier; approve the edit or the spec |
 | `wiki/specs/` | Agent-written plan of a change, with acceptance criteria; humans approve risky ones |
 | `ontology/actions.yaml` / `roles.yaml` | What can be done in the system, and who may do it (people and AI agents) |
-| `pii: true` | Personal data: hidden from logs and from AI agents automatically |
-| `.mcp.json` / `make mcp` | Lets Claude and other agents use the system's actions as tools, safely |
+| `pii: true` | Personal data: masked in what agents receive, for top-level fields only. Logs are not masked for you, so keep personal data out of them |
+| `.mcp.json` / `make mcp` | Lets Claude and other agents use the system's actions as tools, with permission checks. Confirmation for `agent: confirm` depends on the client: Claude Code enforces it |
+| `pyproject.toml` | The Python project's declaration: dependencies and tool settings |
+| `.coveragerc` | How much code the tests must exercise before CI fails |
+| `.gitleaks.toml` | Secret scanner settings. It only allows file hashes in the repo-setup manifest. Changing it needs a person |
+| `setup-blueprint.yaml` | The decisions taken during setup, with reasons and rejected options |
+| `docs/START-HERE.md` | The tour: what was built, what runs by itself, what is not done |
+| `evals/` / `make eval` | Tasks that test AI features against the real API. Costs money, so not in `make check` |
+| `ai_tier` | How much AI the product uses: one call, a workflow, or an agent |
+| `github-agents` | Optional capability: agents work from GitHub issues and open PRs |
 | `contracts/openapi.json` | The API contract, generated from the ontology; CI blocks breaking changes |
 | `architecture/modules.yaml` | Business modules and who may depend on whom; CI checks imports |
 | `Dockerfile` / `compose.yaml` | How the app is packaged and run as a container |
