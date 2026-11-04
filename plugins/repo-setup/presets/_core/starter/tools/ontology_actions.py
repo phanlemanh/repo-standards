@@ -114,8 +114,11 @@ def lint(root: Path, entities: dict[str, dict[str, Any]], error: Any, warn: Any)
         if a.get("agent", "forbidden") not in AGENT_MODES:
             error(apath, f"{label}: agent must be one of {', '.join(sorted(AGENT_MODES))}")
         if a.get("agent", "forbidden") == "forbidden" and "agent" in (a.get("roles") or []):
-            error(apath, f"{label}: lists role 'agent' but agents are forbidden: "
-                         "set agent: allowed or confirm, or remove the role")
+            error(
+                apath,
+                f"{label}: lists role 'agent' but agents are forbidden: "
+                "set agent: allowed or confirm, or remove the role",
+            )
         out = str(a.get("output") or "").removesuffix("[]")
         if out and out not in entities:
             error(apath, f"{label}: output '{a.get('output')}' is not an entity")

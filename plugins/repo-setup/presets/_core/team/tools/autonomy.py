@@ -96,7 +96,8 @@ def changed_files(root: Path, base: str, head: str) -> list[dict[str, Any]]:
             )
     tokens = git("diff", "--no-renames", "-z", "--name-status", span).split("\0")
     files: list[dict[str, Any]] = []
-    for status, path in zip(tokens[0::2], tokens[1::2]):
+    # strict=False: the output ends with a NUL, so the split leaves one extra empty token.
+    for status, path in zip(tokens[0::2], tokens[1::2], strict=False):
         n_added, n_deleted = stats.get(path, (0, 0))
         entry = {"path": path, "status": status[0], "added": n_added, "deleted": n_deleted}
         if TEST_PATH.search(path) and status[0] != "D":
@@ -124,9 +125,7 @@ def classify(
             tier, reason = "high", "protected path"
         elif matches(path, policy.get("low") or []):
             tier, reason = "low", "low-risk path"
-            weakened = (
-                f.get("deleted", 0) > 0 or f.get("status") == "D" or f.get("disables_tests")
-            )
+            weakened = f.get("deleted", 0) > 0 or f.get("status") == "D" or f.get("disables_tests")
             if TEST_PATH.search(path) and weakened:
                 tier = str(rules.get("test_deletions_raise_to", "medium"))
                 reason = "removes, rewrites or disables test code"
