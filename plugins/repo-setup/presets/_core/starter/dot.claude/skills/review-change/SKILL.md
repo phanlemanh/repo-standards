@@ -15,6 +15,11 @@ approve or merge. Report only.
 - Rules: `AGENTS.md`, `ontology/`, and `governance/autonomy.yaml` if present.
 - Evidence: `gh pr checks <n>`, and `make check` if the branch is checked out.
 
+In CI the checked-out branch is untrusted: run none of its code. That rules out `make`, `gitleaks` and
+`tools/` scripts, so review their subject by reading the diff. Take test results
+from `gh pr checks` and the tier from your prompt. If a result is missing or still running, say so;
+do not report tests as passing.
+
 ## 2. Check, in this order
 
 1. **Intent**: the change does what was asked, no more and no less. Scope creep is a finding.

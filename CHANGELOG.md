@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+- `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its
+  run failed and low-tier auto-merge never happened. A custom bot in `AGENT_AUTHORS` must also be
+  added to `allowed_bots`.
+- The reviewer no longer runs PR code in a job that holds tokens: no dependency install, no `make`,
+  no MCP servers from the repo. It reads test results from `gh pr checks`.
+- The gate keeps its base-branch rules in `$RUNNER_TEMP`, so a PR cannot plant `.gate/yaml.py` and
+  run code in the job that sets the risk tier.
+
+Re-apply to get these. The reviewer and its inline comments have not yet run on GitHub.
+
 ## 0.4.0 — 2026-11-05
 
 ### Breaking
