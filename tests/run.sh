@@ -505,5 +505,59 @@ if python3 "$u/tools/github_setup.py" --help | grep -q marketplace; then miss "g
 grep -q 'acceptance-gate-kit' "$ROOT/README.md" || miss "README does not say where the feature loop lives"
 echo "ok  setup only (or misses reported above)"
 
+# 30. PR pipeline: bots can be reviewed, review runs no PR code, the gate runs no PR code
+g="$TMP/gate-repo"; mkdir -p "$g" && git -C "$g" init -q -b main
+python3 "$S/apply.py" --target "$g" --preset python --level team --with github-agents --var project_name=G --var description=x --var owner=a >/dev/null
+pipeline="$g/.github/workflows/pr-pipeline.yml"
+review=$(sed -n '/^  review:$/,/^  automerge:$/p' "$pipeline")
+echo "$review" | grep -q 'allowed_bots: "claude\[bot\]"' || miss "review rejects PRs opened by claude[bot]"
+if grep -q "allowed_bots: *['\"]\*" "$pipeline"; then miss "pipeline allows every bot"; fi
+if echo "$review" | grep -q 'setup-project'; then miss "review installs the PR's dependencies"; fi
+if echo "$review" | grep -q 'Bash(make:'; then miss "review may run make from the PR"; fi
+echo "$review" | grep -q -- '--strict-mcp-config' || miss "review may start MCP servers from the PR"
+echo "$review" | grep -q 'Bash(gh pr checks:' || miss "review cannot read the CI result"
+echo "$review" | grep -q 'checks: read' || miss "review lacks permission to read checks"
+skill="$g/.claude/skills/review-change/SKILL.md"
+grep -q 'In CI' "$skill" || miss "review-change does not say what to skip in CI"
+git -C "$g" add -A && git -C "$g" -c user.name=t -c user.email=t@t -c core.hooksPath=/dev/null commit -qm base
+git -C "$g" update-ref refs/remotes/origin/main main
+git -C "$g" switch -qc pr
+mkdir -p "$g/.gate"
+printf 'import os\nopen(os.environ["TRAP"], "w").write("ran")\n' > "$g/.gate/yaml.py"
+cp "$g/.gate/yaml.py" "$g/yaml.py"
+cat "$g/.gate/yaml.py" "$g/tools/autonomy.py" > "$g/tools/autonomy.py.new" && mv "$g/tools/autonomy.py.new" "$g/tools/autonomy.py"
+git -C "$g" add -A && git -C "$g" -c user.name=t -c user.email=t@t -c core.hooksPath=/dev/null commit -qm pr
+steps_of() { python3 - "$pipeline" "$1" <<'PY_STEP'
+import sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+start = next(i for i, l in enumerate(lines) if sys.argv[2] in l and "- name:" in l)
+run = next(i for i in range(start, len(lines)) if lines[i].strip() == "run: |")
+indent = len(lines[run]) - len(lines[run].lstrip()) + 2
+for l in lines[run + 1:]:
+    if l.strip() and len(l) - len(l.lstrip()) < indent:
+        break
+    print(l[indent:])
+PY_STEP
+}
+gate_run() { # base-branch rules present or removed: $1 = output file
+  ( cd "$g" && TRAP="$TMP/trap" RUNNER_TEMP="$TMP/runner" GITHUB_WORKSPACE="$g" GITHUB_OUTPUT="$1" \
+    GITHUB_STEP_SUMMARY="$TMP/summary" BASE=main AUTHOR=someone UPDATE_TYPE="" \
+    bash -e -c "$(steps_of 'Load the rules from the base branch'; steps_of 'Classify')" ) >/dev/null 2>&1
+}
+mkdir -p "$TMP/runner"; rm -f "$TMP/trap"
+gate_run "$TMP/gate.out" || miss "gate failed on a pull request with a planted .gate/yaml.py"
+[ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request"
+grep -q '^tier=high$' "$TMP/gate.out" 2>/dev/null || miss "gate did not judge a tools/ change as high"
+[ ! -e "$g/.gate/autonomy.py" ] || miss "gate copied its rules into the checkout"
+git -C "$g" update-ref refs/remotes/origin/bare "$(git -C "$g" commit-tree -m none "$(git -C "$g" mktree </dev/null)")"
+rm -f "$TMP/gate2.out" "$TMP/trap"
+( cd "$g" && TRAP="$TMP/trap" RUNNER_TEMP="$TMP/runner" GITHUB_WORKSPACE="$g" GITHUB_OUTPUT="$TMP/gate2.out" \
+  GITHUB_STEP_SUMMARY="$TMP/summary" BASE=bare AUTHOR=someone UPDATE_TYPE="" \
+  bash -e -c "$(steps_of 'Load the rules from the base branch'; steps_of 'Classify')" ) >/dev/null 2>&1 \
+  || miss "gate failed when the base branch has no rules"
+grep -q '^tier=high$' "$TMP/gate2.out" 2>/dev/null || miss "gate without base rules must be high"
+[ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request when the base has no rules"
+echo "ok  pr pipeline (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
