@@ -549,7 +549,7 @@ gate_run "$TMP/gate.out" || miss "gate failed on a pull request with a planted .
 [ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request"
 grep -q '^tier=high$' "$TMP/gate.out" 2>/dev/null || miss "gate did not judge a tools/ change as high"
 [ ! -e "$g/.gate/autonomy.py" ] || miss "gate copied its rules into the checkout"
-git -C "$g" update-ref refs/remotes/origin/bare "$(git -C "$g" commit-tree -m none "$(git -C "$g" mktree </dev/null)")"
+git -C "$g" update-ref refs/remotes/origin/bare "$(git -C "$g" -c user.name=t -c user.email=t@t commit-tree -m none "$(git -C "$g" mktree </dev/null)")"
 rm -f "$TMP/gate2.out" "$TMP/trap"
 ( cd "$g" && TRAP="$TMP/trap" RUNNER_TEMP="$TMP/runner" GITHUB_WORKSPACE="$g" GITHUB_OUTPUT="$TMP/gate2.out" \
   GITHUB_STEP_SUMMARY="$TMP/summary" BASE=bare AUTHOR=someone UPDATE_TYPE="" \
