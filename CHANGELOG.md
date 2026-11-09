@@ -13,6 +13,15 @@
 
 Re-apply to get these. The reviewer and its inline comments have not yet run on GitHub.
 
+- `tools/boundaries.py` (`modular-monolith`): `@/` imports were never checked and `src/app` was
+  never scanned, so a Next.js repo could bypass every module boundary. Both now follow the same
+  rules as relative imports. `server` is a second public entry next to `index`, and a
+  `"use client"` file may not import one. These apply to every TypeScript repo: the client rule
+  does nothing without the directive, and `server` only makes one exact filename public.
+
+Re-applying does not replace a vendored tool: copy this file into an existing repo by hand, and
+expect it to report violations that were hidden before.
+
 ## 0.4.0 — 2026-11-05
 
 ### Breaking

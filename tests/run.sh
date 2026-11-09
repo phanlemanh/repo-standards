@@ -175,6 +175,51 @@ printf 'from coffee_bad import x\nfrom ..loyalty import points_for\n' >> "$b/src
 if ( cd "$b" && python3 tools/boundaries.py >/dev/null ); then fail "boundaries missed a forbidden dependency"; fi
 echo "ok  module boundaries"
 
+# 14b. TS boundaries: `@/` alias, the server entry, src/app and "use client"
+bt="$TMP/combo-ts-node-modular-monolith-none-mcp/tools/boundaries.py"
+boundary_errors() { # $1 = file to plant, $2 = its text
+  local r; r=$(mktemp -d "$TMP/bnd.XXXXXX")
+  mkdir -p "$r/architecture" "$r/src/modules/listings" "$r/src/modules/contacts" "$(dirname "$r/$1")"
+  printf 'modules:\n  - name: listings\n    owns: []\n    depends_on: [contacts]\n  - name: contacts\n    owns: []\n    depends_on: []\n' > "$r/architecture/modules.yaml"
+  printf 'export {};\n' > "$r/src/modules/listings/index.ts"
+  printf 'export {};\n' > "$r/src/modules/contacts/index.ts"
+  printf '%b' "$2" > "$r/$1"
+  { python3 "$bt" --root "$r" --json || true; } | json '"\n".join(d["errors"])'
+}
+expect_boundary() { # $1 = case, $2 = file, $3 = text, $4 = part of the expected error, "" = none
+  local out; out=$(boundary_errors "$2" "$3") || out="tool crashed"
+  if [ -z "$4" ]; then
+    [ -z "$out" ] || miss "boundaries: $1: unexpected error: $out"
+  else
+    case "$out" in *"$4"*) ;; *) miss "boundaries: $1: expected '$4', got '${out:-no error}'" ;; esac
+  fi
+}
+expect_boundary "server entry of a declared dependency" src/modules/listings/a.ts \
+  'import { x } from "../contacts/server";\n' ""
+expect_boundary "server entry of an undeclared dependency" src/modules/contacts/a.ts \
+  'import { x } from "../listings/server";\n' "may not use"
+expect_boundary "internal file through @/" src/modules/listings/a.ts \
+  'import { x } from "@/modules/contacts/phones";\n' "public API"
+expect_boundary "undeclared dependency through @/" src/modules/contacts/a.ts \
+  'import { x } from "@/modules/listings";\n' "may not use"
+expect_boundary "@/ reaches modules under a package folder" src/shop/modules/orders/a.ts \
+  'import { x } from "@/shop/modules/billing/inner";\n' "may not use"
+expect_boundary "internal file from src/app through @/" src/app/page.tsx \
+  'import { x } from "@/modules/contacts/phones";\n' "public API"
+expect_boundary "internal file from src/app, relative" src/app/page.tsx \
+  'import { x } from "../modules/contacts/phones";\n' "public API"
+expect_boundary "client file imports a server entry" src/app/widget.tsx \
+  '"use client";\nimport { x } from "@/modules/contacts/server";\n' "client file"
+expect_boundary "client directive after a comment" src/app/widget.tsx \
+  '// banner\n"use client";\nimport { x } from "@/modules/contacts/server";\n' "client file"
+expect_boundary "client file imports its own module's server entry" src/modules/contacts/widget.tsx \
+  "'use client';\nimport { x } from './server';\n" "client file"
+expect_boundary "client file uses the index entry" src/app/widget.tsx \
+  '"use client";\nimport { x } from "@/modules/contacts";\n' ""
+expect_boundary "server component uses a server entry" src/app/page.tsx \
+  'import { x } from "@/modules/contacts/server";\n' ""
+echo "ok  ts module boundaries (or misses reported above)"
+
 # 15. API breaking-change detection
 a="$TMP/combo-fastapi-service-api-container-x"
 cp "$a/contracts/openapi.json" "$TMP/old.json"
