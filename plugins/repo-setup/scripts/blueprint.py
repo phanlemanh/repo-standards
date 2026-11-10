@@ -129,6 +129,12 @@ def _ai_errors(layer: dict[str, Any]) -> list[str]:
 
 
 def _design_errors(layer: dict[str, Any], bp: dict[str, Any]) -> list[str]:
+    preset = (((bp.get("layers") or {}).get("stack") or {}).get("choice") or {}).get("preset")
+    if layer.get("status") == "not_applicable" and preset in DESIGN_STACKS:
+        return [
+            f"design: stack {preset} has a screen, so the layer applies; to go without the "
+            "floor, mark it decided with automation manual and a why"
+        ]
     if layer.get("status") != "decided" or layer.get("automation") == "manual":
         return []
     choice = layer.get("choice") or {}
@@ -137,7 +143,6 @@ def _design_errors(layer: dict[str, Any], bp: dict[str, Any]) -> list[str]:
         problems.append("design: only base shadcn is built, so any other base needs automation manual")
     if choice.get("surface") not in DESIGN_SURFACES:
         problems.append(f"design: surface must be one of {sorted(DESIGN_SURFACES)}")
-    preset = (((bp.get("layers") or {}).get("stack") or {}).get("choice") or {}).get("preset")
     if preset not in DESIGN_STACKS:
         problems.append(f"design: needs a stack with a screen, one of {sorted(DESIGN_STACKS)}")
     if "brand_primary" in choice:

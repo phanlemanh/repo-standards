@@ -432,6 +432,29 @@ bad_design 'surface: tool' 'surface: magazine' "an unknown surface"
 bad_design 'base: shadcn' 'base: bootstrap' "an unbuilt base marked automated"
 bad_design 'preset: react-vite' 'preset: python' "a stack without a screen"
 bad_design 'brand_primary: "#0246ff"' 'brand_primary: #0246ff' "an unquoted colour"
+bad_design 'locale: vi-VN' 'locale: vietnamese' "an invalid locale"
+bad_design 'currency: VND' 'currency: dong' "an invalid currency"
+python3 - "$B/design.yaml" "$TMP/dna.yaml" <<'PY'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+start = t.index("  design:\n"); end = t.index("  quality:\n")
+open(sys.argv[2], "w", encoding="utf-8").write(t[:start] + "  design:\n    status: not_applicable\n" + t[end:])
+PY
+out=$(python3 "$bp" check "$TMP/dna.yaml" 2>&1) && miss "design: not_applicable accepted for a stack with a screen"
+case "$out" in *"automation manual"*) ;; *) miss "design not_applicable: unclear message: $out" ;; esac
+python3 - "$B/design.yaml" "$TMP/dman.yaml" <<'PY'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+old = "    automation: automated\n    choice:\n      base: shadcn"
+assert old in t
+open(sys.argv[2], "w", encoding="utf-8").write(t.replace(old, "    automation: manual\n    choice:\n      base: company"))
+PY
+python3 "$bp" check "$TMP/dman.yaml" >/dev/null || miss "design: a manual base with a why should be valid"
+args=$(python3 -c "
+import sys; sys.path.insert(0, '$S'); import blueprint
+from pathlib import Path
+print(' '.join(blueprint.to_apply_args(blueprint.load(Path('$TMP/dman.yaml')))))")
+case "$args" in *design*) miss "design: a manual base still gives --with design: $args" ;; esac
 grep -E 'needs_review' "$SK/SKILL.md" | grep -q 'not_applicable' || miss "needs_review ignores not_applicable layers"
 for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
 grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "new does not use its references"
