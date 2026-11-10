@@ -388,10 +388,41 @@ echo "ok  blueprint (or misses reported above)"
 
 # 26. new: layers, references, language rule, Vietnamese names, old Python
 SK="$ROOT/plugins/repo-setup/skills/new"
-for l in context repo architecture ai stack domain quality delivery governance; do
+for l in context repo architecture ai stack domain design quality delivery governance; do
   [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
+# 26b. design layer: choices, colours, mapping to apply.py
+python3 "$bp" check "$B/design.yaml" >/dev/null || miss "design.yaml should be valid"
+args=$(python3 -c "
+import sys; sys.path.insert(0, '$S'); import blueprint
+from pathlib import Path
+print(' '.join(blueprint.to_apply_args(blueprint.load(Path('$B/design.yaml')))))")
+for w in "--with design" "design_surface=tool" "brand_primary=#0246ff" "locale=vi-VN" "currency=VND"; do
+  case "$args" in *"$w"*) ;; *) miss "blueprint args lack: $w" ;; esac
+done
+python3 - "$S" <<'PY' || miss "colour rules"
+import sys; sys.path.insert(0, sys.argv[1]); import blueprint as b
+assert round(b.contrast_ratio("#0246ff", "#ffffff"), 2) == 6.32
+assert b.readable_on("#0246ff") == "#ffffff" and b.readable_on("#ffba00") == "#0a0a0a"
+assert b.brand_errors("#0246FF") == []
+for bad in ("#ffba00", "#FFF", "blue", None, ""):
+    assert b.brand_errors(bad), bad
+PY
+bad_design() { python3 - "$B/design.yaml" "$TMP/dv.yaml" "$1" "$2" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+assert old in t, old
+open(dst, "w", encoding="utf-8").write(t.replace(old, new, 1))
+PY
+  if python3 "$bp" check "$TMP/dv.yaml" >/dev/null 2>&1; then miss "design: accepted $3"; fi
+}
+bad_design 'surface: tool' 'surface: magazine' "an unknown surface"
+bad_design 'base: shadcn' 'base: bootstrap' "an unbuilt base marked automated"
+bad_design 'preset: react-vite' 'preset: python' "a stack without a screen"
+bad_design 'brand_primary: "#0246ff"' 'brand_primary: #0246ff' "an unquoted colour"
+grep -E 'needs_review' "$SK/SKILL.md" | grep -q 'not_applicable' || miss "needs_review ignores not_applicable layers"
 for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
 grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "new does not use its references"
 grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"

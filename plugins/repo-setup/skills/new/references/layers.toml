@@ -26,6 +26,10 @@ id = "domain"
 depends_on = ["architecture", "ai"]
 
 [[layer]]
+id = "design"
+depends_on = ["context", "stack"]
+
+[[layer]]
 id = "quality"
 depends_on = ["repo"]
 

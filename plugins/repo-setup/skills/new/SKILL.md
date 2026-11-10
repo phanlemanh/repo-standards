@@ -53,7 +53,7 @@ For each layer, read `references/layers/<id>.md` and run this loop:
    label, and never imply that a `manual` option will be built.
 3. **Refine**: the user picks, edits or asks. Name what the choice leaves undecided.
 4. **Decide**: write it to `setup-blueprint.yaml`, then run `blueprint.py dependents <layer>` and mark
-   any decided layer in that list as `needs_review`. Revisit those layers.
+   any layer in that list that is `decided` or `not_applicable` as `needs_review`. Revisit those layers.
 
 A layer with only one sensible answer gets one line, no question. Keep the blueprint `status` at
 `designing`. Check it with `blueprint.py check setup-blueprint.yaml`.
