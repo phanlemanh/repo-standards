@@ -397,6 +397,8 @@ for l in context repo architecture ai stack domain design quality delivery gover
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
 # 26a. the build step and docs describe the design layer
+sed -n 's/^description: //p' "$SK/SKILL.md" | grep -q 'context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents' \
+  || miss "new: description does not list the layers in layers.toml order"
 grep -q 'design/terms.json' "$SK/SKILL.md" && grep -q 'docs_language' "$SK/SKILL.md" || miss "SKILL.md build step lacks design/terms.json and docs_language"
 awk '/^## 6\./{f=1;next} /^## 7\./{f=0} f' "$SK/SKILL.md" | grep -q 'design/terms.json' || miss "SKILL.md step 6 lacks design/terms.json"
 grep -q 'src/example' "$SK/references/tour.md" || miss "tour.md lacks src/example"

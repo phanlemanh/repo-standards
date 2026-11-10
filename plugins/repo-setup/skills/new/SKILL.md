@@ -1,6 +1,6 @@
 ---
 name: new
-description: Set up a new or empty repository through decision layers — repo strategy, architecture, AI in the product, stack, domain, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
+description: Set up a new or empty repository through decision layers — context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
 ---
 
 # Set up a repository through decision layers
