@@ -75,7 +75,7 @@ function Body({ state }: { state: ScreenState }) {
             <CardDescription>{formatDate(entry.date)}</CardDescription>
           </CardHeader>
           <CardContent>
-            <p>{entry.body}</p>
+            <p className="text-base">{entry.body}</p>
           </CardContent>
         </Card>
       ))}
@@ -85,7 +85,7 @@ function Body({ state }: { state: ScreenState }) {
 
 export function ReferenceScreen({ state }: { state: ScreenState }) {
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6 text-base">
+    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold">{LABELS.screenTitle}</h1>
       <Body state={state} />
     </main>
