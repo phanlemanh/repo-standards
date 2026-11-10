@@ -66,6 +66,14 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     sed 's#"shadcn/no-restyle": \["error"#"shadcn/no-restyle": ["warn"#' "$TMP/e.bak" > eslint.config.js
     changed "$TMP/e.bak" eslint.config.js "the warn mutation"
     red "rule downgraded to warn" "not caught by shadcn/no-restyle" node tools/design_guards.mjs --only guards; cp "$TMP/e.bak" eslint.config.js
+    sed 's#"src/generated/"\]#"src/generated/", "src/example/"]#' "$TMP/e.bak" > eslint.config.js
+    changed "$TMP/e.bak" eslint.config.js "the ignored-folder mutation"
+    red "screen ignored by eslint" "ignored by eslint: src/example/ReferenceScreen.tsx" node tools/design_guards.mjs --only guards; cp "$TMP/e.bak" eslint.config.js
+    awk '{ print } /design-floor:end/ { print "  { files: [\"src/example/**\"], rules: { \"shadcn/no-restyle\": \"off\" } }," }' "$TMP/e.bak" > eslint.config.js
+    changed "$TMP/e.bak" eslint.config.js "the folder override mutation"
+    red "rule off for one folder" "shadcn/no-restyle is not an error for src/example/ReferenceScreen.tsx" node tools/design_guards.mjs --only guards; cp "$TMP/e.bak" eslint.config.js
+    mkdir -p src/feature/components/ui; printf '// eslint-disable-next-line\nexport const x = 1;\n' > src/feature/components/ui/thing.ts
+    red "disable in a nested ui folder" "eslint-disable without a reason: src/feature/components/ui/thing.ts" node tools/design_guards.mjs --only guards; rm -r src/feature
     cp mk/design.mk "$TMP/m.bak"; awk '{ if ($0 == "\tnpx playwright test") print "\t-npx playwright test"; else print }' "$TMP/m.bak" > mk/design.mk
     changed "$TMP/m.bak" mk/design.mk "the ignored-step mutation"
     red "ignored browser step" "the browser step can no longer fail the gate" node tools/design_guards.mjs --only gate; cp "$TMP/m.bak" mk/design.mk

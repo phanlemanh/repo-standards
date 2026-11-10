@@ -33,14 +33,24 @@ const CLEAN = [
   '<Button size="lg" className="mt-4 w-full" />',
 ];
 const HEAD = 'import { Button } from "@/components/ui/button";\nexport const a = ';
+// Rules every source file outside the vendor folder must get as errors.
+const FLOOR_RULES = ["shadcn/no-restyle", "no-restricted-syntax"];
+const VENDOR = join("src", "components", "ui");
+// The one place allowed to format, and the generated types that `make ontology` checks.
+const OUTSIDE_FLOOR = [join("src", "lib", "format.ts"), join("src", "generated", "ontology.ts")];
 const problems = [];
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
-    if (statSync(p).isDirectory()) return p.endsWith(join("components", "ui")) ? [] : walk(p);
-    return /\.tsx?$/.test(p) ? [p] : [];
+    if (statSync(p).isDirectory()) return p === VENDOR ? [] : walk(p);
+    return /\.[jt]sx?$/.test(p) ? [p] : [];
   });
+}
+
+function isError(entry) {
+  const level = Array.isArray(entry) ? entry[0] : entry;
+  return level === 2 || level === "error";
 }
 
 function read(file) {
@@ -86,6 +96,14 @@ async function guards() {
     problems.push("design/terms.json is missing or not valid JSON");
   }
   for (const f of existsSync("src") ? walk("src") : []) {
+    if (!OUTSIDE_FLOOR.includes(f)) {
+      if (await eslint.isPathIgnored(f)) problems.push(`ignored by eslint: ${f}`);
+      else {
+        const rules = (await eslint.calculateConfigForFile(f))?.rules ?? {};
+        for (const rule of FLOOR_RULES)
+          if (!isError(rules[rule])) problems.push(`${rule} is not an error for ${f}`);
+      }
+    }
     const text = read(f);
     for (const line of text.split("\n"))
       if (/eslint-disable/.test(line) && !/ -- [^\s*]/.test(line))
@@ -104,8 +122,22 @@ function gate() {
     problems.push("make -n check failed");
   }
   if (!/^npx playwright test$/m.test(plan)) problems.push("make check has no browser step");
-  if (!/^\tnpx playwright test$/m.test(read("mk/design.mk")))
+  if (!/^node tools\/design_guards\.mjs$/m.test(plan))
+    problems.push("make check does not run the design guards");
+  const mk = read("mk/design.mk");
+  if (!/^\tnpx playwright test$/m.test(mk))
     problems.push("the browser step can no longer fail the gate");
+  if (!/^\tnode tools\/design_guards\.mjs$/m.test(mk))
+    problems.push("the design guards can no longer fail the gate");
+  // A make setting that ignores errors would turn every step above into decoration.
+  const mkFiles = existsSync("mk") ? readdirSync("mk").filter((n) => n.endsWith(".mk")) : [];
+  for (const f of ["Makefile", ...mkFiles.map((n) => join("mk", n))]) {
+    const text = read(f);
+    if (/^\s*\.IGNORE\s*:/m.test(text)) problems.push(`${f} ignores errors with .IGNORE`);
+    const flags = text.split("\n").filter((line) => /^\s*(override\s+)?MAKEFLAGS\b/.test(line));
+    if (flags.some((line) => /(^|[\s=])(-[a-zA-Z]*i[a-zA-Z]*|--ignore-errors)\b/.test(line)))
+      problems.push(`${f} ignores errors through MAKEFLAGS`);
+  }
 }
 
 function reference() {

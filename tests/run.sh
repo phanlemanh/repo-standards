@@ -636,6 +636,23 @@ if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with d
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31a. the gate check goes red when make could skip the guards or ignore their failure
+d="$TMP/design-team"
+( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
+gate_red() { # <file> <line to add, or "" to drop design-guards from the gate> <expected text>
+  cp "$d/$1" "$TMP/gate.bak"
+  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards /CHECK_TARGETS += /' "$d/$1"; fi
+  cmp -s "$TMP/gate.bak" "$d/$1" && miss "design gate: mutation '$2' did not change $1"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with '$2' in $1"
+  case "$out" in *"$3"*) ;; *) miss "design gate: '$2' in $1 went red for another reason: $out" ;; esac
+  cp "$TMP/gate.bak" "$d/$1"
+}
+gate_red mk/design.mk "" "make check does not run the design guards"
+gate_red mk/design.mk ".IGNORE:" "mk/design.mk ignores errors with .IGNORE"
+gate_red Makefile "MAKEFLAGS += -i" "Makefile ignores errors through MAKEFLAGS"
+gate_red Makefile "MAKEFLAGS += --keep-going --ignore-errors" "Makefile ignores errors through MAKEFLAGS"
+( cd "$d" && printf 'MAKEFLAGS += --no-print-directory\n' >> Makefile && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) \
+  || miss "design gate: an unrelated MAKEFLAGS setting went red"
 python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "design checks wired wrongly"
 import sys, tomllib, pathlib
 checks = {c["id"]: c for c in tomllib.loads((pathlib.Path(sys.argv[1]) / "checklists/top-tier.toml").read_text())["check"]}
