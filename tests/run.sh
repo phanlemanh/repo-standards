@@ -590,5 +590,40 @@ grep -q '^tier=high$' "$TMP/gate2.out" 2>/dev/null || miss "gate without base ru
 [ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request when the base has no rules"
 echo "ok  pr pipeline (or misses reported above)"
 
+# 31. design capability
+for level in starter team; do
+  d="$TMP/design-$level"; mkdir -p "$d"; git -C "$d" init -q -b main
+  python3 "$S/apply.py" --target "$d" --preset react-vite --level "$level" --with design \
+    --var 'project_name=Quán "Cà" \ Phê' --var description=x --var owner=acme \
+    --var 'brand_primary=#0246ff' --var locale=vi-VN --var currency=VND --json >/dev/null \
+    || miss "design: apply failed at $level"
+  grep -q -- '--primary: #0246ff' "$d/src/index.css" || miss "design: brand block missing"
+  [ "$(tail -6 "$d/src/index.css" | grep -c primary)" -ge 2 ] || miss "design: brand block must come last"
+  grep -q 'lang="vi"' "$d/index.html" || miss "design: page language"
+  grep -q '"vi-VN"' "$d/src/lib/format.ts" && grep -q '"VND"' "$d/src/lib/format.ts" || miss "design: locale"
+  grep -q 'CHECK_TARGETS += design-guards ui-floor' "$d/mk/design.mk" || miss "design: not in the gate"
+  [ -f "$d/.mcp.json" ] && miss "design: must not add .mcp.json"
+  # The measurement protocol cuts the capability at these exact lines.
+  grep -qx ' *// design-floor:start' "$d/eslint.config.js" && grep -qx ' *// design-floor:end' "$d/eslint.config.js" \
+    || miss "design: eslint markers missing"
+  grep -qx '## Design floor' "$d/AGENTS.md" || miss "design: AGENTS section heading"
+  again=$(python3 "$S/apply.py" --target "$d" --json | json 'len(d["created"])+len(d["updated"])+len(d["conflict"])') || again=-1
+  [ "$again" -eq 0 ] || miss "design/$level: second run changed $again files"
+done
+grep -q 'src/components/ui' "$TMP/design-team/vitest.config.ts" || miss "design: team coverage counts vendor code"
+d="$TMP/design-plain"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design \
+  --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: no brand must work"
+grep -q 'brand' "$d/src/index.css" && miss "design: brand block without a brand"
+d="$TMP/design-content"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design --var design_surface=content \
+  --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: content surface apply failed"
+grep -q 'TableRow' "$d/src/example/ReferenceScreen.tsx" && miss "design: content surface got the table screen"
+grep -q 'text-base' "$d/design/behaviors.md" || miss "design: content surface lacks its density"
+grep -q 'text-sm' "$TMP/design-plain/design/behaviors.md" || miss "design: tool surface lacks its density"
+if python3 "$S/apply.py" --target "$TMP/design-py" --preset fastapi --with design \
+  --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: stack without a screen accepted"; fi
+if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var 'brand_primary=red' \
+  --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: bad colour accepted"; fi
+echo "ok  design capability (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

@@ -1,0 +1,20 @@
+// Every word the screens show. Translate here; the tests compare against this file.
+export const LABELS = {
+  screenTitle: "Reference screen",
+  loading: "Loading",
+  errorTitle: "This page could not load",
+  errorDetail: "Check your connection and try again.",
+  emptyTitle: "Nothing here yet",
+  emptyDetail: "Add the first item to get started.",
+  emptyAction: "Add item",
+  noResultsTitle: "No results",
+  noResultsDetail: "Try a different search or clear the filters.",
+  noResultsAction: "Clear filters",
+  columnName: "Name",
+  columnDate: "Date",
+  columnTotal: "Total",
+  sampleFirstName: "Annual subscription",
+  sampleFirstBody: "Renews once a year and covers every member of the team.",
+  sampleSecondName: "Onboarding session",
+  sampleSecondBody: "A single guided session for people who are new to the product.",
+} as const;

@@ -236,6 +236,15 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")
     v["ai_workflow"] = "yes" if v["ai_tier"] in ("workflow", "agent") else "no"
     v["ai_agent"] = "yes" if v["ai_tier"] == "agent" else "no"
+    # The "design" capability: a brand colour is optional, and a bad one stops the run.
+    brand = v.get("brand_primary", "")
+    if brand:
+        problems = blueprint.brand_errors(brand)
+        if problems:
+            raise ValueError("; ".join(problems))
+    v.setdefault("design_brand", "yes" if brand else "no")
+    v.setdefault("brand_primary_foreground", blueprint.readable_on(brand) if brand else "")
+    v.setdefault("html_lang", v.get("locale", "").split("-")[0] or "en")
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
     market = v.get("marketplace", "").strip()
     if market:
