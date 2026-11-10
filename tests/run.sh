@@ -667,7 +667,7 @@ done
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
-# 31e. dropping design from the manifest does not switch the checks off unseen
+# 31a. dropping design from the manifest does not switch the checks off unseen
 d="$TMP/design-plain"; git -C "$d" init -q -b main 2>/dev/null; git -C "$d" add -A
 python3 - "$d/.repo-setup.json" <<'PY'
 import json, sys
@@ -675,7 +675,7 @@ p = sys.argv[1]; m = json.load(open(p)); m["capabilities"].remove("design"); jso
 PY
 detail=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["failed"] if r["id"]=="design_present"]')
 case "$detail" in *"does not list design"*) ;; *) miss "doctor: design dropped from the manifest went unseen: $detail" ;; esac
-# 31d. turning design on in an existing react-vite repo: the user's own stylesheet is kept, with a note
+# 31b. turning design on in an existing react-vite repo: the user's own stylesheet is kept, with a note
 d="$TMP/design-later"; mkdir -p "$d/src"; git -C "$d" init -q -b main
 python3 "$S/apply.py" --target "$d" --preset react-vite --var project_name=P --var description=x --var owner=a >/dev/null
 echo 'body { margin: 0; }' > "$d/src/index.css"
@@ -697,7 +697,7 @@ if python3 "$S/apply.py" --target "$d" --with design >/dev/null 2>&1; then miss 
 git -C "$d" add -A
 skip=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["skipped"] if r["id"]=="design_present"]')
 case "$skip" in *"not applicable"*) ;; *) miss "doctor: design_present not skipped for an adopted repo: $skip" ;; esac
-# 31b. doctor: the floor files must stay as apply wrote them
+# 31d. doctor: the floor files must stay as apply wrote them
 d="$TMP/design-starter"
 floor() { python3 "$S/doctor.py" --target "$d" --level starter --json | json '[r.get("detail","")+" | "+r["fix"] for r in d["failed"] if r["id"]=="design_guards_bite"][0]'; }
 case "$(floor)" in *"changed since apply"*) miss "design floor: fresh repo reported as changed" ;; esac
@@ -720,7 +720,7 @@ m["files"]["mk/design.mk"] = hashlib.sha256(open(f, "rb").read()).hexdigest(); j
 PY
 case "$(floor)" in *"changed since apply"*) miss "design floor: compared with the plugin copy although a hash is recorded" ;; esac
 cp "$TMP/mk.bak" "$d/mk/design.mk"; cp "$TMP/manifest.bak" "$d/.repo-setup.json"
-# 31a. the gate check goes red when make could skip the guards or ignore their failure
+# 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
 gate_red() { # <file> <line to add, or "" to drop design-guards from the gate> <expected text>
