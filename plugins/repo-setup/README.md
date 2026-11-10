@@ -20,8 +20,8 @@ One flow, three depths, changeable at any layer:
 - **Review each layer**: stop at every layer with a real choice.
 - **Bring a design**: paste what you decided; Claude asks only about gaps and conflicts.
 
-The nine layers are context, repo strategy, architecture, AI in the product, stack, domain, quality,
-delivery, and agents and governance. Every option carries a label: `automated`, `partial`, or
+The ten layers are context, repo strategy, architecture, AI in the product, stack, domain, design,
+quality, delivery, and agents and governance. Every option carries a label: `automated`, `partial`, or
 `manual` (recorded with guidance, not built).
 
 Decisions go to `setup-blueprint.yaml` with reasons and rejected options. `apply.py --from-blueprint`
@@ -34,7 +34,7 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 | --- | --- |
 | **Stack** | `ts-node`, `ts-api` (Fastify), `react-vite`, `python`, `fastapi` |
 | **Archetype** | `service-api`, `modular-monolith`, or none |
-| **Capability** | `ai` (tiers `call`, `workflow`, `agent`), `mcp`, `github-agents` |
+| **Capability** | `ai` (tiers `call`, `workflow`, `agent`), `design` (React/Vite only), `mcp`, `github-agents` |
 | **Deploy** | `container` |
 | **Level** | `starter`, `team` |
 

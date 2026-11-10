@@ -396,6 +396,12 @@ for l in context repo architecture ai stack domain design quality delivery gover
   [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
+# 26a. the build step and docs describe the design layer
+grep -q 'design/terms.json' "$SK/SKILL.md" && grep -q 'docs_language' "$SK/SKILL.md" || miss "SKILL.md build step lacks design/terms.json and docs_language"
+awk '/^## 6\./{f=1;next} /^## 7\./{f=0} f' "$SK/SKILL.md" | grep -q 'design/terms.json' || miss "SKILL.md step 6 lacks design/terms.json"
+grep -q 'src/example' "$SK/references/tour.md" || miss "tour.md lacks src/example"
+grep -q 'ten layers' "$ROOT/plugins/repo-setup/README.md" || miss "plugin README lacks: ten layers"
+grep '`react-vite`' "$SK/references/layers/stack.md" | grep -q 'design' || miss "stack.md react-vite row lacks design"
 # 26b. design layer: choices, colours, mapping to apply.py
 python3 "$bp" check "$B/design.yaml" >/dev/null || miss "design.yaml should be valid"
 args=$(python3 -c "

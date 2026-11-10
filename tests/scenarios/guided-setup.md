@@ -8,7 +8,7 @@ Tin nhắn đầu: "Tôi muốn làm một công cụ nhỏ quản lý quán cà
 
 | Phải thấy | Không được xảy ra |
 |---|---|
-| Bức tranh 9 tầng, ngắn, không thuật ngữ thừa | Hỏi chọn `starter` hay `team` |
+| Bức tranh 10 tầng, ngắn, không thuật ngữ thừa | Hỏi chọn `starter` hay `team` |
 | Chỉ dừng ở tổng duyệt | Bật `github-agents` |
 | `doctor` 100, có giải thích điểm đo gì | Nói điểm 100 nghĩa là ứng dụng đã xong |
 | `docs/START-HERE.md` viết tiếng Việt | Tên tệp hay mã nguồn tiếng Việt |

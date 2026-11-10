@@ -74,6 +74,9 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
    `.claude/skills/ontology-add/SKILL.md`, replacing the sample ontology
    if there is one, then write the handlers, and update the sample tests and `evals/` that name the
    sample actions. `make gen`.
+   If the `design` capability is on, translate the text in `src/lib/labels.ts`, `src/example/` and
+   `design/behaviors.md` into `docs_language`. When you write the domain, record the synonyms to
+   avoid in `design/terms.json`.
 4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
    most 2 fixes, then report exactly what fails.
 5. Run `doctor.py`. Explain what the score does and does not measure.
