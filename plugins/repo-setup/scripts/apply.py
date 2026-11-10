@@ -238,7 +238,16 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")
     v["ai_workflow"] = "yes" if v["ai_tier"] in ("workflow", "agent") else "no"
     v["ai_agent"] = "yes" if v["ai_tier"] == "agent" else "no"
-    # The "design" capability: a brand colour is optional, and a bad one stops the run.
+    # The "design" capability: the same rules as the blueprint, for values given with --var.
+    surface = v.get("design_surface")
+    if surface is not None and surface not in blueprint.DESIGN_SURFACES:
+        surfaces = ", ".join(sorted(blueprint.DESIGN_SURFACES))
+        raise ValueError(f"design_surface must be one of: {surfaces}")
+    if "locale" in v and not blueprint.LOCALE.fullmatch(v["locale"]):
+        raise ValueError("locale must look like vi-VN (language-COUNTRY)")
+    if "currency" in v and not blueprint.CURRENCY.fullmatch(v["currency"]):
+        raise ValueError("currency must be a three-letter code like VND")
+    # A brand colour is optional, and a bad one stops the run.
     brand = v.get("brand_primary", "")
     if brand:
         problems = blueprint.brand_errors(brand)

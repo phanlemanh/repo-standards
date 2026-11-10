@@ -656,6 +656,12 @@ if python3 "$S/apply.py" --target "$TMP/design-py" --preset fastapi --with desig
   --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: stack without a screen accepted"; fi
 if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var 'brand_primary=red' \
   --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: bad colour accepted"; fi
+for bad in design_surface=magazine locale=vietnamese locale=vi_VN currency=dong currency=VN; do
+  out=$(python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var "$bad" \
+    --var project_name=P --var description=x --var owner=a 2>&1) && miss "design: --var $bad accepted"
+  case "$out" in *"${bad%%=*} must"*) ;; *) miss "design: --var $bad refused without saying why: $out" ;; esac
+done
+[ ! -e "$TMP/design-bad/package.json" ] || miss "design: a bad --var still wrote files"
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"

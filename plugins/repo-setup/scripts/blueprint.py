@@ -33,6 +33,8 @@ AGENT_RUNTIMES = {"tool-runner", "manual-loop", "agent-sdk", "managed-agents"}
 DESIGN_BASES = {"shadcn", "company", "other"}
 DESIGN_SURFACES = {"tool", "content"}
 DESIGN_STACKS = {"react-vite"}
+LOCALE = re.compile(r"[a-z]{2}-[A-Z]{2}")
+CURRENCY = re.compile(r"[A-Z]{3}")
 BRAND_MIN_CONTRAST = 4.5
 
 
@@ -148,9 +150,9 @@ def _design_errors(layer: dict[str, Any], bp: dict[str, Any]) -> list[str]:
     if "brand_primary" in choice:
         problems += brand_errors(choice["brand_primary"])
     locale, currency = choice.get("locale"), choice.get("currency")
-    if locale is not None and not re.fullmatch(r"[a-z]{2}-[A-Z]{2}", str(locale)):
+    if locale is not None and not LOCALE.fullmatch(str(locale)):
         problems.append("design: locale must look like vi-VN")
-    if currency is not None and not re.fullmatch(r"[A-Z]{3}", str(currency)):
+    if currency is not None and not CURRENCY.fullmatch(str(currency)):
         problems.append("design: currency must look like VND")
     return problems
 
