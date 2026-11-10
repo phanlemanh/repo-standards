@@ -511,6 +511,10 @@ requires = "tools/design_guards.mjs"
 title = "The design guards still fail on real violations"
 why = "A guard that cannot fail is decoration: someone loosened the rules and nothing noticed."
 fix = "Run: node tools/design_guards.mjs --only guards, then restore the rules it names in eslint.config.js."
+# These files hold the floor itself: they must stay as apply.py wrote them (hash in .repo-setup.json).
+unchanged = ["tools/design_guards.mjs", "tests/e2e/floor.spec.ts", "mk/design.mk"]
+unchanged_from = "capabilities/design/starter"
+unchanged_fix = "Re-apply the design capability: delete the files named, then run python3 <plugin>/scripts/apply.py --target . --with design to write the plugin's copy back."
 
 [[check]]
 id = "design_floor_in_gate"

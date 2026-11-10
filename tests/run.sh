@@ -636,6 +636,29 @@ if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with d
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31b. doctor: the floor files must stay as apply wrote them
+d="$TMP/design-starter"
+floor() { python3 "$S/doctor.py" --target "$d" --level starter --json | json '[r.get("detail","")+" | "+r["fix"] for r in d["failed"] if r["id"]=="design_guards_bite"][0]'; }
+case "$(floor)" in *"changed since apply"*) miss "design floor: fresh repo reported as changed" ;; esac
+cp "$d/tests/e2e/floor.spec.ts" "$TMP/floor.bak"; echo "// weaker" >> "$d/tests/e2e/floor.spec.ts"
+case "$(floor)" in *"changed since apply wrote them: tests/e2e/floor.spec.ts"*"Re-apply the design capability"*) ;;
+  *) miss "design floor: edited floor.spec.ts not reported: $(floor)" ;; esac
+cp "$TMP/floor.bak" "$d/tests/e2e/floor.spec.ts"
+cp "$d/.repo-setup.json" "$TMP/manifest.bak"
+python3 - "$d/.repo-setup.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p)); del m["files"]["mk/design.mk"]; json.dump(m, open(p, "w"))
+PY
+case "$(floor)" in *"changed since apply"*) miss "design floor: no hash and the plugin copy reported as changed" ;; esac
+cp "$d/mk/design.mk" "$TMP/mk.bak"; printf '\t-true\n' >> "$d/mk/design.mk"
+case "$(floor)" in *"changed since apply wrote them: mk/design.mk"*) ;; *) miss "design floor: no hash, edit not caught against the plugin copy" ;; esac
+python3 - "$d/.repo-setup.json" "$d/mk/design.mk" <<'PY'
+import hashlib, json, sys
+p, f = sys.argv[1:]; m = json.load(open(p))
+m["files"]["mk/design.mk"] = hashlib.sha256(open(f, "rb").read()).hexdigest(); json.dump(m, open(p, "w"))
+PY
+case "$(floor)" in *"changed since apply"*) miss "design floor: compared with the plugin copy although a hash is recorded" ;; esac
+cp "$TMP/mk.bak" "$d/mk/design.mk"; cp "$TMP/manifest.bak" "$d/.repo-setup.json"
 # 31a. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"

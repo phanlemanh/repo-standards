@@ -17,6 +17,7 @@ if sys.version_info < (3, 11):
     sys.exit(2)
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -194,7 +195,26 @@ def blueprint_report(root: Path, setup: dict) -> dict[str, list[str]]:
     return {"blueprint_drift": blueprint.drift(bp, setup), "manual_steps": blueprint.manual_steps(bp)}
 
 
-def run_check(repo: Repo, check: dict, remote: Remote | None = None) -> dict:
+def changed_since_apply(repo: Repo, check: dict, recorded: dict[str, str]) -> list[str]:
+    """Files of `unchanged` that differ from the hash apply.py recorded, or, when it recorded
+    none, from the plugin's copy. A recorded hash wins, so a plugin upgrade alone fails nothing."""
+    changed = []
+    for rel in check.get("unchanged", []):
+        want = recorded.get(rel)
+        if want is None:
+            source = PLUGIN_ROOT / str(check.get("unchanged_from", "")) / rel
+            if not source.is_file():
+                continue
+            want = hashlib.sha256(source.read_bytes()).hexdigest()
+        path = repo.root / rel
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != want:
+            changed.append(rel)
+    return changed
+
+
+def run_check(
+    repo: Repo, check: dict, remote: Remote | None = None, recorded: dict[str, str] | None = None
+) -> dict:
     ctype = check.get("type", "exists")
     res = {k: check.get(k) for k in ("id", "level", "title", "why", "fix")}
     res["weight"] = check.get("weight", 1)
@@ -215,6 +235,12 @@ def run_check(repo: Repo, check: dict, remote: Remote | None = None) -> dict:
         if required and not (repo.root / required).exists():
             res["status"] = "fail"
             res["detail"] = f"{required} not found"
+            return res
+        changed = changed_since_apply(repo, check, recorded or {})
+        if changed:
+            res["status"] = "fail"
+            res["detail"] = "changed since apply wrote them: " + ", ".join(changed)
+            res["fix"] = check.get("unchanged_fix", res["fix"])
             return res
         cmd = [sys.executable if part == "{python}" else part for part in check.get("command", [])]
         try:
@@ -297,7 +323,8 @@ def main(argv: list[str] | None = None) -> int:
 
     repo = Repo(root)
     remote = Remote(root) if args.remote else None
-    results = [run_check(repo, c, remote) for c in checks]
+    recorded = setup.get("files") or {}
+    results = [run_check(repo, c, remote, recorded) for c in checks]
     scored = [r for r in results if r["status"] in ("pass", "fail")]
     total = sum(r["weight"] for r in scored)
     got = sum(r["weight"] for r in scored if r["status"] == "pass")
