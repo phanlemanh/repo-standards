@@ -517,6 +517,10 @@ def main(argv: list[str] | None = None) -> int:
         if "mcp" in caps:
             caps.remove("mcp")
         caps.insert(caps.index("ai"), "mcp")
+    if adopt and "design" in capabilities_for(archetype, caps):
+        ap.error("adopt does not support the design capability yet: it would overwrite or skip "
+                 "the screens, styles and lint setup of an existing front end. Leave out "
+                 "--with design when adopting.")
     try:
         check_combination(preset, archetype, deploy, caps, level)
     except ValueError as exc:

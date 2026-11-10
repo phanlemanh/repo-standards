@@ -212,6 +212,12 @@ def changed_since_apply(repo: Repo, check: dict, recorded: dict[str, str]) -> li
     return changed
 
 
+def skipped(check: dict, why: str) -> dict:
+    res = {k: check.get(k) for k in ("id", "level", "title", "why", "fix")}
+    return {**res, "weight": check.get("weight", 1), "type": check.get("type", "exists"),
+            "status": "skipped", "detail": why}
+
+
 def run_check(
     repo: Repo, check: dict, remote: Remote | None = None, recorded: dict[str, str] | None = None
 ) -> dict:
@@ -324,7 +330,11 @@ def main(argv: list[str] | None = None) -> int:
     repo = Repo(root)
     remote = Remote(root) if args.remote else None
     recorded = setup.get("files") or {}
-    results = [run_check(repo, c, remote, recorded) for c in checks]
+    results = [
+        skipped(c, c["skip_if_adopt"]) if setup.get("adopt") and c.get("skip_if_adopt")
+        else run_check(repo, c, remote, recorded)
+        for c in checks
+    ]
     scored = [r for r in results if r["status"] in ("pass", "fail")]
     total = sum(r["weight"] for r in scored)
     got = sum(r["weight"] for r in scored if r["status"] == "pass")

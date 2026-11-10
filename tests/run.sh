@@ -636,6 +636,18 @@ if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with d
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31c. adopt does not support design yet: apply refuses it, doctor does not score it
+d="$TMP/design-adopt"; mkdir -p "$d"; git -C "$d" init -q -b main
+out=$(python3 "$S/apply.py" --target "$d" --preset react-vite --adopt --with design \
+  --var project_name=P --var description=x --var owner=a 2>&1) && miss "design: accepted under adopt"
+case "$out" in *"adopt does not support the design capability yet"*) ;; *) miss "design under adopt: unclear refusal: $out" ;; esac
+[ -z "$(ls -A "$d" | grep -v '^.git$' || true)" ] || miss "design under adopt: files written"
+python3 "$S/apply.py" --target "$d" --preset react-vite --adopt --var project_name=P --var description=x --var owner=a >/dev/null \
+  || miss "adopt react-vite without design failed"
+if python3 "$S/apply.py" --target "$d" --with design >/dev/null 2>&1; then miss "design: added later to an adopted repo"; fi
+git -C "$d" add -A
+skip=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["skipped"] if r["id"]=="design_present"]')
+case "$skip" in *"not applicable"*) ;; *) miss "doctor: design_present not skipped for an adopted repo: $skip" ;; esac
 # 31b. doctor: the floor files must stay as apply wrote them
 d="$TMP/design-starter"
 floor() { python3 "$S/doctor.py" --target "$d" --level starter --json | json '[r.get("detail","")+" | "+r["fix"] for r in d["failed"] if r["id"]=="design_guards_bite"][0]'; }
