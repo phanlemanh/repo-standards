@@ -287,6 +287,8 @@ def main(argv: list[str] | None = None) -> int:
             return False
         if "capabilities" in c and not caps & set(c["capabilities"]):
             return False
+        if "presets" in c and setup.get("preset") not in c["presets"]:
+            return False
         if any(setup_vars.get(k) != v for k, v in (c.get("vars") or {}).items()):
             return False
         return not ("deploy" in c and deploy not in c["deploy"])

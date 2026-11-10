@@ -55,7 +55,8 @@ PY
     # 6. doctor: everything except the lockfile (needs an install) passes
     git -C "$d" add -A
     failed=$(python3 "$S/doctor.py" --target "$d" --level "$level" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
-    [ "$failed" = "lockfile" ] || fail "$preset/$level: unexpected doctor failures: $failed"
+    want=lockfile; [ "$preset" = react-vite ] && want=design_present,lockfile
+    [ "$failed" = "$want" ] || fail "$preset/$level: unexpected doctor failures: $failed"
 
     # 6b. bytecode from the vendored Python tools never reaches a commit
     git -C "$d" check-ignore -q tools/__pycache__/x.pyc || miss "$preset/$level: tools/__pycache__ is not ignored"
@@ -623,6 +624,16 @@ if python3 "$S/apply.py" --target "$TMP/design-py" --preset fastapi --with desig
   --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: stack without a screen accepted"; fi
 if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var 'brand_primary=red' \
   --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: bad colour accepted"; fi
+d="$TMP/design-starter"; git -C "$d" add -A
+failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+[ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "design checks wired wrongly"
+import sys, tomllib, pathlib
+checks = {c["id"]: c for c in tomllib.loads((pathlib.Path(sys.argv[1]) / "checklists/top-tier.toml").read_text())["check"]}
+for k, mode in (("design_guards_bite", "guards"), ("design_floor_in_gate", "gate"), ("design_reference", "reference")):
+    assert checks[k]["type"] == "command" and checks[k]["capabilities"] == ["design"] and mode in checks[k]["command"], k
+assert checks["design_present"]["presets"] == ["react-vite"] and checks["design_present"]["weight"] == 3
+PY
 echo "ok  design capability (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
