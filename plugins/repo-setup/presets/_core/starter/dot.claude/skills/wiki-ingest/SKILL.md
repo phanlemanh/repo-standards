@@ -5,11 +5,13 @@ description: Update the repo wiki from recent work — a branch/PR diff, merged 
 
 # Ingest knowledge into the wiki
 
-The wiki (`wiki/`) records *why* things are the way they are. Code shows *what*.
+The wiki (`wiki/`) records _why_ things are the way they are. Code shows _what_.
 You compile raw material into short, linked, sourced pages. Humans read; you write.
 
 ## 1. Gather the material
+
 Pick what applies (ask if unclear):
+
 - current branch: `git diff --stat main...HEAD` and `git log main..HEAD --oneline`;
 - since the last ingest: date of the newest line in `wiki/log.md`, then
   `git log --since=<date> --oneline --merges` (or all commits);
@@ -18,7 +20,9 @@ Pick what applies (ask if unclear):
 - files the user drops in `raw/` (if the repo uses one).
 
 ## 2. Decide which pages change
+
 Read `wiki/index.md` and `ontology/page-types.yaml` first.
+
 - **Always**: one line at the top of the list in `wiki/log.md`: `YYYY-MM-DD — what — source`.
 - **New technical choice** (library, architecture, protocol, data store, convention):
   `wiki/decisions/NNNN-short-title.md` (next number). If it replaces an older decision,
@@ -27,9 +31,10 @@ Read `wiki/index.md` and `ontology/page-types.yaml` first.
 - **Domain behaviour changed** (rule, state, property): update `wiki/entities/<name>.md`
   (History section) — and if the meaning changed, the ontology too (use ontology-add).
 - **A multi-step business process** touched: `wiki/flows/<name>.md`.
-Skip anything that is pure refactoring with no lasting "why".
+  Skip anything that is pure refactoring with no lasting "why".
 
 ## 3. Write
+
 - Front matter: `type`, `title`, `links` (repo-relative paths), `sources`
   (PR/commit/issue/"user, <date>").
 - Exactly the sections the page type requires, as `## Section` headings.
@@ -39,8 +44,10 @@ Skip anything that is pure refactoring with no lasting "why".
 - Link new pages from `wiki/index.md` in the right section.
 
 ## 4. Verify
+
 Run `python3 tools/wiki_lint.py` (or `make ontology`) and fix all errors.
 Run `make format` if the repo formats Markdown.
 
 ## 5. Report
+
 List the pages created/updated with one line each. Do not paste the pages back.

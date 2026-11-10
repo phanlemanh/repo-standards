@@ -68,6 +68,9 @@ PY
   done
 done
 
+# 6d. Prettier must not rewrite the manifest: re-apply would then rewrite it unformatted
+grep -qxF '.repo-setup.json' "$TMP/ts-node-starter/.prettierignore" || miss "ts-node: .prettierignore does not list .repo-setup.json"
+
 # 7. starter -> team upgrade adds team files only
 d="$TMP/upgrade"; mkdir -p "$d"
 python3 "$S/apply.py" --target "$d" --preset python --var project_name=Up --var description=x --var owner=acme >/dev/null

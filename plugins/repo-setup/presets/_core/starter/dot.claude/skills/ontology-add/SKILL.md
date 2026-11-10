@@ -9,6 +9,7 @@ The ontology (`ontology/`) is the source of truth for business meaning. A change
 changes what the whole system means, so do it completely and make it easy to review.
 
 ## 1. Understand the concept (ask only what is missing)
+
 - Name in code (PascalCase, singular: `Customer`, not `Customers`/`Client`). Check
   `ontology/glossary.md` first: if a synonym exists, reuse it and tell the user.
 - One-sentence definition, and what it must NOT be confused with.
@@ -18,8 +19,9 @@ changes what the whole system means, so do it completely and make it easy to rev
 - Business rules and where they are (or will be) implemented.
 
 ## 2. Write the files
+
 1. `ontology/glossary.md`: one table row `| \`Name\` | definition | not to be confused with | display name |`.
-   The code name is English. The display name and definition follow the repo's `docs_language`.
+The code name is English. The display name and definition follow the repo's `docs_language`.
 2. `ontology/entities/<Name>.yaml` — same shape as `_template.yaml`:
    - `name` must equal the file name; `description` required.
    - property `type`: `string text integer number boolean date datetime uuid enum ref`
@@ -37,7 +39,7 @@ changes what the whole system means, so do it completely and make it easy to rev
 5. **Personal data**: mark properties that identify or describe a person with `pii: true`
    (name, phone, email, address, national id, birth date...). Generated helpers redact them in
    logs and in anything returned to AI agents.
-6. **Actions** (what can be *done*): `ontology/actions.yaml` — `name` (camelCase verb),
+6. **Actions** (what can be _done_): `ontology/actions.yaml` — `name` (camelCase verb),
    `description`, `entity`, `kind` (create/update/delete/query/command), `input` (same property
    types), `output` (entity, `Entity[]` or none), `roles`, `agent` (`allowed` / `confirm` /
    `forbidden`), `idempotent`. Roles live in `ontology/roles.yaml` (`name`, `inherits`,
@@ -47,6 +49,7 @@ changes what the whole system means, so do it completely and make it easy to rev
 7. Append one line to `wiki/log.md`.
 
 ## 3. Regenerate and verify
+
 Run `make gen`, then `make format` (if available), then `make check`. `make gen` also
 rewrites the API contract (service-api) and the MCP tool list; implement any new action in
 the actions module (the compiler/mypy lists missing handlers).
@@ -54,11 +57,13 @@ the actions module (the compiler/mypy lists missing handlers).
 Fix every wiki-lint error before continuing.
 
 ## 4. Use it
+
 Point the user to the generated types (`src/generated/ontology.ts` or
 `src/<package>/ontology_types.py`) and use them in the code you write. Never edit the
 generated file by hand.
 
 ## 5. Hand-off
+
 In the summary / PR description, list the ontology changes explicitly under
 "Domain changes — needs domain review". Renaming or removing an entity or property is a
 breaking change: search the code for usages first and say how many places change.
