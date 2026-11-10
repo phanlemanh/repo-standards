@@ -4,4 +4,6 @@ export const ROUTES: string[] = [
   "/?state=empty",
   "/?state=error",
   "/?state=no-results",
+  "/?state=saving",
+  "/?state=confirm-delete",
 ];

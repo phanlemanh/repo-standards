@@ -13,8 +13,9 @@ for (const route of ROUTES) {
         getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
       );
       expect(primary).not.toBe("");
-      await expect(page.getByRole("main")).toHaveCount(1);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      // An open dialog hides the page behind it from assistive tech; the structure must still be there.
+      await expect(page.getByRole("main", { includeHidden: true })).toHaveCount(1);
+      await expect(page.getByRole("heading", { level: 1, includeHidden: true })).toHaveCount(1);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );

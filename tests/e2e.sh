@@ -74,7 +74,7 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     red "missing stylesheet" 'expect(primary).not.toBe("")' make ui-floor; cp "$TMP/s.bak" src/main.tsx
     f=src/example/ReferenceScreen.tsx; cp "$f" "$TMP/r.bak"; sed 's#<h1#<h2#; s#</h1>#</h2>#' "$TMP/r.bak" > "$f"
     changed "$TMP/r.bak" "$f" "the heading mutation"
-    red "missing heading" "getByRole('heading', { level: 1 })" make ui-floor; cp "$TMP/r.bak" "$f"
+    red "missing heading" "getByRole('heading', { includeHidden: true, level: 1 })" make ui-floor; cp "$TMP/r.bak" "$f"
     node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 >/dev/null 2>&1 & PREVIEW=$!
     for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/4173) 2>/dev/null && break; sleep 0.2; done
     red "busy port" "http://127.0.0.1:4173 is already used" make ui-floor
