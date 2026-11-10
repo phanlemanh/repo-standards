@@ -636,6 +636,16 @@ if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with d
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31d. turning design on in an existing react-vite repo: the user's own stylesheet is kept, with a note
+d="$TMP/design-later"; mkdir -p "$d/src"; git -C "$d" init -q -b main
+python3 "$S/apply.py" --target "$d" --preset react-vite --var project_name=P --var description=x --var owner=a >/dev/null
+echo 'body { margin: 0; }' > "$d/src/index.css"
+notes=$(python3 "$S/apply.py" --target "$d" --with design --json | json '" ".join(d["notes"])+" kept="+",".join(d["kept"])')
+case "$notes" in *"kept your own src/index.css"*"design tokens"*"by hand"*"kept=src/index.css"*) ;; *) miss "design later: no note about src/index.css: $notes" ;; esac
+grep -q 'margin: 0' "$d/src/index.css" || miss "design later: own stylesheet overwritten"
+d="$TMP/design-team"; echo "/* mine */" >> "$d/src/index.css"
+notes=$(python3 "$S/apply.py" --target "$d" --json | json '" ".join(d["notes"])')
+case "$notes" in *"src/index.css"*) miss "design: note for a stylesheet apply wrote itself: $notes" ;; esac
 # 31c. adopt does not support design yet: apply refuses it, doctor does not score it
 d="$TMP/design-adopt"; mkdir -p "$d"; git -C "$d" init -q -b main
 out=$(python3 "$S/apply.py" --target "$d" --preset react-vite --adopt --with design \

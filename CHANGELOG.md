@@ -8,7 +8,11 @@
   `design/behaviors.md` and a sample screen in `src/example/` that the AI copies. `doctor` checks it
   (`design_present` and related checks).
 - A `react-vite` repo built before this will fail `design_present` until you turn on the `design`
-  capability.
+  capability. Turning it on there (`apply.py --with design`): if you edited `src/App.tsx`,
+  `vite.config.ts` or `eslint.config.js`, they show as conflicts and are left alone (`--diff` shows
+  why); your own `src/index.css` is kept, with a note, and its design tokens must be merged by hand.
+- `adopt` does not support the `design` capability yet: `apply.py` refuses it in adopt mode, and
+  `doctor` reports `design_present` as not applicable there.
 
 ### Fixes
 - `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its

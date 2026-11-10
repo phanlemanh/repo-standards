@@ -1,6 +1,8 @@
 description = "Design floor for a web front end: component base, machine guards, browser checks, reference screen"
 stacks = ["react-vite"]
 user_owned = ["src/index.css"]
+# What a user's own copy of a user_owned file is missing; apply.py names it in a note.
+hand_merge = { "src/index.css" = "its design tokens (the Tailwind imports and the theme variables)" }
 sample = ["src/example/**"]
 
 [vars]

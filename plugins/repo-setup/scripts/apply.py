@@ -185,6 +185,7 @@ def load_meta(
         "exclude": [],
         "install": [],
         "verify": [],
+        "hand_merge": {},
     }
     upto = LEVELS[: LEVELS.index(level) + 1]
     for unit in units(preset, archetype, deploy, caps):
@@ -192,6 +193,7 @@ def load_meta(
         if unit.name == preset and unit.parent == PRESETS_DIR:
             merged["description"] = data.get("description", "")
         merged["vars"].update(data.get("vars", {}))
+        merged["hand_merge"].update(data.get("hand_merge", {}))
         for key in ("user_owned", "sample", "merge_lines", "equivalents", "exclude"):
             merged[key] += data.get(key, [])
         for lv in upto:
@@ -393,6 +395,20 @@ def merge_lines(current: bytes, template: bytes) -> bytes | None:
     return (text + "\n# Added by repo-setup\n" + "\n".join(missing) + "\n").encode("utf-8")
 
 
+def unified_diff(key: str, current: bytes, content: bytes) -> str:
+    try:
+        return "".join(
+            difflib.unified_diff(
+                current.decode("utf-8").splitlines(keepends=True),
+                content.decode("utf-8").splitlines(keepends=True),
+                fromfile=f"{key} (current)",
+                tofile=f"{key} (preset)",
+            )
+        )
+    except UnicodeDecodeError:
+        return "(binary file differs)"
+
+
 def _keep(args: argparse.Namespace) -> list[str]:
     """The flags that still apply next to a blueprint."""
     kept = ["--target", args.target]
@@ -580,6 +596,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if key in user_owned:
                 results["kept"].append(key)
+                if key not in prev_hashes:
+                    what = meta["hand_merge"].get(key, "what the preset puts in it")
+                    notes.append(f"kept your own {key}: merge {what} into it by hand "
+                                 "(--diff shows the preset's version)")
+                if args.diff:
+                    diffs[key] = unified_diff(key, current, content)
                 continue
             if prev_hashes.get(key) == sha(current):
                 results["updated"].append(key)
@@ -592,17 +614,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 results["conflict"].append(key)
                 if args.diff:
-                    try:
-                        diffs[key] = "".join(
-                            difflib.unified_diff(
-                                current.decode("utf-8").splitlines(keepends=True),
-                                content.decode("utf-8").splitlines(keepends=True),
-                                fromfile=f"{key} (current)",
-                                tofile=f"{key} (preset)",
-                            )
-                        )
-                    except UnicodeDecodeError:
-                        diffs[key] = "(binary file differs)"
+                    diffs[key] = unified_diff(key, current, content)
                 continue
         else:
             if adopt and key not in prev_hashes:
