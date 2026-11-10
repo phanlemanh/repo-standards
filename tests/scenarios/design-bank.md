@@ -107,7 +107,7 @@ Một hàng cho mỗi lần chạy, 24 hàng.
 Cách đếm từng cột:
 
 - **Trạng thái thiếu:** theo mục 4, số trạng thái cần có mà tác tử chấm đánh dấu không.
-- **Lỗi rào còn lại:** sau khi tác tử dựng báo xong, sao `eslint.config.js` của nền thử ra một tệp tạm nằm ngoài repo, rồi chạy `npx eslint -c <tệp tạm đó> src --format json` trên cả hai nền. Đếm các thông báo có rule là `shadcn/*` hoặc `no-restricted-syntax`, bỏ `src/components/ui`. Kiểm tra trên trình duyệt không tính. Tác tử dựng trên nền đối chứng không bao giờ thấy cấu hình này.
+- **Lỗi rào còn lại:** sau khi tác tử dựng báo xong, trong bản sao đang đo (cả hai nền), sao `eslint.config.js` của nền thử thành `.eslint.measure.config.js` ở thư mục gốc bản sao, chạy `npx eslint -c .eslint.measure.config.js src --format json`, rồi xoá tệp đó. Đếm các thông báo có rule là `shadcn/*` hoặc `no-restricted-syntax`, bỏ `src/components/ui`. Kiểm tra trên trình duyệt không tính. Tệp chỉ xuất hiện sau khi tác tử dựng đã xong, nên tác tử dựng trên nền đối chứng không bao giờ thấy cấu hình này.
 - **Số vòng sửa:** số lệnh `make check`, `npm run lint`, `npx eslint` hoặc `npx tsc` trong bản ghi mà kết thúc với mã khác 0.
 - **Token:** chỉ token của tác tử dựng, lấy từ đầu ra JSON của `claude -p`.
 
