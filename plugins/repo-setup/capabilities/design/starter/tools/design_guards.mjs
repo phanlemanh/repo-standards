@@ -88,7 +88,7 @@ async function guards() {
   for (const f of existsSync("src") ? walk("src") : []) {
     const text = read(f);
     for (const line of text.split("\n"))
-      if (/eslint-disable/.test(line) && !/ -- \w/.test(line))
+      if (/eslint-disable/.test(line) && !/ -- [^\s*]/.test(line))
         problems.push(`eslint-disable without a reason: ${f}`);
     const lower = text.toLowerCase();
     for (const t of terms)
