@@ -330,11 +330,19 @@ def main(argv: list[str] | None = None) -> int:
     repo = Repo(root)
     remote = Remote(root) if args.remote else None
     recorded = setup.get("files") or {}
-    results = [
-        skipped(c, c["skip_if_adopt"]) if setup.get("adopt") and c.get("skip_if_adopt")
-        else run_check(repo, c, remote, recorded)
-        for c in checks
-    ]
+
+    def evaluate(c: dict) -> dict:
+        if setup.get("adopt") and c.get("skip_if_adopt"):
+            return skipped(c, c["skip_if_adopt"])
+        res = run_check(repo, c, remote, recorded)
+        # The files are there but the manifest dropped the capability: its checks are off.
+        needed = c.get("needs_capability")
+        if res["status"] == "pass" and needed and needed not in caps:
+            res["status"] = "fail"
+            res["detail"] = f"the files are there, but .repo-setup.json does not list {needed}"
+        return res
+
+    results = [evaluate(c) for c in checks]
     scored = [r for r in results if r["status"] in ("pass", "fail")]
     total = sum(r["weight"] for r in scored)
     got = sum(r["weight"] for r in scored if r["status"] == "pass")

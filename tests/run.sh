@@ -659,6 +659,14 @@ if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with d
 d="$TMP/design-starter"; git -C "$d" add -A
 failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
 [ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31e. dropping design from the manifest does not switch the checks off unseen
+d="$TMP/design-plain"; git -C "$d" init -q -b main 2>/dev/null; git -C "$d" add -A
+python3 - "$d/.repo-setup.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p)); m["capabilities"].remove("design"); json.dump(m, open(p, "w"))
+PY
+detail=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["failed"] if r["id"]=="design_present"]')
+case "$detail" in *"does not list design"*) ;; *) miss "doctor: design dropped from the manifest went unseen: $detail" ;; esac
 # 31d. turning design on in an existing react-vite repo: the user's own stylesheet is kept, with a note
 d="$TMP/design-later"; mkdir -p "$d/src"; git -C "$d" init -q -b main
 python3 "$S/apply.py" --target "$d" --preset react-vite --var project_name=P --var description=x --var owner=a >/dev/null

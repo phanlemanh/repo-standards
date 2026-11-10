@@ -550,6 +550,7 @@ title = "A web front end has the design floor (guards, browser checks, reference
 why = "Without a floor, every screen an agent builds drifts a little further from the last."
 fix = "Run: python3 <plugin>/scripts/apply.py --target . --with design"
 skip_if_adopt = "not applicable: adopt does not support the design capability yet"
+needs_capability = "design"
 
 # ---------------------------------------------------------------- GitHub (scored with --remote, otherwise reminders)
 [[check]]
