@@ -65,12 +65,18 @@ async function guards() {
     const [r] = await eslint.lintText(`${HEAD}${jsx};\n`, {
       filePath: "src/pages/guard-probe.tsx",
     });
-    return r.messages.map((m) => m.ruleId ?? `parse: ${m.message}`);
+    return r.messages.map((m) => ({
+      rule: m.ruleId ?? `parse: ${m.message}`,
+      error: m.severity === 2,
+    }));
   };
   for (const [jsx, rule] of CASES)
-    if (!(await lint(jsx)).includes(rule)) problems.push(`not caught by ${rule}: ${jsx}`);
+    if (!(await lint(jsx)).some((m) => m.rule === rule && m.error))
+      problems.push(`not caught by ${rule}: ${jsx}`);
   for (const jsx of CLEAN) {
-    const hit = (await lint(jsx)).filter((r) => r !== "@typescript-eslint/no-unused-vars");
+    const hit = (await lint(jsx))
+      .map((m) => m.rule)
+      .filter((r) => r !== "@typescript-eslint/no-unused-vars");
     if (hit.length) problems.push(`wrongly blocked (${hit}): ${jsx}`);
   }
   let terms = [];
@@ -82,7 +88,7 @@ async function guards() {
   for (const f of existsSync("src") ? walk("src") : []) {
     const text = read(f);
     for (const line of text.split("\n"))
-      if (/eslint-disable/.test(line) && !/ -- \S/.test(line))
+      if (/eslint-disable/.test(line) && !/ -- \w/.test(line))
         problems.push(`eslint-disable without a reason: ${f}`);
     const lower = text.toLowerCase();
     for (const t of terms)
