@@ -88,7 +88,7 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     changed "$TMP/r.bak" "$f" "the heading mutation"
     red "missing heading" "getByRole('heading', { includeHidden: true, level: 1 })" make ui-floor; cp "$TMP/r.bak" "$f"
     # States come from the data source: when the list request can no longer fail, the error state is gone.
-    f=src/example/data.ts; cp "$f" "$TMP/d.bak"; grep -v 'return fail("GET' "$TMP/d.bak" > "$f"
+    f=src/example/data.ts; cp "$f" "$TMP/d.bak"; sed 's/ fail: "fail", empty/ empty/' "$TMP/d.bak" > "$f"
     changed "$TMP/d.bak" "$f" "the list request that cannot fail"
     red "error state without a failing request" "reaches / error" make test; cp "$TMP/d.bak" "$f"
     # The reference screen shows a destructive badge: shadcn's own red must fail the floor there.

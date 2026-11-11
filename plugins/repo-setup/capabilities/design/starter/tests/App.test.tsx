@@ -1,26 +1,45 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { App } from "../src/App.tsx";
-import { ReferenceScreen } from "../src/example/ReferenceScreen.tsx";
 import { formatDate, formatMoney } from "../src/lib/format.ts";
 import { LABELS } from "../src/lib/labels.ts";
 import { pick, SCREENS, type Step } from "../src/screens.ts";
 import { ROUTES } from "./e2e/routes.ts";
 
-// The fake data source answers according to `?scenario=` in the address.
+// The fake data source answers according to `?scenario=` in the address, after a real wait that
+// fake timers skip. Each test gets a fresh source, because deleting and adding change its store.
 function setScenario(scenario?: string) {
   window.history.replaceState(null, "", scenario ? `/?scenario=${scenario}` : "/");
 }
 
-async function take(step: Step) {
-  if ("press" in step) fireEvent.click(await screen.findByRole("button", { name: step.press }));
-  else fireEvent.change(await screen.findByLabelText(step.fill), { target: { value: step.text } });
+const answer = () => act(() => vi.advanceTimersByTimeAsync(200));
+
+async function show(scenario?: string) {
+  setScenario(scenario);
+  const { ReferenceScreen } = await import("../src/example/ReferenceScreen.tsx");
+  const view = render(<ReferenceScreen />);
+  await answer();
+  return view;
 }
 
-const ready = () => screen.findByText(LABELS.sampleFirstName);
+async function take(step: Step) {
+  if ("press" in step) fireEvent.click(screen.getByRole("button", { name: step.press }));
+  else fireEvent.change(screen.getByLabelText(step.fill), { target: { value: step.text } });
+  await answer();
+}
+
+function setOnline(online: boolean) {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(online);
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.resetModules();
+});
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   setScenario();
 });
 
@@ -34,9 +53,10 @@ it.each(SCREENS.flatMap((s) => s.states.map((state) => [s.path, state.name, s, s
     setScenario(state.scenario);
     const Screen = await entry.load();
     render(<Screen />);
+    await answer();
     for (const step of state.steps ?? []) await take(step);
     // A dialog renders outside the screen's own element, so look at the whole page.
-    expect(await screen.findAllByText(state.shows)).not.toHaveLength(0);
+    expect(screen.getAllByText(state.shows)).not.toHaveLength(0);
     // A dialog hides the page behind it from assistive tech; the structure must still be there.
     expect(screen.getAllByRole("main", { hidden: true })).toHaveLength(1);
     expect(screen.getAllByRole("heading", { level: 1, hidden: true })).toHaveLength(1);
@@ -44,34 +64,71 @@ it.each(SCREENS.flatMap((s) => s.states.map((state) => [s.path, state.name, s, s
 );
 
 it("shows loading while the request is pending, then the items", async () => {
+  setScenario();
+  const { ReferenceScreen } = await import("../src/example/ReferenceScreen.tsx");
   render(<ReferenceScreen />);
   expect(screen.getByRole("status")).toHaveTextContent(LABELS.loading);
-  expect(await ready()).toBeInTheDocument();
+  await answer();
   expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(screen.getByText(LABELS.sampleFirstName)).toBeInTheDocument();
+});
+
+it("ignores an answer that arrives after the screen has gone", async () => {
+  const error = vi.spyOn(console, "error");
+  setScenario();
+  const { ReferenceScreen } = await import("../src/example/ReferenceScreen.tsx");
+  const { unmount } = render(<ReferenceScreen />);
+  unmount();
+  await answer();
+  render(<ReferenceScreen />);
+  expect(screen.getByRole("status")).toHaveTextContent(LABELS.loading);
+  expect(screen.queryByText(LABELS.sampleFirstName)).not.toBeInTheDocument();
+  expect(error).not.toHaveBeenCalled();
 });
 
 it("shows the error when the request fails, and retry runs it again", async () => {
-  setScenario("fail");
-  render(<ReferenceScreen />);
-  expect(await screen.findByText(LABELS.errorTitle)).toBeInTheDocument();
+  await show("fail");
+  expect(screen.getByText(LABELS.errorTitle)).toBeInTheDocument();
   setScenario();
   fireEvent.click(screen.getByRole("button", { name: LABELS.retry }));
-  expect(await ready()).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent(LABELS.loading);
+  await answer();
+  expect(screen.getByText(LABELS.sampleFirstName)).toBeInTheDocument();
 });
 
-it("shows the empty state when the request finds nothing", async () => {
-  setScenario("empty");
-  render(<ReferenceScreen />);
-  expect(await screen.findByText(LABELS.emptyTitle)).toBeInTheDocument();
+it("fails for real when the browser is offline, with no scenario", async () => {
+  setOnline(false);
+  await show();
+  expect(screen.getByText(LABELS.errorTitle)).toBeInTheDocument();
+  setOnline(true);
+  fireEvent.click(screen.getByRole("button", { name: LABELS.retry }));
+  await answer();
+  setOnline(false);
+  await take({ press: LABELS.deleteItem(LABELS.sampleFirstName) });
+  await take({ press: LABELS.deleteAction });
+  expect(screen.getByText(LABELS.deleteFailed(LABELS.sampleFirstName))).toBeInTheDocument();
+});
+
+it("reaches the empty state by deleting every item, and Add item brings one back", async () => {
+  await show();
+  const rowButtons = screen.getAllByRole("button", {
+    name: new RegExp(`^${LABELS.deleteItem("")}`),
+  });
+  for (const name of rowButtons.map((b) => b.getAttribute("aria-label") ?? "")) {
+    await take({ press: name });
+    await take({ press: LABELS.deleteAction });
+  }
+  expect(screen.getByText(LABELS.emptyTitle)).toBeInTheDocument();
   expect(screen.queryByLabelText(LABELS.filter)).not.toBeInTheDocument();
-  setScenario();
   fireEvent.click(screen.getByRole("button", { name: LABELS.emptyAction }));
-  expect(await ready()).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent(LABELS.loading);
+  await answer(); // the item is created
+  await answer(); // the list is read again
+  expect(screen.getByText(LABELS.sampleNewName)).toBeInTheDocument();
 });
 
 it("shows no results when the filter matches nothing, and clearing it brings the items back", async () => {
-  render(<ReferenceScreen />);
-  await ready();
+  await show();
   fireEvent.change(screen.getByLabelText(LABELS.filter), { target: { value: "zzz" } });
   expect(screen.getByText(LABELS.noResultsTitle)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: LABELS.noResultsAction }));
@@ -80,8 +137,7 @@ it("shows no results when the filter matches nothing, and clearing it brings the
 });
 
 it("asks before deleting, names the item, and can be cancelled", async () => {
-  render(<ReferenceScreen />);
-  await ready();
+  await show();
   const name = LABELS.deleteItem(LABELS.sampleSecondName);
   fireEvent.click(screen.getByRole("button", { name }));
   expect(screen.getByRole("dialog")).toHaveTextContent(name);
@@ -91,23 +147,20 @@ it("asks before deleting, names the item, and can be cancelled", async () => {
 });
 
 it("shows saving while the delete request runs, then removes the item", async () => {
-  render(<ReferenceScreen />);
-  await ready();
+  await show();
   fireEvent.click(screen.getByRole("button", { name: LABELS.deleteItem(LABELS.sampleFirstName) }));
   fireEvent.click(screen.getByRole("button", { name: LABELS.deleteAction }));
   expect(screen.getByRole("button", { name: LABELS.saving })).toBeDisabled();
   expect(screen.getByRole("button", { name: LABELS.cancel })).toBeDisabled();
+  await answer();
   await waitFor(() => expect(screen.queryByText(LABELS.sampleFirstName)).not.toBeInTheDocument());
 });
 
 it("keeps the item and says so in the dialog when the delete request fails", async () => {
-  setScenario("fail-delete");
-  render(<ReferenceScreen />);
-  await ready();
-  fireEvent.click(screen.getByRole("button", { name: LABELS.deleteItem(LABELS.sampleFirstName) }));
-  fireEvent.click(screen.getByRole("button", { name: LABELS.deleteAction }));
-  const failed = LABELS.deleteFailed(LABELS.sampleFirstName);
-  expect(await screen.findByText(failed)).toBeInTheDocument();
+  await show("fail-delete");
+  await take({ press: LABELS.deleteItem(LABELS.sampleFirstName) });
+  await take({ press: LABELS.deleteAction });
+  expect(screen.getByText(LABELS.deleteFailed(LABELS.sampleFirstName))).toBeInTheDocument();
   expect(screen.getByRole("button", { name: LABELS.deleteAction })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: LABELS.cancel }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -115,8 +168,7 @@ it("keeps the item and says so in the dialog when the delete request fails", asy
 });
 
 it("gives every status its own badge, one of them destructive", async () => {
-  render(<ReferenceScreen />);
-  await ready();
+  await show();
   const look = new Map(
     [...document.querySelectorAll("[data-slot=badge]")].map((b) => [
       b.textContent,
@@ -146,6 +198,7 @@ it("picks the screen by path, and the first screen for an unknown path", () => {
 
 it("opens the screen for the address, which loads its own data", async () => {
   window.history.replaceState(null, "", "/nowhere?scenario=fail");
+  const { App } = await import("../src/App.tsx");
   render(<App />);
   expect(await screen.findByText(LABELS.errorTitle)).toBeInTheDocument();
 });

@@ -776,10 +776,17 @@ for d in "$TMP/design-plain" "$TMP/design-content"; do
   f="$d/src/example/ReferenceScreen.tsx"
   grep -q 'from "@/example/data"' "$f" && grep -q 'useEffect' "$f" || miss "design: $f does not load from src/example/data.ts"
   grep -qE 'ScreenState|\{ state \}|location|URLSearchParams|scenario' "$f" && miss "design: $f picks its state from a prop or the address"
-  for s in '"slow"' '"fail"' '"empty"' '"slow-delete"' '"fail-delete"' 'get("scenario")'; do
-    grep -qF "$s" "$d/src/example/data.ts" || miss "design: $d/src/example/data.ts cannot answer $s"
+  for s in 'slow: "never"' 'fail: "fail"' 'empty: []' '"slow-delete": "never"' '"fail-delete": "fail"' \
+    'get("scenario")' '!navigator.onLine' 'export function createItem' 'let items'; do
+    grep -qF "$s" "$d/src/example/data.ts" || miss "design: $d/src/example/data.ts lacks $s"
   done
+  # The test hook sits at the top of each request, apart from the request itself.
+  [ "$(grep -c '^  if (test) return test;$' "$d/src/example/data.ts")" -eq 2 ] || miss "design: $d data.ts test hook not at the top of list and delete"
+  grep -q 'replace each function body' "$d/src/example/data.ts" && miss "design: $d data.ts tells the builder to delete the test hook"
+  grep -q 'MODE' "$d/src/example/data.ts" && miss "design: $d data.ts has a test-only branch"
+  grep -q 'onAction={addFirst}' "$f" && grep -q 'open={asking}' "$f" || miss "design: $f empty action does not add, or the dialog loses its item while closing"
 done
+grep -q 'useFakeTimers' "$TMP/design-team/tests/App.test.tsx" || miss "design: unit tests wait for real time"
 d="$TMP/design-team"
 grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/screens.ts" \
   && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"

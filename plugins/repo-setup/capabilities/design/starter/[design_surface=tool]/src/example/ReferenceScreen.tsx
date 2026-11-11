@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { deleteItem, listItems, type Item, type Status } from "@/example/data";
+import { createItem, deleteItem, listItems, type Item, type Status } from "@/example/data";
 import { formatDate, formatMoney } from "@/lib/format";
 import { LABELS } from "@/lib/labels";
 
@@ -57,6 +57,7 @@ function Notice(props: { title: string; detail: string; action: string; onAction
 }
 
 function ConfirmDelete(props: {
+  open: boolean;
   item: Item | null;
   saving: boolean;
   failed: boolean;
@@ -65,7 +66,7 @@ function ConfirmDelete(props: {
 }) {
   return (
     <Dialog
-      open={props.item !== null}
+      open={props.open}
       onOpenChange={(open) => {
         if (!open && !props.saving) props.onCancel();
       }}
@@ -94,17 +95,27 @@ function ConfirmDelete(props: {
   );
 }
 
-// Every state follows from a request or from the user, never from a prop or the address.
+// Every state follows from a request or from the user, never from a switch.
 export function ReferenceScreen() {
   // The list request: pending while items is null, then the items or a failure.
   const [items, setItems] = useState<Item[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  // What the user is doing: filtering, or deleting one item.
+  // What the user is doing: filtering, or deleting one item. The dialog keeps showing the last
+  // target while it closes.
   const [query, setQuery] = useState("");
+  const [asking, setAsking] = useState(false);
   const [target, setTarget] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+  // Whether the screen is still there when an answer arrives.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let current = true; // ignore an answer that arrives after the screen has moved on
@@ -123,23 +134,33 @@ export function ReferenceScreen() {
     setAttempt((n) => n + 1);
   }
 
-  function closeDialog() {
-    setTarget(null);
+  function addFirst() {
+    setItems(null);
+    // List again either way: the list shows what the server has.
+    void createItem().then(reload, reload);
+  }
+
+  function askDelete(item: Item) {
+    setTarget(item);
     setDeleteFailed(false);
+    setAsking(true);
   }
 
   async function confirmDelete() {
     if (!target) return;
     setSaving(true);
     setDeleteFailed(false);
-    try {
-      await deleteItem(target.id);
+    const deleted = await deleteItem(target.id).then(
+      () => true,
+      () => false,
+    );
+    if (!mounted.current) return; // ignore an answer that arrives after the screen has gone
+    setSaving(false);
+    if (deleted) {
       setItems((current) => current?.filter((item) => item.id !== target.id) ?? null);
-      setTarget(null);
-    } catch {
+      setAsking(false);
+    } else {
       setDeleteFailed(true);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -174,7 +195,7 @@ export function ReferenceScreen() {
         title={LABELS.emptyTitle}
         detail={LABELS.emptyDetail}
         action={LABELS.emptyAction}
-        onAction={reload}
+        onAction={addFirst}
       />
     );
   } else if (shown.length === 0) {
@@ -212,7 +233,7 @@ export function ReferenceScreen() {
                   variant="outline"
                   size="sm"
                   aria-label={LABELS.deleteItem(item.name)}
-                  onClick={() => setTarget(item)}
+                  onClick={() => askDelete(item)}
                 >
                   {LABELS.deleteAction}
                 </Button>
@@ -240,11 +261,12 @@ export function ReferenceScreen() {
       )}
       {body}
       <ConfirmDelete
+        open={asking}
         item={target}
         saving={saving}
         failed={deleteFailed}
         onConfirm={confirmDelete}
-        onCancel={closeDialog}
+        onCancel={() => setAsking(false)}
       />
     </main>
   );

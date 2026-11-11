@@ -6,8 +6,8 @@ export const LABELS = {
   errorDetail: "Check your connection and try again.",
   retry: "Try again",
   emptyTitle: "Nothing here yet",
-  emptyDetail: "Items show up here as soon as they are added.",
-  emptyAction: "Refresh",
+  emptyDetail: "Add the first item to get started.",
+  emptyAction: "Add item",
   noResultsTitle: "No results",
   noResultsDetail: "Try a different search or clear the filters.",
   noResultsAction: "Clear filters",
@@ -32,4 +32,6 @@ export const LABELS = {
   sampleSecondName: "Onboarding session",
   sampleSecondBody: "A single guided session for people who are new to the product.",
   sampleThirdName: "Support plan",
+  sampleNewName: "New item",
+  sampleNewBody: "Describe the new item here.",
 } as const;
