@@ -13,13 +13,18 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
    repo is on GitHub: it also checks branch protection and whether CI on main is green). Without a `.repo-setup.json`, score at
    `starter` first; also run `--level team` if more than one person works on the repo.
    To use a team-specific standard, pass `--checklist <file>`.
+   The report says which kind of repo it scored (`preset`, `preset_source`): the preset in
+   `.repo-setup.json`, or `claude-plugin` when the repo has Claude Code plugin manifests. If that
+   is wrong, pass `--preset <name>`.
 
 2. Report to the user, in their language, for a non-expert:
    - the score and what it means (90+: excellent, 70–89: good with gaps, <70: risky);
    - the failed checks grouped as **Fix now** (weight 3), **Soon** (weight 2),
      **Nice to have** (weight 1) — each with one sentence of *why* from the checklist;
    - the manual items (secrets store; branch protection/CI when not run with `--remote`) as a
-     short to-do.
+     short to-do;
+   - the `not_applicable` checks, in one short block with their reason. They are not gaps: do not
+     offer to fix them (for example, no ontology or lockfile for a plugin marketplace).
 
 3. Offer fixes, then act only on the ones the user approves:
    - If the stack has a preset (`detect.py` → `suggested_preset`): run

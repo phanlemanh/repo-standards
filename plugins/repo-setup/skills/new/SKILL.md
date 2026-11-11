@@ -31,7 +31,7 @@ install a newer Python (the old one stays), and ask before installing. Then run
 ## 2. Show the whole picture
 
 List the layers from `references/layers.toml` with their state (already known, to decide, nothing
-to decide) in a short list. Invite the user to paste anything they have already decided, in any
+to decide, not applicable to this kind of repo) in a short list. Invite the user to paste anything they have already decided, in any
 form. Mark what they give as `source: user`.
 
 ## 3. Choose the depth
@@ -55,6 +55,10 @@ For each layer, read `references/layers/<id>.md` and run this loop:
 4. **Decide**: write it to `setup-blueprint.yaml`, then run `blueprint.py dependents <layer>` and mark
    any decided layer in that list as `needs_review`. Revisit those layers.
 
+A layer that does not apply to the chosen stack (`blueprint.py not-applicable <preset>`, for example
+ontology and wiki for a plugin marketplace) is never dropped silently: say its reason in one line,
+record `status: not_applicable` with that reason as `why`, and do not build it.
+
 A layer with only one sensible answer gets one line, no question. Keep the blueprint `status` at
 `designing`. Check it with `blueprint.py check setup-blueprint.yaml`.
 
@@ -73,12 +77,13 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
 3. If the user described their domain, write it following
    `.claude/skills/ontology-add/SKILL.md`, replacing the sample ontology
    if there is one, then write the handlers, and update the sample tests and `evals/` that name the
-   sample actions. `make gen`.
+   sample actions. `make gen`. Skip this step when the `domain` layer is not applicable.
 4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
    most 2 fixes, then report exactly what fails.
 5. Run `doctor.py`. Explain what the score does and does not measure.
 6. For each decided layer with rejected options, add a record in `wiki/decisions/`. With "Hand it to
-   Claude", write one record for the whole setup.
+   Claude", write one record for the whole setup. A repo without a wiki (`claude-plugin`) keeps
+   these records in `docs/decisions/`.
 7. Set `status: applied`.
 8. Write the tour using `references/tour.md`.
 

@@ -6,6 +6,11 @@
 
 **Only one sensible answer when:** the user already said it, for example a name and one sentence. Then say it in one line and move on.
 
+**Kind of repository.** If the project is a set of Claude Code plugins (skills, commands, agents,
+hooks offered through a marketplace), say so here. It settles `stack` (`claude-plugin`), and the
+layers listed by `blueprint.py not-applicable claude-plugin` each get one line with their reason
+instead of a question.
+
 ## Options
 
 Offer two or three. Put anything the user already named on the list, even if you would not

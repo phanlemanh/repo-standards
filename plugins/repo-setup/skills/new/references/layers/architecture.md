@@ -6,6 +6,8 @@
 
 **Only one sensible answer when:** it is a small single-purpose tool or library. Then say it in one line and move on.
 
+**Stack `claude-plugin`:** not applicable. Archetypes structure an application; a plugin marketplace is one folder per plugin under `plugins/`. Say that in one line, record `status: not_applicable` with it as `why`, and move on.
+
 ## Options
 
 Offer two or three. Put anything the user already named on the list, even if you would not

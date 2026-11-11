@@ -43,6 +43,19 @@ Với mỗi `ai_tier` (`call`, `workflow`, `agent`), trên Python và TypeScript
 
 Đo bằng `claude plugin eval` với các câu tiếng Việt như "dựng repo mới", vì mô tả skill viết tiếng Anh.
 
+## 6. Repo chứa plugin cho Claude Code
+
+Tin nhắn đầu: "Tôi muốn dựng một repo chứa vài plugin cho Claude Code, phát hành qua marketplace."
+
+| Phải thấy | Không được xảy ra |
+|---|---|
+| Stack `claude-plugin` được nói trong một dòng, không hỏi chọn ngôn ngữ | Hỏi chọn TypeScript hay Python |
+| Bốn tầng kiến trúc, AI, miền nghiệp vụ, triển khai: mỗi tầng một dòng "không áp dụng" kèm lý do | Lặng lẽ bỏ qua tầng, hoặc sinh `ontology/`, `wiki/`, `.env.example` |
+| Một plugin mẫu trong `plugins/<tên>/`, `make check` xanh, `doctor` 100 kèm danh sách mục không áp dụng | `package.json`, `tsconfig.json`, ESLint hay Prettier ở gốc repo |
+| Ghi chép quyết định nằm ở `docs/decisions/` | Tạo `wiki/decisions/` |
+
+Trên repo plugin đã có sẵn (`/repo-setup:adopt`): bản xem trước không thêm plugin mẫu, không đụng manifest đang có; các lỗi làm đổi thứ người dùng cài (nguồn là gốc repo, mô tả quá dài, lệch phiên bản) được nêu riêng, không sửa chung trong commit chuẩn hoá.
+
 ## Kết quả
 
 | Kịch bản | Ngày | Người chạy | Đạt | Ghi chú |
@@ -52,3 +65,4 @@ Với mỗi `ai_tier` (`call`, `workflow`, `agent`), trên Python và TypeScript
 | 3 | | | | |
 | 4 | | | | |
 | 5 | | | | |
+| 6 | | | | |

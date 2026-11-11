@@ -1,0 +1,44 @@
+# Contributing to {{project_name}}
+
+## Setup
+
+```bash
+make setup
+pre-commit install   # hygiene, manifest lint and secret scan on every commit
+make check
+```
+
+## Workflow
+
+1. Create a branch from `main`: `feat/short-description`, `fix/...`, `docs/...`.
+2. Keep the change small and focused. One concern per PR.
+3. Add or update tests for every behaviour change, and add a line under "Unreleased" in `CHANGELOG.md`.
+4. Run `make check` locally — it is what CI runs, plus the official validator (`make validate`).
+5. Open a PR using the template. CI must be green and one approval is required.
+6. Squash-merge. The squash commit message follows Conventional Commits.
+
+## Commit messages — Conventional Commits
+
+```
+feat(hello): greet in the user's language
+fix: keep the marketplace version in step with plugin.json
+docs | refactor | test | chore | ci: ...
+```
+
+## Plugins
+
+- A new plugin is a folder `plugins/<name>/` with `.claude-plugin/plugin.json`, listed in
+  `.claude-plugin/marketplace.json` with `"source": "./plugins/<name>"`.
+- Descriptions stay short; release notes belong in `CHANGELOG.md`.
+- Scripts and hooks use the standard library only and say in the README what they do on the
+  user's machine.
+
+## Releases
+
+`make bump V=patch|minor|major` sets the version in every manifest and dates the changelog section.
+Commit, tag `v<version>` and push the tag: `.github/workflows/release.yml` publishes the GitHub
+Release from that changelog section.
+
+## Decisions
+
+Record significant decisions in `docs/decisions/NNNN-title.md`: context, decision, consequences.

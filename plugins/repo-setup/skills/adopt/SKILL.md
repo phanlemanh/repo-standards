@@ -25,6 +25,9 @@ pyproject / README / git remote first and only confirm), plus:
 
 If the stack has no preset (Go, Rust, Java…), skip to step 5 and work from the doctor list.
 
+If `detect.py` suggests `claude-plugin`, the repo ships Claude Code plugins: follow
+"Plugin marketplaces" below instead of steps 4b and 5.
+
 Pick archetype / capabilities / deploy target the same way as `/repo-setup:new` (purpose questions,
 `apply.py --list-options`), but only when the existing code already has that shape — e.g. do
 not add `modular-monolith` to a codebase without modules; propose it as a later refactor.
@@ -70,6 +73,22 @@ write them following `.claude/skills/ontology-add/SKILL.md` (glossary, `ontology
 `wiki/decisions/0002-adopt-repo-standard.md` and a line in `wiki/log.md`.
 Do not replace existing hand-written types with generated ones in this PR — note it as a
 follow-up.
+
+## Plugin marketplaces (`claude-plugin`)
+
+- No archetype, `ai`, `mcp` or deploy layer applies. Ontology and wiki do not apply either: say the
+  reason from the `not_applicable` list of the plan and of `doctor.py`, and skip step 5. Do not
+  force them in; the repo keeps its own glossary and decision records.
+- The plan never adds a sample plugin, a marketplace manifest or sample tests to a repo that has
+  its own, and never touches existing manifests.
+- If plugins are released on their own schedule, add `--var plugin_versioning=independent`.
+  Otherwise `doctor` expects one version across all plugins.
+- After applying, adapt by hand, each with the user's OK: point the Makefile's `test` target at
+  the suites the repo already has; add `claude plugin validate .` and `python3 tools/plugin_lint.py`
+  to the existing CI workflow rather than adding a second one.
+- Findings that change what users install are separate, reviewed changes, never part of the
+  adoption commit: a plugin whose `source` is the repository root (it must move into its own
+  folder, which changes paths), an over-long `description`, versions that disagree.
 
 ## 6. Verify and report
 - Run the preset install commands that apply (lockfile already present → `make setup`).

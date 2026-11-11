@@ -1,0 +1,8 @@
+name: Set up project
+description: Install Node.js (from .nvmrc). The tools use only the standard library, so there is nothing else to install. Used by agent workflows.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc

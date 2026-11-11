@@ -6,6 +6,8 @@
 
 **Only one sensible answer when:** it is a library or CLI with nothing to deploy. Then say it in one line and move on.
 
+**Stack `claude-plugin`:** not applicable. Nothing is deployed: a plugin is delivered by its marketplace and a tagged release (level `team` adds a workflow that publishes a GitHub Release for each version tag). Say that in one line, record `status: not_applicable` with it as `why`, and move on.
+
 ## Options
 
 Offer two or three. Put anything the user already named on the list, even if you would not

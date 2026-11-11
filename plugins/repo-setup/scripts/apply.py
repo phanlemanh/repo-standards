@@ -22,11 +22,16 @@ Safety rules:
     later run (e.g. upgrading starter -> team) knows what it created.
 
 --adopt (for repositories that already have code):
-  * sample code (preset `sample` globs) is not added;
+  * sample code (preset `sample` globs) is not added, and a file of the repo's own at a sample
+    path is not a conflict;
   * a preset file is skipped when the repo already has an equivalent
     (preset `equivalents`, e.g. any .eslintrc* -> skip eslint.config.js);
   * line-based files listed in `merge_lines` (.gitignore, .gitattributes) get the missing
     lines appended instead of being reported as conflicts.
+
+A preset can declare parts of the shared core that do not fit its kind of repository
+(`[[not_applicable]]` with `what`, `reason`, `paths`): those files are left out and the reason is
+reported, never dropped silently. `team_only` lists core files that only team-level tools need.
 
 Only the Python standard library is used (Python 3.11+).
 """
@@ -62,6 +67,7 @@ PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 CONDITION = re.compile(r"^\[([a-zA-Z_][a-zA-Z0-9_]*)=([^\]]+)\]$")
 REQUIRED_VARS = ["project_name", "description", "owner"]
 AI_TIERS = ("call", "workflow", "agent")
+PLUGIN_VERSIONING = ("lockstep", "independent")
 LICENSES = {
     # license var -> (SPDX for pyproject, value for package.json)
     "MIT": ("MIT", "MIT"),
@@ -183,6 +189,8 @@ def load_meta(
         "merge_lines": [],
         "equivalents": [],
         "exclude": [],
+        "not_applicable": [],
+        "team_only": [],
         "install": [],
         "verify": [],
     }
@@ -192,7 +200,8 @@ def load_meta(
         if unit.name == preset and unit.parent == PRESETS_DIR:
             merged["description"] = data.get("description", "")
         merged["vars"].update(data.get("vars", {}))
-        for key in ("user_owned", "sample", "merge_lines", "equivalents", "exclude"):
+        for key in ("user_owned", "sample", "merge_lines", "equivalents", "exclude",
+                    "not_applicable", "team_only"):
             merged[key] += data.get(key, [])
         for lv in upto:
             for key in ("install", "verify"):
@@ -236,6 +245,11 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
         raise ValueError(f"ai_tier must be one of: {', '.join(AI_TIERS)}")
     v["ai_workflow"] = "yes" if v["ai_tier"] in ("workflow", "agent") else "no"
     v["ai_agent"] = "yes" if v["ai_tier"] == "agent" else "no"
+    # Preset claude-plugin: the sample plugin's name, and whether plugins share one version.
+    v["plugin_name"] = re.sub(r"[^a-z0-9]+", "-", v.get("plugin_name", "").lower()).strip("-") or slug
+    v.setdefault("plugin_versioning", "lockstep")
+    if v["plugin_versioning"] not in PLUGIN_VERSIONING:
+        raise ValueError(f"plugin_versioning must be one of: {', '.join(PLUGIN_VERSIONING)}")
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
     market = v.get("marketplace", "").strip()
     if market:
@@ -532,10 +546,18 @@ def main(argv: list[str] | None = None) -> int:
     except KeyError as exc:
         print(f"Template error: {exc}", file=sys.stderr)
         return 2
-    # Files a derived preset does not want from its base (e.g. a CLI entry point).
-    plan = {k: v for k, v in plan.items() if not matches(k.as_posix(), meta["exclude"])}
+    # Files a derived preset does not want from its base (e.g. a CLI entry point), core parts
+    # that do not fit this kind of repository, and core files only team-level tools need.
+    left_out = [*meta["exclude"], *(p for na in meta["not_applicable"] for p in na.get("paths", []))]
+    if level == "starter":
+        left_out += meta["team_only"]
+    not_applicable = [
+        {"what": na.get("what", ""), "reason": na.get("reason", "")}
+        for na in meta["not_applicable"]
+        if any(matches(k.as_posix(), na.get("paths", [])) for k in plan)
+    ]
+    plan = {k: v for k, v in plan.items() if not matches(k.as_posix(), left_out)}
 
-    user_owned = set(meta["user_owned"])
     merge_set = set(meta["merge_lines"])
     existing = Repo(target).files if adopt else []
 
@@ -565,7 +587,7 @@ def main(argv: list[str] | None = None) -> int:
                 results["unchanged"].append(key)
                 new_hashes[key] = sha(content)
                 continue
-            if key in user_owned:
+            if matches(key, meta["user_owned"]):
                 results["kept"].append(key)
                 continue
             if prev_hashes.get(key) == sha(current):
@@ -576,6 +598,11 @@ def main(argv: list[str] | None = None) -> int:
                     results["unchanged"].append(key)
                     continue
                 results["merged"].append(key)
+            elif adopt and key not in prev_hashes and matches(key, meta["sample"]):
+                # The repo's own file sits where a sample would go: nothing to reconcile.
+                results["skipped"].append(key)
+                reasons[key] = "sample code (adopt mode)"
+                continue
             else:
                 results["conflict"].append(key)
                 if args.diff:
@@ -652,6 +679,7 @@ def main(argv: list[str] | None = None) -> int:
         "dry_run": args.dry_run,
         **results,
         "skip_reasons": reasons,
+        "not_applicable": not_applicable,
         "notes": notes,
         "next_commands": {"install": meta["install"], "verify": meta["verify"]},
         "diffs": diffs,
@@ -671,6 +699,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"\n{label.upper()} ({len(items)})")
                 for i in items:
                     print(f"  {i}" + (f"  — {reasons[i]}" if i in reasons else ""))
+        if not_applicable:
+            print(f"\nNOT APPLICABLE to a {preset} repository ({len(not_applicable)})")
+            for na in not_applicable:
+                print(f"  {na['what']}  — {na['reason']}")
         for k, d in diffs.items():
             print(f"\n--- diff for {k} ---\n{d}")
         if meta["install"]:
