@@ -158,13 +158,8 @@ function reference() {
     problems.push("src/screens.ts lists no screen path starting with /");
   if (!/from\s+["'][./]*src\/screens(\.ts)?["']/.test(read("tests/e2e/routes.ts")))
     problems.push("tests/e2e/routes.ts does not take its routes from src/screens.ts");
-  for (const [file, max] of [
-    [".claude/rules/ui.md", 40],
-    [".claude/skills/ui/SKILL.md", 60],
-  ]) {
-    const n = read(file).split("\n").length - 1;
-    if (n > max) problems.push(`${file} has ${n} lines, the limit is ${max}`);
-  }
+  const n = read(".claude/rules/ui.md").split("\n").length - 1;
+  if (n > 60) problems.push(`.claude/rules/ui.md has ${n} lines, the limit is 60`);
 }
 
 if (want("guards")) await guards();

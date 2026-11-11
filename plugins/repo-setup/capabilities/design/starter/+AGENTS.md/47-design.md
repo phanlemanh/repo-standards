@@ -1,5 +1,4 @@
 ## Design floor
 
-- Building or changing a screen: follow `.claude/rules/ui.md` and copy `src/example`.
-- Finding or adding a component: use `.claude/skills/ui/SKILL.md`.
-- What each state shows and the fixed text density: `design/behaviors.md`.
+- Building or changing a screen, or adding a component: follow `.claude/rules/ui.md`, the one page
+  to read first. It points to `design/behaviors.md` for what each state shows.

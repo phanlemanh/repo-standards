@@ -764,6 +764,12 @@ ref_red() { # <file> <replacement content> <expected text>
 }
 ref_red src/screens.ts 'export const SCREENS = [];' "src/screens.ts lists no screen path starting with /"
 ref_red tests/e2e/routes.ts 'export const ROUTES = ["/"];' "tests/e2e/routes.ts does not take its routes from src/screens.ts"
+# 31g. one page for the builder: the rule holds the component steps and the traps, the skill is gone
+[ ! -e "$d/.claude/skills/ui" ] || miss "design: the ui skill is still generated"
+grep -q '^## Traps' "$d/.claude/rules/ui.md" && grep -q 'npx shadcn@4.23.0 add' "$d/.claude/rules/ui.md" \
+  && grep -q 'design/behaviors.md' "$d/.claude/rules/ui.md" || miss "design: ui.md lacks its traps, the component steps or the behaviors pointer"
+grep -q 'skills/ui' "$d/AGENTS.md" && miss "design: AGENTS.md still points to the ui skill"
+ref_red .claude/rules/ui.md "$(seq 1 61)" ".claude/rules/ui.md has 61 lines, the limit is 60"
 # 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
