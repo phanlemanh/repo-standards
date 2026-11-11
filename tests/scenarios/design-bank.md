@@ -146,6 +146,7 @@ Việc gỡ tham chiếu treo trên nền đối chứng: xoá `tests/App.test.t
 |---|---|---|---|---|---|---|
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 7 / 8 | 0 | 25.197.624 / 19.742.124 (x1,28) | Không | Ngưỡng 1 trượt (cần <= 4). Ngưỡng 2 và 3 đạt. Tổng chi phí 34,86 USD gồm 1,79 USD chạy thử |
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế). chủ repo cho phép chạy | 0 / 6 | 0 | 24.796.847 / 20.004.042 (x1.24) | Có. theo luật khoá | Lần đo hai. Đọc chặt (trạng thái phải do điều kiện thật dẫn tới): 15 / 6. nền thử kém hơn. Xem mục Lần đo hai |
+| 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 0 / 18 | 0 | 35.445.848 / 24.824.052 (x1,43) | Không | Lần đo ba, luật chấm chặt khoá trước. Ngưỡng 1 và 2 đạt, ngưỡng 3 trượt. Chi phí 41,81 USD gồm 1,57 USD chạy thử. Xem mục Lần đo ba |
 
 ### Đọc kết quả
 
@@ -200,6 +201,54 @@ Sau khi sửa tầng thiết kế để giảm chi phí. Cách dựng nền ghi 
 Tổng: trạng thái thiếu 0 / 6 theo luật khoá. 15 / 6 khi đọc chặt; lỗi rào còn lại 0 / 74; token 24.796.847 / 20.004.042 (x1.24).
 
 **Theo luật đã khoá: đạt cả ba ngưỡng.** Khi đọc chặt thì ngược lại: nền thử thiếu nhiều hơn nền đối chứng. Lý do đọc được trong mã: màn mẫu lấy trạng thái từ công tắc trên đường dẫn. và danh sách màn chung khiến việc thêm một trạng thái chỉ là thêm một mục; tác tử nền thử chép đúng cách đó. nên trạng thái đang tải và lỗi có giao diện nhưng dữ liệu mẫu nạp tức thì và không bao giờ lỗi. Tác tử đối chứng. không có màn mẫu. thường viết một hàm nạp dữ liệu bất đồng bộ có thể trả rỗng hay báo lỗi. Ghi lại để chủ repo quyết định. không đổi luật đã khoá.
+
+### Lần đo ba (2026-11-11)
+
+Sau khi sửa màn mẫu để trạng thái đến từ nguồn dữ liệu (độ trễ thật, lỗi khi mất mạng, thêm và xoá thật trong bộ nhớ; móc kiểm thử `?scenario=` nằm riêng trong nguồn dữ liệu). Luật chấm chặt đã khoá trước khi chạy (nhật ký thay đổi). Bản sao để đo nằm ở `/private/tmp/dm3`, nền dựng như lần hai. Cả 24 lần chạy đều ghi được tệp, thoát không lỗi và build được sau `make gen`. Bốn tác tử chấm, mỗi màn một tác tử, bản dựng đổi nhãn A-F, cổng 4174-4177 như lần hai.
+
+| Màn | Nền | Lần | Trạng thái thiếu (luật chặt) | Lỗi rào còn lại | Số vòng sửa | Token | Chi phí (USD) |
+|---|---|---|---|---|---|---|---|
+| 1 | thử | 1 | 0 | 0 | 0 | 2.761.210 | 1,81 |
+| 1 | thử | 2 | 0 | 0 | 0 | 5.497.710 | 2,95 |
+| 1 | thử | 3 | 0 | 0 | 0 | 2.069.312 | 1,64 |
+| 1 | đối chứng | 1 | 1 | 8 | 0 | 2.745.786 | 1,70 |
+| 1 | đối chứng | 2 | 1 | 9 | 0 | 3.768.344 | 2,07 |
+| 1 | đối chứng | 3 | 1 | 6 | 0 | 2.755.605 | 1,81 |
+| 2 | thử | 1 | 0 | 0 | 3 | 2.886.327 | 1,83 |
+| 2 | thử | 2 | 0 | 0 | 0 | 2.866.458 | 1,79 |
+| 2 | thử | 3 | 0 | 0 | 0 | 1.742.208 | 1,38 |
+| 2 | đối chứng | 1 | 2 | 8 | 0 | 1.577.438 | 1,33 |
+| 2 | đối chứng | 2 | 1 | 4 | 0 | 1.320.946 | 1,20 |
+| 2 | đối chứng | 3 | 1 | 6 | 0 | 2.467.544 | 1,64 |
+| 3 | thử | 1 | 0 | 0 | 0 | 2.683.086 | 1,82 |
+| 3 | thử | 2 | 0 | 0 | 0 | 3.988.421 | 2,21 |
+| 3 | thử | 3 | 0 | 0 | 0 | 3.118.044 | 1,96 |
+| 3 | đối chứng | 1 | 2 | 8 | 0 | 1.657.331 | 1,37 |
+| 3 | đối chứng | 2 | 1 | 15 | 1 | 2.337.330 | 1,55 |
+| 3 | đối chứng | 3 | 2 | 6 | 0 | 1.800.452 | 1,29 |
+| 4 | thử | 1 | 0 | 0 | 0 | 2.584.143 | 1,83 |
+| 4 | thử | 2 | 0 | 0 | 0 | 2.441.708 | 1,76 |
+| 4 | thử | 3 | 0 | 0 | 0 | 2.807.221 | 1,80 |
+| 4 | đối chứng | 1 | 2 | 1 | 0 | 1.049.703 | 1,02 |
+| 4 | đối chứng | 2 | 2 | 1 | 0 | 1.425.134 | 1,12 |
+| 4 | đối chứng | 3 | 2 | 4 | 0 | 1.918.439 | 1,36 |
+
+Tổng: trạng thái thiếu 0 / 18; lỗi rào còn lại 0 / 76; token 35.445.848 / 24.824.052 (x1,43); chi phí 22,77 / 17,47 USD (x1,30); số lượt 679 / 593 (x1,15).
+
+**Theo mục 7: không đạt.** Ngưỡng 1 (0 <= 9) và ngưỡng 2 (0) đạt; ngưỡng 3 trượt (x1,43, cần <= x1,30). Không sửa ngưỡng.
+
+- **Chất lượng:** sửa màn mẫu đã đảo kết quả đọc chặt của lần hai (15 / 6) thành 0 / 18. Nền đối chứng thiếu chủ yếu trạng thái đang tải (dữ liệu mẫu nạp tức thì nên khung chờ không kịp hiện), trạng thái đang lưu, và trạng thái lỗi khi nguồn dữ liệu không bao giờ thất bại.
+- **Phán đoán của người chấm:** màn 1, trạng thái rỗng và lỗi được tính là có khi màn quyết định từ kết quả yêu cầu, kể cả khi dữ liệu mẫu không tự gây ra. Đọc khắt hơn nữa (dữ liệu mẫu phải tự gây ra) thì tổng là 3 / 24, vẫn đạt ngưỡng 1. Màn 2, một bản đối chứng chỉ có thông báo nhập sai, không có thông báo lưu thất bại, nên bị tính thiếu lỗi; tính nhẹ thì đối chứng còn 17. Màn 3, một bản đối chứng được tính có lỗi dù dữ liệu mẫu không bao giờ gây ra. Không phán đoán nào đổi được kết luận.
+- **Token:** nền thử chỉ nhiều hơn 15% số lượt nhưng mỗi lượt mang ngữ cảnh lớn hơn, nên token tăng 43%. Chi phí tiền chỉ tăng 30% vì phần lớn token là đọc lại bộ nhớ đệm.
+- **Bản dựng sửa ngoài màn:** một bản nền thử ở màn 3 chuyển hai hàm hỗ trợ kiểm thử ra khỏi nguồn dữ liệu của màn mẫu sang tệp dùng chung; hành vi không đổi.
+
+Đọc nhật ký (mục 6), tám lần chạy, mỗi màn một lần thử và một lần đối chứng, đối chiếu tổng token với số báo cáo (lệch dưới 1%):
+
+- **Token thêm của nền thử (10,5 triệu) đến từ:** khoảng một phần ba là tệp tầng thiết kế đọc lúc đầu rồi mang theo mọi lượt: test ứng dụng `tests/App.test.tsx` (29% phần này), màn mẫu (27%), trang luật (15%), nguồn dữ liệu (9%), danh sách màn (7%). Khoảng một phần ba là 72 lượt thêm, mỗi lượt đọc lại phần đầu chung 47,8 nghìn token. Khoảng một phần tư là chữ viết ra và suy nghĩ dài hơn. Ảnh chụp màn hình, chữ in của `make check` và lỗi bài trình duyệt gần như không đáng kể.
+- **Danh sách màn chưa làm đúng lời hứa:** trang luật nói đăng ký màn vào `src/screens.ts` là "không còn gì để nối", nhưng 9 trên 12 bản nền thử vẫn sửa `tests/App.test.tsx`, và có sáu kiểu ghi đường dẫn màn khác nhau giữa các bản. Đây là chỗ cắt token lớn nhất (ước 1,5-2 triệu).
+- **Rào bảng mâu thuẫn trang luật:** rào bắt ô bảng ở 4 trên 12 bản và lời báo lỗi trái với trang luật, gây vòng sửa (ước 0,8-1 triệu).
+- **Hỏng mà không chỉ số nào bắt:** mọi bản nền thử giữ nguyên màn mẫu (9 trên 12 bản để nó ở trang chủ) và móc kiểm thử `?scenario=` trong mã chạy thật.
+- **Làm được mà nền đối chứng không có:** các trạng thái hiện thật trên ứng dụng đang chạy và được kiểm ở khổ 390 px cùng kiểm truy cập; không bản đối chứng nào làm vậy.
 
 ## Nhật ký thay đổi
 
