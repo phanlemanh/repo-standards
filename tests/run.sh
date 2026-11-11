@@ -770,6 +770,21 @@ grep -q '^## Traps' "$d/.claude/rules/ui.md" && grep -q 'npx shadcn@4.23.0 add' 
   && grep -q 'design/behaviors.md' "$d/.claude/rules/ui.md" || miss "design: ui.md lacks its traps, the component steps or the behaviors pointer"
 grep -q 'skills/ui' "$d/AGENTS.md" && miss "design: AGENTS.md still points to the ui skill"
 ref_red .claude/rules/ui.md "$(seq 1 61)" ".claude/rules/ui.md has 61 lines, the limit is 60"
+# 31h. states come from data: the reference screen loads from a source that can be slow, fail or
+# find nothing; it takes no state prop and reads no address. Tests choose through the source.
+for d in "$TMP/design-plain" "$TMP/design-content"; do
+  f="$d/src/example/ReferenceScreen.tsx"
+  grep -q 'from "@/example/data"' "$f" && grep -q 'useEffect' "$f" || miss "design: $f does not load from src/example/data.ts"
+  grep -qE 'ScreenState|\{ state \}|location|URLSearchParams|scenario' "$f" && miss "design: $f picks its state from a prop or the address"
+  for s in '"slow"' '"fail"' '"empty"' '"slow-delete"' '"fail-delete"' 'get("scenario")'; do
+    grep -qF "$s" "$d/src/example/data.ts" || miss "design: $d/src/example/data.ts cannot answer $s"
+  done
+done
+d="$TMP/design-team"
+grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/screens.ts" \
+  && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"
+grep -q 'getByRole("button", { name: step.press' "$d/tests/e2e/floor.spec.ts" && grep -q 'route.shows' "$d/tests/e2e/floor.spec.ts" \
+  || miss "design: the browser floor does not drive the steps or wait for the state"
 # 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"

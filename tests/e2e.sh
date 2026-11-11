@@ -87,6 +87,10 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     f=src/example/ReferenceScreen.tsx; cp "$f" "$TMP/r.bak"; sed 's#<h1#<h2#; s#</h1>#</h2>#' "$TMP/r.bak" > "$f"
     changed "$TMP/r.bak" "$f" "the heading mutation"
     red "missing heading" "getByRole('heading', { includeHidden: true, level: 1 })" make ui-floor; cp "$TMP/r.bak" "$f"
+    # States come from the data source: when the list request can no longer fail, the error state is gone.
+    f=src/example/data.ts; cp "$f" "$TMP/d.bak"; grep -v 'return fail("GET' "$TMP/d.bak" > "$f"
+    changed "$TMP/d.bak" "$f" "the list request that cannot fail"
+    red "error state without a failing request" "reaches / error" make test; cp "$TMP/d.bak" "$f"
     # The reference screen shows a destructive badge: shadcn's own red must fail the floor there.
     cp src/index.css "$TMP/i.bak"; sed 's/--destructive: oklch(0.48 0.2 27.325)/--destructive: oklch(0.55 0.245 27.325)/' "$TMP/i.bak" > src/index.css
     changed "$TMP/i.bak" src/index.css "restoring the shadcn destructive red"
@@ -95,14 +99,14 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     # focusable cell, so only the patched scroll region keeps it reachable by keyboard.
     cp src/screens.ts "$TMP/sc.bak"; mkdir -p src/wide
     printf '%s\n' 'import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";' \
-      'export function Wide({ state }: { state: "ready" }) {' \
+      'export function Wide() {' \
       '  const cells = Array.from({ length: 12 }, (_, i) => <TableCell key={i}>cell number {i}</TableCell>);' \
-      '  return (<main><h1>{state}</h1><Table aria-label="wide"><TableBody><TableRow>{cells}</TableRow></TableBody></Table></main>);' \
+      '  return (<main><h1>Wide</h1><Table aria-label="wide"><TableBody><TableRow>{cells}</TableRow></TableBody></Table></main>);' \
       '}' > src/wide/Wide.tsx
-    awk '{ print } /^export const SCREENS/ { print "  screen(\"/wide\", [\"ready\"], () => import(\"@/wide/Wide\").then((m) => m.Wide)),"; }' "$TMP/sc.bak" > src/screens.ts
+    awk '{ print } /^export const SCREENS/ { print "  { path: \"/wide\", load: () => import(\"@/wide/Wide\").then((m) => m.Wide), states: [{ name: \"ready\", shows: \"cell number 0\" }] },"; }' "$TMP/sc.bak" > src/screens.ts
     changed "$TMP/sc.bak" src/screens.ts "registering a screen"
     npx playwright test --list > "$TMP/list.txt"
-    grep -qF 'floor /wide at 390px' "$TMP/list.txt" || { echo "FAIL: the floor does not visit a registered screen"; exit 1; }
+    grep -qF 'floor /wide ready at 390px' "$TMP/list.txt" || { echo "FAIL: the floor does not visit a registered screen"; exit 1; }
     make ui-floor >/dev/null || { echo "FAIL: a wide table failed the floor"; make ui-floor; exit 1; }
     cp src/components/ui/table.tsx "$TMP/t.bak"; grep -v 'tabIndex={0}' "$TMP/t.bak" > src/components/ui/table.tsx
     changed "$TMP/t.bak" src/components/ui/table.tsx "dropping the table patch"

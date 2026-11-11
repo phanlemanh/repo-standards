@@ -1,6 +1,6 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,8 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -28,14 +30,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { deleteItem, listItems, type Item, type Status } from "@/example/data";
 import { formatDate, formatMoney } from "@/lib/format";
 import { LABELS } from "@/lib/labels";
-
-export type ScreenState =
-  "ready" | "loading" | "empty" | "error" | "no-results" | "saving" | "confirm-delete";
-
-type Status = "active" | "pending" | "overdue";
-type Row = { name: string; status: Status; date: Date; total: number };
 
 type Variant = ComponentProps<typeof Badge>["variant"];
 // Each status keeps its own look. Never give two statuses the same variant to pass a check.
@@ -44,17 +41,6 @@ const STATUS: Record<Status, { label: string; variant: Variant }> = {
   pending: { label: LABELS.statusPending, variant: "outline" },
   overdue: { label: LABELS.statusOverdue, variant: "destructive" },
 };
-
-const ROWS: Row[] = [
-  { name: LABELS.sampleFirstName, status: "active", date: new Date(2026, 0, 15), total: 1200 },
-  { name: LABELS.sampleSecondName, status: "pending", date: new Date(2026, 1, 3), total: 350 },
-  { name: LABELS.sampleThirdName, status: "overdue", date: new Date(2026, 2, 9), total: 90 },
-];
-
-// Stands in for the real request. Replace it with the call to your API.
-function removeRow(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 600));
-}
 
 function Notice(props: { title: string; detail: string; action: string; onAction: () => void }) {
   return (
@@ -71,23 +57,30 @@ function Notice(props: { title: string; detail: string; action: string; onAction
 }
 
 function ConfirmDelete(props: {
-  row: Row | null;
+  item: Item | null;
   saving: boolean;
+  failed: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
     <Dialog
-      open={props.row !== null}
+      open={props.item !== null}
       onOpenChange={(open) => {
         if (!open && !props.saving) props.onCancel();
       }}
     >
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{props.row ? LABELS.deleteItem(props.row.name) : ""}</DialogTitle>
+          <DialogTitle>{props.item ? LABELS.deleteItem(props.item.name) : ""}</DialogTitle>
           <DialogDescription>{LABELS.deleteDetail}</DialogDescription>
         </DialogHeader>
+        {props.failed && props.item && (
+          <Alert variant="destructive">
+            <AlertTitle>{LABELS.deleteFailed(props.item.name)}</AlertTitle>
+            <AlertDescription>{LABELS.errorDetail}</AlertDescription>
+          </Alert>
+        )}
         <DialogFooter>
           <DialogClose render={<Button variant="outline" disabled={props.saving} />}>
             {LABELS.cancel}
@@ -101,24 +94,73 @@ function ConfirmDelete(props: {
   );
 }
 
-export function ReferenceScreen({ state }: { state: ScreenState }) {
-  const asksDelete = state === "confirm-delete" || state === "saving";
-  const [view, setView] = useState<ScreenState>(asksDelete ? "ready" : state);
-  const [rows, setRows] = useState<Row[]>(state === "empty" ? [] : ROWS);
-  const [target, setTarget] = useState<Row | null>(asksDelete ? (ROWS[0] ?? null) : null);
-  const [saving, setSaving] = useState(state === "saving");
+// Every state follows from a request or from the user, never from a prop or the address.
+export function ReferenceScreen() {
+  // The list request: pending while items is null, then the items or a failure.
+  const [items, setItems] = useState<Item[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  // What the user is doing: filtering, or deleting one item.
+  const [query, setQuery] = useState("");
+  const [target, setTarget] = useState<Item | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
+
+  useEffect(() => {
+    let current = true; // ignore an answer that arrives after the screen has moved on
+    listItems().then(
+      (found) => current && setItems(found),
+      () => current && setFailed(true),
+    );
+    return () => {
+      current = false;
+    };
+  }, [attempt]);
+
+  function reload() {
+    setItems(null);
+    setFailed(false);
+    setAttempt((n) => n + 1);
+  }
+
+  function closeDialog() {
+    setTarget(null);
+    setDeleteFailed(false);
+  }
 
   async function confirmDelete() {
     if (!target) return;
     setSaving(true);
-    await removeRow();
-    setRows((current) => current.filter((row) => row !== target));
-    setSaving(false);
-    setTarget(null);
+    setDeleteFailed(false);
+    try {
+      await deleteItem(target.id);
+      setItems((current) => current?.filter((item) => item.id !== target.id) ?? null);
+      setTarget(null);
+    } catch {
+      setDeleteFailed(true);
+    } finally {
+      setSaving(false);
+    }
   }
 
+  const shown = (items ?? []).filter((item) =>
+    item.name.toLowerCase().includes(query.toLowerCase()),
+  );
+
   let body: ReactNode;
-  if (view === "loading") {
+  if (failed) {
+    body = (
+      <Alert variant="destructive">
+        <AlertTitle>{LABELS.errorTitle}</AlertTitle>
+        <AlertDescription>{LABELS.errorDetail}</AlertDescription>
+        <AlertAction>
+          <Button variant="outline" size="sm" onClick={reload}>
+            {LABELS.retry}
+          </Button>
+        </AlertAction>
+      </Alert>
+    );
+  } else if (items === null) {
     body = (
       <div role="status" className="flex flex-col gap-2">
         <span className="sr-only">{LABELS.loading}</span>
@@ -126,32 +168,22 @@ export function ReferenceScreen({ state }: { state: ScreenState }) {
         <Skeleton className="h-8 w-full" />
       </div>
     );
-  } else if (view === "error") {
-    body = (
-      <Alert variant="destructive">
-        <AlertTitle>{LABELS.errorTitle}</AlertTitle>
-        <AlertDescription>{LABELS.errorDetail}</AlertDescription>
-      </Alert>
-    );
-  } else if (view === "no-results") {
-    body = (
-      <Notice
-        title={LABELS.noResultsTitle}
-        detail={LABELS.noResultsDetail}
-        action={LABELS.noResultsAction}
-        onAction={() => setView("ready")}
-      />
-    );
-  } else if (rows.length === 0) {
+  } else if (items.length === 0) {
     body = (
       <Notice
         title={LABELS.emptyTitle}
         detail={LABELS.emptyDetail}
         action={LABELS.emptyAction}
-        onAction={() => {
-          setRows(ROWS);
-          setView("ready");
-        }}
+        onAction={reload}
+      />
+    );
+  } else if (shown.length === 0) {
+    body = (
+      <Notice
+        title={LABELS.noResultsTitle}
+        detail={LABELS.noResultsDetail}
+        action={LABELS.noResultsAction}
+        onAction={() => setQuery("")}
       />
     );
   } else {
@@ -167,20 +199,20 @@ export function ReferenceScreen({ state }: { state: ScreenState }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.name}>
-              <TableCell>{row.name}</TableCell>
+          {shown.map((item) => (
+            <TableRow key={item.id}>
+              <TableCell>{item.name}</TableCell>
               <TableCell>
-                <Badge variant={STATUS[row.status].variant}>{STATUS[row.status].label}</Badge>
+                <Badge variant={STATUS[item.status].variant}>{STATUS[item.status].label}</Badge>
               </TableCell>
-              <TableCell>{formatDate(row.date)}</TableCell>
-              <TableCell>{formatMoney(row.total)}</TableCell>
+              <TableCell>{formatDate(item.date)}</TableCell>
+              <TableCell>{formatMoney(item.total)}</TableCell>
               <TableCell>
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-label={LABELS.deleteItem(row.name)}
-                  onClick={() => setTarget(row)}
+                  aria-label={LABELS.deleteItem(item.name)}
+                  onClick={() => setTarget(item)}
                 >
                   {LABELS.deleteAction}
                 </Button>
@@ -195,12 +227,24 @@ export function ReferenceScreen({ state }: { state: ScreenState }) {
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6 text-sm">
       <h1 className="text-lg font-semibold">{LABELS.screenTitle}</h1>
+      {items && items.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="filter">{LABELS.filter}</Label>
+          <Input
+            id="filter"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
       {body}
       <ConfirmDelete
-        row={target}
+        item={target}
         saving={saving}
+        failed={deleteFailed}
         onConfirm={confirmDelete}
-        onCancel={() => setTarget(null)}
+        onCancel={closeDialog}
       />
     </main>
   );

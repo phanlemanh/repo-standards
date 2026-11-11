@@ -5,9 +5,16 @@ import { ROUTES } from "./routes.ts";
 
 for (const route of ROUTES) {
   for (const width of [1440, 390]) {
-    test(`floor ${route} at ${width}px`, async ({ page }) => {
+    test(`floor ${route.title} at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto(route);
+      await page.goto(route.url);
+      // Reach the state the way a user does, then wait until it is on the page.
+      for (const step of route.steps) {
+        if ("press" in step)
+          await page.getByRole("button", { name: step.press, exact: true }).click();
+        else await page.getByLabel(step.fill, { exact: true }).fill(step.text);
+      }
+      await page.waitForFunction((text) => document.body.textContent?.includes(text), route.shows);
       // styles loaded
       const primary = await page.evaluate(() =>
         getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
