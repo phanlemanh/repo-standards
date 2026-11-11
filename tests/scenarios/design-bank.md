@@ -79,30 +79,30 @@ Một hàng cho mỗi lần chạy, 24 hàng.
 
 | Màn | Nền | Lần | Trạng thái thiếu (trên bảng mục 4) | Lỗi rào còn lại | Số vòng sửa | Token |
 |---|---|---|---|---|---|---|
-| 1 | thử | 1 | | | | |
-| 1 | thử | 2 | | | | |
-| 1 | thử | 3 | | | | |
-| 1 | đối chứng | 1 | | | | |
-| 1 | đối chứng | 2 | | | | |
-| 1 | đối chứng | 3 | | | | |
-| 2 | thử | 1 | | | | |
-| 2 | thử | 2 | | | | |
-| 2 | thử | 3 | | | | |
-| 2 | đối chứng | 1 | | | | |
-| 2 | đối chứng | 2 | | | | |
-| 2 | đối chứng | 3 | | | | |
-| 3 | thử | 1 | | | | |
-| 3 | thử | 2 | | | | |
-| 3 | thử | 3 | | | | |
-| 3 | đối chứng | 1 | | | | |
-| 3 | đối chứng | 2 | | | | |
-| 3 | đối chứng | 3 | | | | |
-| 4 | thử | 1 | | | | |
-| 4 | thử | 2 | | | | |
-| 4 | thử | 3 | | | | |
-| 4 | đối chứng | 1 | | | | |
-| 4 | đối chứng | 2 | | | | |
-| 4 | đối chứng | 3 | | | | |
+| 1 | thử | 1 | 0 | 0 | 0 | 3.352.854 |
+| 1 | thử | 2 | 0 | 0 | 1 | 1.918.949 |
+| 1 | thử | 3 | 0 | 0 | 0 | 2.805.194 |
+| 1 | đối chứng | 1 | 0 | 7 | 0 | 1.928.353 |
+| 1 | đối chứng | 2 | 0 | 9 | 0 | 1.748.265 |
+| 1 | đối chứng | 3 | 0 | 6 | 1 | 1.380.240 |
+| 2 | thử | 1 | 0 | 0 | 2 | 2.877.232 |
+| 2 | thử | 2 | 0 | 0 | 0 | 2.559.373 |
+| 2 | thử | 3 | 0 | 0 | 0 | 2.338.688 |
+| 2 | đối chứng | 1 | 0 | 6 | 0 | 1.606.906 |
+| 2 | đối chứng | 2 | 1 | 8 | 0 | 2.069.228 |
+| 2 | đối chứng | 3 | 1 | 5 | 0 | 1.483.869 |
+| 3 | thử | 1 | 0 | 0 | 0 | 2.780.369 |
+| 3 | thử | 2 | 2 | 0 | 0 | 508.240 |
+| 3 | thử | 3 | 2 | 0 | 0 | 587.530 |
+| 3 | đối chứng | 1 | 2 | 0 | 0 | 714.264 |
+| 3 | đối chứng | 2 | 0 | 9 | 1 | 1.970.798 |
+| 3 | đối chứng | 3 | 0 | 7 | 1 | 2.500.029 |
+| 4 | thử | 1 | 0 | 0 | 0 | 1.897.239 |
+| 4 | thử | 2 | 0 | 0 | 1 | 2.777.575 |
+| 4 | thử | 3 | 3 | 0 | 0 | 794.381 |
+| 4 | đối chứng | 1 | 0 | 1 | 0 | 2.250.291 |
+| 4 | đối chứng | 2 | 2 | 4 | 0 | 864.619 |
+| 4 | đối chứng | 3 | 2 | 4 | 0 | 1.225.262 |
 
 Cách đếm từng cột:
 
@@ -137,13 +137,32 @@ Không đạt thì sửa thiết kế trước khi phát hành. Không sửa ng�
 
 ## Kết quả
 
-Phiên bản Claude Code: (ghi một lần)
+Phiên bản Claude Code: 2.1.281. Tác tử dựng: claude-opus-5-5. Lượt chạy hợp lệ là lượt thứ hai (lượt thứ nhất bị huỷ, xem nhật ký thay đổi).
 
-Việc gỡ tham chiếu treo trên nền đối chứng, nếu có: (ghi lại)
+Việc gỡ tham chiếu treo trên nền đối chứng: xoá `tests/App.test.tsx` vì tệp này nhập `src/example/` và `tests/e2e/routes.ts` đã bị cắt; sau đó `npm run build` qua.
 
 | Ngày | Người chạy | Trạng thái thiếu (thử / đối chứng) | Lỗi còn lại (thử) | Token (thử / đối chứng) | Đạt | Ghi chú |
 |---|---|---|---|---|---|---|
-| | | | | | | |
+| 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 7 / 8 | 0 | 25.197.624 / 19.742.124 (x1,28) | Không | Ngưỡng 1 trượt (cần <= 4). Ngưỡng 2 và 3 đạt. Tổng chi phí 34,86 USD gồm 1,79 USD chạy thử |
+
+### Đọc kết quả
+
+- **Bốn lần chạy không ghi được tệp nào** (thử màn 3 lần 2 và 3, thử màn 4 lần 3, đối chứng màn 3 lần 1). Tác tử dựng gõ sai đường dẫn tuyệt đối của thư mục đo (gạch ngang thay cho gạch chéo), nên mọi lần ghi nằm ngoài thư mục làm việc và bị từ chối. Đây là lỗi môi trường đo, không do tầng thiết kế. Cả 7 trạng thái thiếu của nền thử nằm ở ba lần chạy này.
+- **Chỉ tính các lần chạy dựng được:** nền thử thiếu 0 trạng thái trên 9 lần, nền đối chứng thiếu 6 trên 11 lần. Nhưng token mỗi lần là 2,59 triệu so với 1,73 triệu (x1,50), vượt ngưỡng 30%. Vì vậy chạy lại bốn lần hỏng cũng không đổi được kết luận: không đạt.
+- **Người chấm:** bốn tác tử chấm, mỗi màn một tác tử, bản dựng đổi nhãn A-F để giấu nền (không giấu trọn: tệp thiết kế vẫn nằm trong repo). Mỗi tác tử dùng một cổng riêng 4174-4177 thay cho 4173 để chạy song song. Trạng thái mở được bằng `?state=` được tính là có, đúng luật mục 4; đọc chặt hơn (phải do dữ liệu thật dẫn tới) thì hai bản nền thử ở màn 1 thiếu thêm 3 trạng thái mỗi bản.
+- **Nền đối chứng không sạch hoàn toàn:** một tác tử đối chứng đọc lại màn mẫu đã cắt qua lịch sử git của nền. Lần đo sau nên dựng nền đối chứng thành một commit không có lịch sử.
+
+### Đọc nhật ký (mục 6)
+
+Đọc tám nhật ký, mỗi màn một lần thử và một lần đối chứng.
+
+- **Tầng thiết kế làm được:** bài kiểm trình duyệt bắt lỗi tương phản của nhãn huỷ (màn 1) và bảng tràn ngang ở khổ 390 px (màn 3). Tác tử nền thử dựng đủ trạng thái đang lưu và lỗi ở màn 2 và 4. Cả bốn tác tử đối chứng đều nói chưa từng xem trang.
+- **Hỏng mà không chỉ số nào bắt:** ở màn 1, để qua kiểm tương phản, tác tử đổi trạng thái "đã trả" sang cùng kiểu nhãn với "đang chờ", làm mất phân biệt.
+- **Đối chứng làm tốt hơn ở vài chỗ nhỏ:** giữ bộ lọc khi quay lại (màn 1), có thông báo đã lưu (màn 2), ít lượt hơn.
+- **Token thêm của nền thử đến từ:** vòng sửa do rào và bài kiểm trình duyệt (4-7 lần `make check` so với 2-3), đọc tầng thiết kế trước khi sửa, và nối mỗi màn vào `App.tsx`, `routes.ts` và test đơn vị.
+- **Hai lỗi nằm sẵn trong bộ linh kiện của capability** làm mọi tác tử vấp: nhãn huỷ không đủ tương phản, và vùng cuộn của bảng không nhận được tiêu điểm bàn phím.
+
+Theo mục 7: không đạt, phải sửa thiết kế trước khi phát hành. Không sửa ngưỡng.
 
 ## Nhật ký thay đổi
 
