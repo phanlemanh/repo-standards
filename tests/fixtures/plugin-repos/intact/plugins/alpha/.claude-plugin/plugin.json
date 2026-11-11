@@ -1,0 +1,8 @@
+{
+  "name": "alpha",
+  "version": "1.2.0",
+  "description": "Sample plugin alpha for the repo-setup tests.",
+  "author": {
+    "name": "acme"
+  }
+}

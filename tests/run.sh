@@ -616,5 +616,18 @@ python3 "$S/apply.py" --target "$kg" --preset claude-plugin --level team --with 
 [ -f "$kg/.github/actions/setup-project/action.yml" ] || miss "claude-plugin: agent workflows have no setup-project action"
 echo "ok  claude-plugin skeleton (or misses reported above)"
 
+# 32. detection: plugin manifests decide the kind; other repos are unaffected
+kind() { python3 "$S/detect.py" --target "$1" | json 'str(d["suggested_preset"])+" "+str(d["signals"]["claude_plugin"])'; }
+[ "$(kind "$k")" = "claude-plugin True" ] || miss "detect: skeleton gives $(kind "$k")"
+[ "$(kind "$ROOT")" = "claude-plugin True" ] || miss "detect: this repo gives $(kind "$ROOT")"
+[ "$(kind "$ROOT/tests/fixtures/plugin-repos/intact")" = "claude-plugin True" ] || miss "detect: fixture not recognised"
+python3 "$S/detect.py" --target "$ROOT/tests/fixtures/plugin-repos/intact" | json '",".join(d["claude_plugin"]["plugins"])' | grep -q '^alpha,beta$' || miss "detect: plugins not listed"
+[ "$(kind "$TMP/ts-node-starter")" = "ts-node False" ] || miss "detect: ts-node repo gives $(kind "$TMP/ts-node-starter")"
+[ "$(kind "$TMP/python-starter")" = "python False" ] || miss "detect: python repo gives $(kind "$TMP/python-starter")"
+[ "$(kind "$e")" = "None False" ] || miss "detect: empty folder gives $(kind "$e")"
+lone="$TMP/lone-plugin"; mkdir -p "$lone/plugins/solo/.claude-plugin"; echo '{"name":"solo"}' > "$lone/plugins/solo/.claude-plugin/plugin.json"
+[ "$(kind "$lone")" = "claude-plugin True" ] || miss "detect: plugin manifests without a marketplace give $(kind "$lone")"
+echo "ok  detection of plugin repos (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

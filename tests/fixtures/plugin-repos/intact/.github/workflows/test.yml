@@ -1,0 +1,14 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash tests/run.sh
+      - run: npx -y @anthropic-ai/claude-code plugin validate .
