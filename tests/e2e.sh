@@ -101,7 +101,8 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
       '}' > src/wide/Wide.tsx
     awk '{ print } /^export const SCREENS/ { print "  screen(\"/wide\", [\"ready\"], () => import(\"@/wide/Wide\").then((m) => m.Wide)),"; }' "$TMP/sc.bak" > src/screens.ts
     changed "$TMP/sc.bak" src/screens.ts "registering a screen"
-    npx playwright test --list | grep -qF 'floor /wide at 390px' || { echo "FAIL: the floor does not visit a registered screen"; exit 1; }
+    npx playwright test --list > "$TMP/list.txt"
+    grep -qF 'floor /wide at 390px' "$TMP/list.txt" || { echo "FAIL: the floor does not visit a registered screen"; exit 1; }
     make ui-floor >/dev/null || { echo "FAIL: a wide table failed the floor"; make ui-floor; exit 1; }
     cp src/components/ui/table.tsx "$TMP/t.bak"; grep -v 'tabIndex={0}' "$TMP/t.bak" > src/components/ui/table.tsx
     changed "$TMP/t.bak" src/components/ui/table.tsx "dropping the table patch"
