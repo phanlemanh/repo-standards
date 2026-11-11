@@ -783,7 +783,10 @@ for d in "$TMP/design-plain" "$TMP/design-content"; do
   # The test hook sits at the top of each request, apart from the request itself.
   [ "$(grep -c '^  if (test) return test;$' "$d/src/example/data.ts")" -eq 2 ] || miss "design: $d data.ts test hook not at the top of list and delete"
   grep -q 'replace each function body' "$d/src/example/data.ts" && miss "design: $d data.ts tells the builder to delete the test hook"
-  grep -q 'MODE' "$d/src/example/data.ts" && miss "design: $d data.ts has a test-only branch"
+  # The hook answers only in the checks' builds; nothing else in the source depends on the mode.
+  grep -qF 'if (import.meta.env.MODE !== "test" && import.meta.env.MODE !== "floor") return null;' "$d/src/example/data.ts" \
+    || miss "design: $d data.ts test hook is live outside the checks"
+  [ "$(grep -c 'MODE' "$d/src/example/data.ts")" -eq 1 ] || miss "design: $d data.ts has a test-only branch besides the hook"
   grep -q 'onAction={addFirst}' "$f" && grep -q 'open={asking}' "$f" || miss "design: $f empty action does not add, or the dialog loses its item while closing"
 done
 grep -q 'useFakeTimers' "$TMP/design-team/tests/App.test.tsx" || miss "design: unit tests wait for real time"
@@ -792,11 +795,27 @@ grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/scre
   && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"
 grep -q 'getByRole("button", { name: step.press' "$d/tests/e2e/floor.spec.ts" && grep -q 'route.shows' "$d/tests/e2e/floor.spec.ts" \
   || miss "design: the browser floor does not drive the steps or wait for the state"
-for f in design/behaviors.md .claude/rules/ui.md; do
-  grep -q 'A state appears because of a real condition' "$d/$f" && grep -q 'Never because of a switch' "$d/$f" \
-    || miss "design: $f lacks the real-condition rule"
-done
+grep -q 'A state appears because of a real condition' "$d/design/behaviors.md" && grep -q 'Never because of a switch' "$d/design/behaviors.md" \
+  || miss "design: behaviors.md lacks the real-condition rule"
+grep -q 'A state appears because of a real condition' "$d/.claude/rules/ui.md" && miss "design: ui.md repeats the state rule kept in behaviors.md"
 grep -q 'A state reachable only from a switch is not a state' "$d/.claude/rules/ui.md" || miss "design: ui.md traps lack the switch trap"
+# 31i. the registry is enough on its own: paths with parts, the sample off the home page, the test
+# files owned by the plugin, a guard message that agrees with the rule, no screenshots.
+grep -q 'path: "/example"' "$d/src/screens.ts" && grep -q 'visit?: string' "$d/src/screens.ts" \
+  && grep -q 'params: Params' "$d/src/screens.ts" || miss "design: src/screens.ts lacks the sample at /example or the visit and params shape"
+grep -q 'LABELS.notFound' "$d/src/App.tsx" || miss "design: an unknown address does not get its own page"
+grep -q 'ROUTES' "$d/tests/App.test.tsx" && ! grep -qE 'ReferenceScreen|example' "$d/tests/App.test.tsx" \
+  || miss "design: tests/App.test.tsx is not a generic walk over the registry"
+for f in tests/App.test.tsx tests/e2e/routes.ts tests/e2e/floor.spec.ts; do
+  grep -qF "\`$f\`" "$d/.claude/rules/ui.md" || miss "design: ui.md does not say the plugin owns $f"
+  grep -qF "\"$f\"" "$PL/checklists/top-tier.toml" || miss "design: doctor does not guard $f"
+done
+grep -q 'TableCell' "$d/.claude/rules/ui.md" && grep -q 'no screenshots' "$d/.claude/rules/ui.md" \
+  || miss "design: ui.md lacks the TableCell trap or the no-screenshot line"
+grep -q 'never edit src/components/ui' "$d/eslint.config.js" || miss "design: the restyle message still sends the builder into src/components/ui"
+grep -q 'vite build --mode floor --outDir coverage/floor' "$d/playwright.config.ts" \
+  || miss "design: the browser checks do not build in their own mode, apart from dist/"
+grep -q '"src/example/\*\*"' "$d/vitest.config.ts" || miss "design: team coverage counts the sample"
 # 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"

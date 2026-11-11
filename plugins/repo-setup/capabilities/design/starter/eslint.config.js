@@ -22,7 +22,19 @@ export default defineConfig([
     ignores: ["src/components/ui/**", "src/lib/format.ts"],
     plugins: { shadcn },
     rules: {
-      "shadcn/no-restyle": ["error", { allow: ["layout"] }],
+      "shadcn/no-restyle": [
+        "error",
+        {
+          allow: ["layout"],
+          // The default text sends the builder into src/components/ui, which is not edited here.
+          message: {
+            default:
+              '"{{className}}" is not allowed on <{{component}}>, which owns its look. Its variants: {{variants|none}}. Otherwise wrap the text in a span and put the class there; never edit src/components/ui.',
+            spacing:
+              '"{{className}}" is not allowed on <{{component}}>, which owns its spacing. Its sizes: {{sizes|none}}. For space around it: {{around}}. Never edit src/components/ui.',
+          },
+        },
+      ],
       "shadcn/no-raw-colors": "error",
       "shadcn/no-arbitrary-values": "error",
       "shadcn/no-inline-styles": "error",

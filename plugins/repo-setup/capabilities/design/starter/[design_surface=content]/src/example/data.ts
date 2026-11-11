@@ -1,14 +1,10 @@
 import { LABELS } from "@/lib/labels";
 
-// Stands in for your API. Put each real request below the `testAnswer` lines. Those lines are the
-// test hook: the browser checks pick the answer with `?scenario=`. Keep them, and read `?scenario=`
-// nowhere else. The screen relies only on what every request does: it takes a while and it can
-// fail. Real request functions should also accept an `AbortSignal` and pass it to `fetch`, so a
-// screen can cancel a request it no longer needs.
+// Stands in for your API. Put each real request below its `testAnswer` line, and keep that line:
+// it is the hook the checks use to pick an answer (`scenario` in src/screens.ts).
 export type Status = "active" | "overdue";
 export type Item = { id: number; name: string; status: Status; date: Date; body: string };
 
-// The fake server's store: deleting and adding change it until the page reloads.
 let items: Item[] = [
   {
     id: 1,
@@ -56,9 +52,9 @@ export function createItem(): Promise<Item> {
   });
 }
 
-// The test hook: the answer `?scenario=` asks for (src/screens.ts names one per state), or null to
-// make the real request. An answer never comes, fails, or is a fixed value.
+// The answer `?scenario=` asks for, or null for the real request. Live only in the checks' builds.
 function testAnswer<T>(answers: Record<string, T | "never" | "fail">): Promise<T> | null {
+  if (import.meta.env.MODE !== "test" && import.meta.env.MODE !== "floor") return null;
   const scenario = new URLSearchParams(window.location.search).get("scenario");
   if (scenario === null || !(scenario in answers)) return null;
   const answer = answers[scenario];
@@ -69,8 +65,7 @@ function testAnswer<T>(answers: Record<string, T | "never" | "fail">): Promise<T
   });
 }
 
-// Answers after a short wait, as a server does. Offline (DevTools, Network, Offline) every request
-// fails, as a real one would: the error and delete-failed states need no scenario there.
+// Answers after a short wait, as a server does. Offline, every request fails.
 async function respond<T>(answer: () => T): Promise<T> {
   await new Promise((resolve) => setTimeout(resolve, 200));
   if (!navigator.onLine) throw new Error("Offline");

@@ -1,5 +1,6 @@
 // Every word the screens show. Translate here; the tests compare against this file.
 export const LABELS = {
+  notFound: "This page does not exist",
   screenTitle: "Reference screen",
   loading: "Loading",
   errorTitle: "This page could not load",

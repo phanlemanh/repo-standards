@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -30,17 +30,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createItem, deleteItem, listItems, type Item, type Status } from "@/example/data";
+import { createItem, deleteItem, listItems, type Item } from "@/example/data";
 import { formatDate, formatMoney } from "@/lib/format";
 import { LABELS } from "@/lib/labels";
 
-type Variant = ComponentProps<typeof Badge>["variant"];
-// Each status keeps its own look. Never give two statuses the same variant to pass a check.
-const STATUS: Record<Status, { label: string; variant: Variant }> = {
+const STATUS = {
   active: { label: LABELS.statusActive, variant: "default" },
   pending: { label: LABELS.statusPending, variant: "outline" },
   overdue: { label: LABELS.statusOverdue, variant: "destructive" },
-};
+} as const;
 
 function Notice(props: { title: string; detail: string; action: string; onAction: () => void }) {
   return (
@@ -56,69 +54,17 @@ function Notice(props: { title: string; detail: string; action: string; onAction
   );
 }
 
-function ConfirmDelete(props: {
-  open: boolean;
-  item: Item | null;
-  saving: boolean;
-  failed: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(open) => {
-        if (!open && !props.saving) props.onCancel();
-      }}
-    >
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>{props.item ? LABELS.deleteItem(props.item.name) : ""}</DialogTitle>
-          <DialogDescription>{LABELS.deleteDetail}</DialogDescription>
-        </DialogHeader>
-        {props.failed && props.item && (
-          <Alert variant="destructive">
-            <AlertTitle>{LABELS.deleteFailed(props.item.name)}</AlertTitle>
-            <AlertDescription>{LABELS.errorDetail}</AlertDescription>
-          </Alert>
-        )}
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" disabled={props.saving} />}>
-            {LABELS.cancel}
-          </DialogClose>
-          <Button variant="destructive" disabled={props.saving} onClick={props.onConfirm}>
-            {props.saving ? LABELS.saving : LABELS.deleteAction}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Every state follows from a request or from the user, never from a switch.
 export function ReferenceScreen() {
-  // The list request: pending while items is null, then the items or a failure.
   const [items, setItems] = useState<Item[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  // What the user is doing: filtering, or deleting one item. The dialog keeps showing the last
-  // target while it closes.
   const [query, setQuery] = useState("");
   const [asking, setAsking] = useState(false);
   const [target, setTarget] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
-  // Whether the screen is still there when an answer arrives.
-  const mounted = useRef(true);
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let current = true; // ignore an answer that arrives after the screen has moved on
+    let current = true;
     listItems().then(
       (found) => current && setItems(found),
       () => current && setFailed(true),
@@ -136,7 +82,6 @@ export function ReferenceScreen() {
 
   function addFirst() {
     setItems(null);
-    // List again either way: the list shows what the server has.
     void createItem().then(reload, reload);
   }
 
@@ -154,7 +99,6 @@ export function ReferenceScreen() {
       () => true,
       () => false,
     );
-    if (!mounted.current) return; // ignore an answer that arrives after the screen has gone
     setSaving(false);
     if (deleted) {
       setItems((current) => current?.filter((item) => item.id !== target.id) ?? null);
@@ -260,14 +204,33 @@ export function ReferenceScreen() {
         </div>
       )}
       {body}
-      <ConfirmDelete
+      <Dialog
         open={asking}
-        item={target}
-        saving={saving}
-        failed={deleteFailed}
-        onConfirm={confirmDelete}
-        onCancel={() => setAsking(false)}
-      />
+        onOpenChange={(open) => {
+          if (!open && !saving) setAsking(false);
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{target ? LABELS.deleteItem(target.name) : ""}</DialogTitle>
+            <DialogDescription>{LABELS.deleteDetail}</DialogDescription>
+          </DialogHeader>
+          {deleteFailed && target && (
+            <Alert variant="destructive">
+              <AlertTitle>{LABELS.deleteFailed(target.name)}</AlertTitle>
+              <AlertDescription>{LABELS.errorDetail}</AlertDescription>
+            </Alert>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" disabled={saving} />}>
+              {LABELS.cancel}
+            </DialogClose>
+            <Button variant="destructive" disabled={saving} onClick={confirmDelete}>
+              {saving ? LABELS.saving : LABELS.deleteAction}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

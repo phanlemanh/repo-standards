@@ -6,53 +6,46 @@ paths: ["src/**/*.tsx"]
 
 - Copy the structure of a new screen from `src/example`: one `main`, one `h1`, its data from a
   source module next to it (`data.ts`), and every state the screen can reach.
-  `design/behaviors.md` says what each state shows and the text density.
-- A state appears because of a real condition: a pending or failed request, an empty result, a
-  filter with no match, a user action. Never because of a switch: a prop or URL value that exists
-  only to pick the state. Tests choose the condition through the data source.
-- Register every new screen in `src/screens.ts`, with its path and how to reach each state: the
-  data source's scenario, the user's steps, and the text the state shows. The app, the unit tests
-  and the browser checks read that list; there is nothing else to wire.
-- Use the components in `src/components/ui`. Never write a raw `button`, `input`, `select`,
-  `textarea` or `table`.
-- Do not edit `src/components/ui`. Change the look through the tokens in `src/index.css`.
+  `design/behaviors.md` says when each state appears and what it shows.
+- Register every new screen and each of its states in `src/screens.ts`, as its comment says. A
+  path with parts (`/orders/:id`) also gets `visit`, a real address (`/orders/1`). The app, the
+  unit tests and the browser checks read that list; there is nothing else to wire.
+- The sample screen sits at `/example`; your first screen takes `/`.
+- Use the components in `src/components/ui`; never a raw `button`, `input`, `select`, `textarea`
+  or `table`. Do not edit `src/components/ui`: change the look through the tokens in
+  `src/index.css`.
 - Take every word from `src/lib/labels.ts`. Format every number and date with `@/lib/format`.
 - Use the token classes (`bg-primary`, `text-muted-foreground`) and the spacing and size scales.
   `make lint` rejects raw colours, arbitrary values and inline styles.
 
 ## Loop
 
-- Fast loop while building a screen: `make format lint ui-floor` (formatting, guards, then the
-  browser checks at 1440 and 390 px).
+- While building: `make format lint ui-floor`. The browser checks, at 1440 and 390 px, are the
+  visual check: no screenshots, no preview server.
 - Before you finish: `make check`. A guard failure means the screen should change, not the guard.
 
 ## Traps
 
 - A link that looks like a button stays a link:
-  `<a href="..." className={buttonVariants({ variant: "outline" })}>`, with `buttonVariants` from
-  `@/components/ui/button`. Never copy button classes onto an `<a>` by hand.
-- Spacing inside a `Card`: put content in its slots (`CardHeader`, `CardContent`, `CardFooter`).
-  For a stack inside a slot, wrap it in a plain `div` with `flex flex-col gap-*`; `gap` on the
-  `Card` or a slot is rejected. For tighter cards use `size="sm"`.
-- Numbers, money and dates only through `@/lib/format`, never `toLocaleString` or `Intl`.
-- Wide tables on phones: the `Table` container scrolls sideways. Give `Table` an `aria-label` and
-  do not force column widths.
-- Statuses must stay visually distinct. If a `Badge` fails contrast, pick another variant; never
-  give two statuses the same look to pass a check.
-- A new screen that the browser checks never visit is missing from `src/screens.ts`.
+  `<a className={buttonVariants({ variant: "outline" })}>`, from `@/components/ui/button`.
+- Inside a `Card`, put content in its slots (`CardHeader`, `CardContent`, `CardFooter`); for a
+  stack inside a slot, wrap it in a `div` with `flex flex-col gap-*`. For tighter cards, `size="sm"`.
+- No colour or type class on `TableCell`: wrap the text in a `span` and put the class there.
+- Wide tables on phones: the `Table` container scrolls sideways; do not force column widths.
+- Statuses stay visually distinct. If a `Badge` fails contrast, pick another variant; never give
+  two statuses the same look.
 - A state reachable only from a switch is not a state: the running app never shows it.
 
 ## Adding a component
 
-shadcn is pinned to one version; always call it with that version.
+shadcn is pinned; always call it with its version:
 
-1. Find it: `npx shadcn@4.23.0 search @shadcn -q "date picker"`.
-2. Read how it is used: `npx shadcn@4.23.0 docs calendar`, and its source:
-   `npx shadcn@4.23.0 view @shadcn/calendar`.
-3. Install it: `npx shadcn@4.23.0 add calendar`, then `make ui-patch format`.
+1. Find: `npx shadcn@4.23.0 search @shadcn -q "date picker"`.
+2. Read: `npx shadcn@4.23.0 docs calendar` and `npx shadcn@4.23.0 view @shadcn/calendar`.
+3. Install: `npx shadcn@4.23.0 add calendar`, then `make ui-patch format`.
 
-Results marked `(block)` are ready-made sections: read them with `view` for ideas, never `add`
-them. They bring their own layout and words past the guards.
+Results marked `(block)` are ready-made sections: `view` them for ideas, never `add` them.
 
-`tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` belong to the plugin. Do
-not edit them here: change them in the plugin and re-apply, or `doctor` loses points.
+`tools/design_guards.mjs`, `mk/design.mk`, `tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and
+`tests/e2e/routes.ts` belong to the plugin: you never need to open them, and an edit costs
+`doctor` points.

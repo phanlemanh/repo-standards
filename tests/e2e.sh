@@ -60,10 +60,10 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
       fi
     }
     changed() { if cmp -s "$1" "$2"; then echo "FAIL: $3 did not change the file"; exit 1; fi; }
-    cp eslint.config.js "$TMP/e.bak"; grep -v 'shadcn/no-restyle' "$TMP/e.bak" > eslint.config.js
+    cp eslint.config.js "$TMP/e.bak"; awk '/"shadcn\/no-restyle": \[$/ { skip = 1 } !skip { print } skip && /^      \],$/ { skip = 0 }' "$TMP/e.bak" > eslint.config.js
     changed "$TMP/e.bak" eslint.config.js "removing the rule"
     red "removed rule" "not caught by shadcn/no-restyle" node tools/design_guards.mjs; cp "$TMP/e.bak" eslint.config.js
-    sed 's#"shadcn/no-restyle": \["error"#"shadcn/no-restyle": ["warn"#' "$TMP/e.bak" > eslint.config.js
+    awk 'hit { sub(/"error"/, "\"warn\""); hit = 0 } /"shadcn\/no-restyle": \[$/ { hit = 1 } { print }' "$TMP/e.bak" > eslint.config.js
     changed "$TMP/e.bak" eslint.config.js "the warn mutation"
     red "rule downgraded to warn" "not caught by shadcn/no-restyle" node tools/design_guards.mjs --only guards; cp "$TMP/e.bak" eslint.config.js
     sed 's#"src/generated/"\]#"src/generated/", "src/example/"]#' "$TMP/e.bak" > eslint.config.js
@@ -90,7 +90,7 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     # States come from the data source: when the list request can no longer fail, the error state is gone.
     f=src/example/data.ts; cp "$f" "$TMP/d.bak"; sed 's/ fail: "fail", empty/ empty/' "$TMP/d.bak" > "$f"
     changed "$TMP/d.bak" "$f" "the list request that cannot fail"
-    red "error state without a failing request" "reaches / error" make test; cp "$TMP/d.bak" "$f"
+    red "error state without a failing request" "reaches /example error" make test; cp "$TMP/d.bak" "$f"
     # The reference screen shows a destructive badge: shadcn's own red must fail the floor there.
     cp src/index.css "$TMP/i.bak"; sed 's/--destructive: oklch(0.48 0.2 27.325)/--destructive: oklch(0.55 0.245 27.325)/' "$TMP/i.bak" > src/index.css
     changed "$TMP/i.bak" src/index.css "restoring the shadcn destructive red"
@@ -116,6 +116,15 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/4173) 2>/dev/null && break; sleep 0.2; done
     red "busy port" "http://127.0.0.1:4173 is already used" make ui-floor
     kill "$PREVIEW"; wait "$PREVIEW" 2>/dev/null || true; PREVIEW=""
+    # The sample's own behaviour is tested here, so the repo ships only the generic walk.
+    cp "$ROOT/tests/fixtures/design/reference.test.tsx" tests/reference.test.tsx
+    npx vitest run tests/reference.test.tsx --coverage.enabled=false >"$TMP/ref.txt" 2>&1 \
+      || { echo "FAIL: the sample screen's own tests"; cat "$TMP/ref.txt"; exit 1; }
+    rm tests/reference.test.tsx
+    # The test hook is in the browser checks' build and gone from the build for users.
+    npx vite build --mode floor --outDir coverage/floor --logLevel warn
+    grep -q 'Test scenario' coverage/floor/assets/*.js || { echo "FAIL: the browser checks' build lost the test hook"; exit 1; }
+    if grep -q 'Test scenario' dist/assets/*.js; then echo "FAIL: the test hook ships in npm run build"; exit 1; fi
     echo "/* kept */" >> src/index.css
     python3 "$S/apply.py" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["conflict"], d["conflict"]; assert "src/index.css" in d["kept"]'
     grep -q 'kept' src/index.css || { echo "FAIL: index.css overwritten"; exit 1; }

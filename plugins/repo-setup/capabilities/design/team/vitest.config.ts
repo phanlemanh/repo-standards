@@ -12,9 +12,10 @@ export default mergeConfig(
         // The console shows only a missed threshold; coverage/index.html has the table per file.
         reporter: ["html", "json-summary"],
         include: ["src/**"],
-        // Entry points and generated code are covered by other means.
+        // Entry points, generated code, vendor code and the sample are covered by other means.
         exclude: [
           "src/main.tsx",
+          "src/example/**",
           "src/**/stdio.ts",
           "src/generated/**",
           "src/**/*.d.ts",
