@@ -68,7 +68,7 @@ Dựng thật hai lần trong thư mục tạm, với ESLint 10.14, TypeScript 6
 | Rào | Linter có sẵn cộng luật sẵn của ESLint | `onehub-inventory` phải tự viết và nuôi 10 luật; ở đây không viết luật nào cho ngày đầu |
 | Kiểm trình duyệt | Nằm trong `make check` | Phép thử xoá tiêu đề cho thấy nằm ngoài cổng chung là không có tác dụng. Kit nghiệm thu và CI đều chạy `make check`, nên được phủ luôn |
 | Nền linh kiện | Chụp sẵn cấu hình trong khung, chỉ dùng CLI để thêm linh kiện, ghim đúng phiên bản | Màu thương hiệu có trước khi cài; lần chạy lại không báo xung đột |
-| Tra linh kiện | Skill trỏ tới lệnh của shadcn, không máy chủ MCP | Tránh đụng `.mcp.json` của capability `mcp`; thử nghiệm của Atlassian cho thấy CLI nhỉnh hơn MCP một chút |
+| Tra linh kiện | Luật `ui.md` trỏ tới lệnh của shadcn, không máy chủ MCP | Tránh đụng `.mcp.json` của capability `mcp`; thử nghiệm của Atlassian cho thấy CLI nhỉnh hơn MCP một chút |
 | Danh mục linh kiện tự sinh | Không có ở ngày đầu | Kho của nhà cung cấp đã trả lời được; bản tự sinh ở `onehub-inventory` thiếu props và gán sai variant |
 | Chứng minh rào hoạt động | Đưa lỗi mẫu qua đúng cấu hình thật, không xem tệp có tồn tại | Sổ quyết định ở `onehub-inventory` tăng từ 50% lên 75% khi chèn 40 dòng vô nghĩa |
 
@@ -112,7 +112,7 @@ Màu thương hiệu được kiểm ngay ở bước quyết định. Máy ch�
 |---|---|---|
 | Rào máy | Khối luật trong cấu hình ESLint: sáu luật `@shadcn/lint`, thang khoảng cách, thang kích thước, control trần, tự định dạng số và ngày | `make check` và bài đưa lỗi vào |
 | Kiểm trình duyệt | `tests/e2e/floor.spec.ts`: đúng một vùng chính, đúng một tiêu đề cấp một, không tràn ngang, không lỗi truy cập, ở 1440 và 390 px, trên từng đường dẫn trong danh sách | `make check` |
-| Lớp nạp cho Claude Code | Luật ngắn chỉ nạp khi đụng màn hình, skill ngắn trỏ tới lệnh tra cứu, một đoạn trong `AGENTS.md` | Giới hạn độ dài trong bài kiểm |
+| Lớp nạp cho Claude Code | Một luật ngắn chỉ nạp khi đụng màn hình, gồm lệnh tra cứu linh kiện và danh sách bẫy hay gặp, cùng một đoạn trong `AGENTS.md`. Sau phép đo 2026-11-11, skill `ui` được gộp vào luật này | Giới hạn độ dài trong bài kiểm |
 | Câu trả lời đóng | `design/behaviors.md`, một trang: mỗi trạng thái (chờ, trống, lỗi, không có kết quả, đang lưu, xác nhận xoá) một câu trả lời và linh kiện cụ thể | Màn mẫu thể hiện đủ, kiểm bằng test |
 | Một nguồn cho chữ và số | Hàm định dạng tiền, số, ngày theo `locale` và `currency` đã chốt; từ điển nhãn dùng chung; danh sách từ cấm | Luật cấm tự định dạng; bài quét từ cấm |
 | Màn mẫu | Thay trang demo, đủ trạng thái, chỉ dùng linh kiện có sẵn, có test đơn vị và kiểm trình duyệt cho từng trạng thái | `make check` |
@@ -123,9 +123,9 @@ Plugin chỉ chứa tiếng Anh, `tests/run.sh` chặn tiếng Việt trong plug
 
 Linh kiện cài sẵn: button, input, label, table, card, badge, dialog, select, skeleton, empty, alert. Không cài `sonner` cho tới khi hết lỗi kiểu chặt.
 
-Màn mẫu nhận trạng thái qua tham số trên đường dẫn, và `tests/e2e/routes.ts` liệt kê từng trạng thái để bài trình duyệt đi qua. Repo thêm màn thật thì thêm đường dẫn vào danh sách này.
+Màn mẫu nhận trạng thái qua tham số trên đường dẫn. Một danh sách chung `src/screens.ts` ghi mỗi màn và các trạng thái của nó; ứng dụng, bài trình duyệt và test đơn vị đều đọc từ danh sách này. Repo thêm màn thật hay thêm trạng thái thì chỉ thêm một mục ở đó (đổi sau phép đo 2026-11-11, vì nối tay vào ba chỗ làm tác tử tốn lượt).
 
-Skill cho phép thêm linh kiện từ kho, nhưng khối dựng sẵn (dashboard, login và tương tự) chỉ được đọc để tham khảo, không `add` thẳng vào repo.
+Luật cho phép thêm linh kiện từ kho, nhưng khối dựng sẵn (dashboard, login và tương tự) chỉ được đọc để tham khảo, không `add` thẳng vào repo.
 
 ### Điều chỉnh rút ra từ lần dựng thử
 
@@ -154,7 +154,7 @@ Skill cho phép thêm linh kiện từ kho, nhưng khối dựng sẵn (dashboar
 2. Đưa vài dòng hợp lệ, phải xanh.
 3. Xác nhận `make -n check` có bước kiểm trình duyệt, và trong `mk/design.mk` bước đó không bị `-` hay `|| true` làm mất khả năng đỏ.
 4. Từ chối `eslint-disable` cho luật giao diện nếu không kèm lý do sau `--`.
-5. Luật và skill không vượt giới hạn độ dài.
+5. Luật không vượt giới hạn độ dài.
 6. Quét từ cấm trong `design/terms.json` trên toàn bộ `src`.
 7. Có `design/behaviors.md`, và danh sách đường dẫn của bài trình duyệt có ít nhất một màn.
 
