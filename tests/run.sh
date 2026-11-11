@@ -811,5 +811,53 @@ b="$TMP/bump-kitlike"; fresh "$b"; edit_json "$b/.claude-plugin/marketplace.json
 python3 "$BT" --root "$b" patch >/dev/null; [ "$(ver "$b")" = "None/1.2.1 None/1.2.1" ] || miss "bump: added a version to marketplace entries that had none: $(ver "$b")"
 echo "ok  bump tool (or misses reported above)"
 
+# 37. decision layers: what does not apply to a plugin marketplace is recorded with its reason, never built
+python3 "$bp" not-applicable claude-plugin > "$TMP/layers-na.txt"
+for l in architecture ai domain delivery; do grep -q "^$l: ." "$TMP/layers-na.txt" || miss "layers: $l is not marked not applicable for claude-plugin"; done
+grep -q '^domain: A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated' "$TMP/layers-na.txt" || miss "layers: no reason for ontology and wiki"
+[ -z "$(python3 "$bp" not-applicable python)" ] || miss "layers: an app stack has layers marked not applicable"
+for l in architecture ai domain delivery; do grep -q 'Stack `claude-plugin`:\*\* not applicable' "$SK/references/layers/$l.md" || miss "layer $l does not tell the agent it is not applicable for claude-plugin"; done
+grep -q '`claude-plugin`' "$SK/references/layers/stack.md" && grep -q 'claude-plugin' "$SK/references/layers/context.md" || miss "stack/context layers do not offer claude-plugin"
+grep -q 'not-applicable' "$SK/SKILL.md" && grep -q 'never dropped silently' "$SK/SKILL.md" || miss "new does not show layers that do not apply"
+grep -q 'claude-plugin' "$ROOT/plugins/repo-setup/skills/adopt/SKILL.md" && grep -q 'not_applicable' "$ROOT/plugins/repo-setup/skills/doctor/SKILL.md" || miss "adopt/doctor skills do not cover plugin repos"
+python3 "$bp" check "$B/ok-claude-plugin.yaml" >/dev/null 2>&1 || miss "blueprint: plugin marketplace blueprint rejected"
+pvariant() { python3 - "$B/ok-claude-plugin.yaml" "$TMP/pvariant.yaml" "$1" "$2" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+assert old in t, old
+open(dst, "w", encoding="utf-8").write(t.replace(old, new, 1))
+PY
+}
+pvariant '  domain:
+    status: not_applicable
+' '  domain:
+    status: decided
+    source: user
+    automation: automated
+    choice: {seed: [Order]}
+'
+python3 "$bp" check "$TMP/pvariant.yaml" > "$TMP/pvariant.out" 2>&1 && miss "blueprint: an ontology was forced onto a plugin marketplace"
+grep -q 'domain: not applicable with preset claude-plugin (A plugin marketplace has no business domain' "$TMP/pvariant.out" || miss "blueprint: no reason given when a layer does not apply: $(cat "$TMP/pvariant.out")"
+if python3 "$S/apply.py" --target "$TMP/bp-forced" --from-blueprint "$TMP/pvariant.yaml" >/dev/null 2>&1; then miss "blueprint: apply built a layer that does not apply"; fi
+pvariant '  domain:
+    status: not_applicable
+' '  domain:
+    status: decided
+    source: user
+    automation: manual
+    choice: {glossary: docs/glossary.md}
+'
+python3 "$bp" check "$TMP/pvariant.yaml" >/dev/null 2>&1 || miss "blueprint: a manual note on a layer that does not apply was rejected"
+pvariant 'choice: {preset: claude-plugin}' 'choice: {preset: claude-plugin, plugin_name: greeter, plugin_versioning: independent}'
+z="$TMP/bp-plugin"; mkdir -p "$z" && git -C "$z" init -q -b main
+mapped=$(python3 "$S/apply.py" --target "$z" --from-blueprint "$TMP/pvariant.yaml" --json 2>/dev/null | json 'd["preset"]+"/"+d["level"]+"/"+d["archetype"]+"/"+d["deploy"]' 2>/dev/null || true)
+[ "$mapped" = claude-plugin/starter/none/none ] || miss "blueprint: plugin marketplace mapping: $mapped"
+[ -f "$z/plugins/greeter/.claude-plugin/plugin.json" ] && [ ! -e "$z/ontology" ] && [ ! -e "$z/wiki" ] || miss "blueprint: plugin marketplace was not built as designed"
+python3 -c "import json; assert json.load(open('$z/.repo-setup.json'))['vars']['plugin_versioning'] == 'independent'" 2>/dev/null || miss "blueprint: versioning policy not recorded"
+cp "$TMP/pvariant.yaml" "$z/setup-blueprint.yaml"; git -C "$z" add -A
+[ "$(python3 "$S/doctor.py" --target "$z" --json | json 'str(d["score"])+str(d["blueprint_drift"])')" = "100[]" ] || miss "blueprint: plugin marketplace drift or score"
+echo "ok  layers for plugin repos (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

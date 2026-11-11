@@ -5,7 +5,9 @@ Keep the file name in English. Sections:
 
 1. **Where things stand**: one or two sentences, including that a scaffold is not a finished
    product. Say what the sample code does.
-2. **Three everyday commands**: `make dev`, `make format`, `make check`.
+2. **Three everyday commands**: `make dev`, `make format`, `make check`. For a plugin marketplace
+   (`claude-plugin`): `make check`, `make validate`, `make bump V=minor`, and how to try a plugin
+   with `claude --plugin-dir plugins/<name>`.
 3. **What is in the repo**: a table of path, what it is, what you need to do. Group paths and list
    only what exists.
 4. **What happens automatically**: CI on push, and `make check` in that CI. Nothing runs by itself inside Claude Code.

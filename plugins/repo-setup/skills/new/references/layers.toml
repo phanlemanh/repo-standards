@@ -1,5 +1,9 @@
 # The decision layers of /repo-setup:new, in the order they are visited. Source of truth for
 # scripts/blueprint.py. Details of each layer: layers/<id>.md.
+#
+# [layer.not_applicable] maps a stack preset to the reason this layer does not apply to it. Such a
+# layer is recorded as `status: not_applicable` with that reason, said to the user in one line,
+# and never built. List them with: blueprint.py not-applicable <preset>
 
 [[layer]]
 id = "context"
@@ -12,10 +16,14 @@ depends_on = ["context"]
 [[layer]]
 id = "architecture"
 depends_on = ["context"]
+[layer.not_applicable]
+claude-plugin = "Archetypes structure an application. A plugin marketplace is one folder per plugin under plugins/."
 
 [[layer]]
 id = "ai"
 depends_on = ["architecture"]
+[layer.not_applicable]
+claude-plugin = "This layer scaffolds an app that calls a model through the SDK. Plugins run inside Claude Code and call no model themselves."
 
 [[layer]]
 id = "stack"
@@ -23,7 +31,9 @@ depends_on = ["architecture", "ai"]
 
 [[layer]]
 id = "domain"
-depends_on = ["architecture", "ai"]
+depends_on = ["architecture", "ai", "stack"]
+[layer.not_applicable]
+claude-plugin = "A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated. Its glossary and decision records stay in its own docs."
 
 [[layer]]
 id = "quality"
@@ -32,6 +42,8 @@ depends_on = ["repo"]
 [[layer]]
 id = "delivery"
 depends_on = ["architecture", "stack"]
+[layer.not_applicable]
+claude-plugin = "Nothing is deployed: a plugin is delivered by its marketplace and a tagged release."
 
 [[layer]]
 id = "governance"
