@@ -9,6 +9,8 @@ screens all day or read them; the stack must have a screen at all.
 **Only one sensible answer when:** the stack has no user interface (for example `python`,
 `fastapi`, `ts-node`, `ts-api`). Then write `not_applicable` in one line and move on.
 
+**Stack `claude-plugin`:** not applicable. A plugin marketplace has no screens: the design floor is for a web front end (`react-vite`). Say that in one line, record `status: not_applicable` with it as `why`, and move on.
+
 ## Options
 
 Offer these three. There is no "skip" row: a team that deliberately wants no floor records

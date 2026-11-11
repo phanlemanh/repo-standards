@@ -67,3 +67,8 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `contracts/openapi.json` | The API contract, generated from the ontology; CI blocks breaking changes |
 | `architecture/modules.yaml` | Business modules and who may depend on whom; CI checks imports |
 | `Dockerfile` / `compose.yaml` | How the app is packaged and run as a container |
+| `.claude-plugin/marketplace.json` | The list of plugins a repository offers to Claude Code, and where each one lives |
+| `plugins/<name>/.claude-plugin/plugin.json` | One plugin's own card: name, version, short description |
+| `tools/plugin_lint.py` / `make lint` (plugin repos) | Checks that those files are valid and agree on names and versions |
+| `tools/bump_version.py` / `make bump` | Sets the next version in every manifest at once and dates the changelog |
+| "not applicable" in `doctor` | A check that does not fit this kind of repo; it is listed with its reason and not scored |

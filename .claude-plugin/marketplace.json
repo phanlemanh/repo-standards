@@ -10,8 +10,8 @@
     {
       "name": "repo-setup",
       "source": "./plugins/repo-setup",
-      "description": "Repository setup through decision layers (5 stacks, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers. Stops at setup.",
-      "version": "0.4.0",
+      "description": "Repository setup through decision layers (5 app stacks and Claude Code plugin marketplaces, service-api / modular-monolith, MCP, container), ontology → types/API/agent tools, autonomy tiers. Stops at setup.",
+      "version": "0.5.0",
       "category": "development",
       "keywords": [
         "ai-native",

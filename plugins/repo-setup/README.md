@@ -32,7 +32,7 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 
 | Axis | Options |
 | --- | --- |
-| **Stack** | `ts-node`, `ts-api` (Fastify), `react-vite`, `python`, `fastapi` |
+| **Stack** | `ts-node`, `ts-api` (Fastify), `react-vite`, `python`, `fastapi`, `claude-plugin` (a Claude Code plugin marketplace) |
 | **Archetype** | `service-api`, `modular-monolith`, or none |
 | **Capability** | `ai` (tiers `call`, `workflow`, `agent`), `design` (React/Vite only), `mcp`, `github-agents` |
 | **Deploy** | `container` |
@@ -50,6 +50,28 @@ as `/orders/:id`, with a real address to visit); the sample screen sits at `/exa
 reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the fast loop. The data source's test
 hook (`?scenario=`) answers only in the unit tests and the browser checks' own build, never in
 `npm run build`; there it answers every request, so the checks never reach a real server.
+
+### Plugin marketplaces
+
+`--preset claude-plugin` is for a repository that ships Claude Code plugins. It is not an app, so it
+gets no `package.json`, type checker, linter config, `.env.example`, ontology or wiki. It gets a
+marketplace manifest, one sample plugin with a skill under `plugins/<name>/`, a manifest lint
+(`tools/plugin_lint.py`), a one-command version bump for every manifest and the changelog
+(`tools/bump_version.py`), shell tests, a `Makefile` (`setup`, `lint`, `test`, `check`, `validate`,
+`bump`), a pinned Node version and CI that runs the checks and `claude plugin validate`. Level
+`team` adds a workflow that publishes a GitHub Release for each version tag.
+
+- `detect.py` suggests it when a repo has `.claude-plugin/marketplace.json` or plugin manifests.
+- `--adopt` on an existing plugin repo adds only the shared basics. It never adds a sample plugin
+  or tests, and never touches existing manifests.
+- What does not fit this kind of repo is said, not hidden: `apply.py` lists it under
+  "not applicable", the decision layers record it with a reason (architecture, AI, domain,
+  design, delivery), and `doctor` lists those checks without scoring them.
+- `doctor` adds checks only plugin repos need: manifests parse and agree on names; versions agree
+  across manifests (or `--var plugin_versioning=independent`); no plugin uses the repository root
+  as its source; descriptions stay within 1024 characters; a bump tool, a changelog and a CI step
+  that validates manifests exist; with `--remote`, version tags have GitHub Releases.
+- No archetype, `ai`, `design`, `mcp` or deploy layer applies; `github-agents` does.
 
 ### AI in the product
 
@@ -70,7 +92,7 @@ This layer has not yet been run against a real Claude session.
 | --- | --- |
 | `/repo-setup:new` | A new repo, through the decision layers |
 | `/repo-setup:adopt` | A repo that already has code, in small safe steps |
-| `/repo-setup:doctor` | A 0-100 score (`--remote` also checks GitHub) |
+| `/repo-setup:doctor` | A 0-100 score for the repo's kind (`--remote` also checks GitHub) |
 | `/repo-setup:explain` | What a file or tool is, and why something was blocked |
 | `/repo-setup:github` | GitHub settings, and agents on GitHub if enabled |
 
@@ -81,7 +103,7 @@ agent loop and acceptance gates, use a separate tool such as
 ## Procedures generated into the repo
 
 These live in `.claude/skills/` of each generated repo, next to the tools they use, and work without
-this plugin:
+this plugin. A plugin marketplace gets `/review-change` only, written for plugins:
 
 | Command | Use it for |
 | --- | --- |
@@ -130,7 +152,8 @@ scripts/apply.py      composes layers: core, stack, archetype, capability, deplo
                       "+<file>/NN-part" builds a file from parts; mk/*.mk joins make check;
                       "[var=value]/" is a conditional folder; never overwrites; safe to re-run
 scripts/blueprint.py  reads and checks setup-blueprint.yaml
-scripts/doctor.py     scores against checklists/top-tier.toml
+scripts/doctor.py     scores against checklists/top-tier.toml, as the repo's kind (preset or detected)
+scripts/detect.py     says what a folder is and suggests a preset
 presets/ archetypes/ capabilities/ deploy/   each folder: preset.toml + starter/ + team/
 ```
 
@@ -151,5 +174,7 @@ python3 scripts/doctor.py --target ../shop --remote
   (a person must change it).
 - New stack, archetype, capability or deploy target: a folder with `preset.toml` (`extends`,
   `stacks`, `not_stacks`, `requires_level`, `when`, `capabilities`, `install`, `verify`), `starter/`
-  and `team/`.
+  and `team/`. A stack that is not an app declares what it leaves out of the shared core with
+  `[[not_applicable]]` (`what`, `reason`, `paths`); the checklist and `layers.toml` name the same
+  preset under `not_applicable`.
 - Release: `python3 tools/bump_version.py minor`.

@@ -13,6 +13,23 @@ import sys
 from pathlib import Path
 
 IGNORED = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".idea", ".vscode"}
+# The manifest reader a claude-plugin repository runs itself (tools/plugin_lint.py).
+PLUGIN_TOOLS = Path(__file__).resolve().parent.parent / "presets" / "claude-plugin" / "starter" / "tools"
+
+
+def plugin_marketplace(root: Path) -> dict | None:
+    """What a Claude Code plugin repository declares, or None when this is not one."""
+    sys.path.insert(0, str(PLUGIN_TOOLS))
+    import plugin_lint
+
+    if not plugin_lint.is_plugin_repo(root):
+        return None
+    market = plugin_lint.Marketplace(root)
+    return {
+        "marketplace": (market.data or {}).get("name"),
+        "has_marketplace_manifest": (root / plugin_lint.MARKETPLACE).is_file(),
+        "plugins": [p.name for p in market.plugins],
+    }
 
 
 def run(cmd: list[str], cwd: Path) -> str | None:
@@ -46,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         "rust": (root / "Cargo.toml").exists(),
         "java": any((root / f).exists() for f in ("pom.xml", "build.gradle", "build.gradle.kts")),
     }
+    plugins = plugin_marketplace(root) if root.exists() else None
+    signals["claude_plugin"] = plugins is not None
 
     def text(name: str) -> str:
         try:
@@ -54,7 +73,10 @@ def main(argv: list[str] | None = None) -> int:
             return ""
 
     suggested = None
-    if signals["node"] or signals["typescript"]:
+    # Plugin manifests say what the repository is for; a package.json next to them is tooling.
+    if plugins is not None:
+        suggested = "claude-plugin"
+    elif signals["node"] or signals["typescript"]:
         pkg = text("package.json")
         suggested = "react-vite" if '"react"' in pkg else "ts-api" if '"fastify"' in pkg else "ts-node"
     elif signals["python"]:
@@ -83,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         "signals": signals,
         "unsupported_stack": next((k for k in ("go", "rust", "java") if signals[k]), None),
         "suggested_preset": suggested,
+        "claude_plugin": plugins,
         "previous_setup": previous,
         "tools": {
             "git": tool_version("git"),

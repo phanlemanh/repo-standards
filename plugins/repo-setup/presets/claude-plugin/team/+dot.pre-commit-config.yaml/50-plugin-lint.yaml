@@ -1,0 +1,9 @@
+
+  - repo: local
+    hooks:
+      - id: plugin-lint
+        name: plugin manifests
+        entry: python3 tools/plugin_lint.py
+        language: system
+        pass_filenames: false
+        files: (^|/)\.claude-plugin/.*\.json$

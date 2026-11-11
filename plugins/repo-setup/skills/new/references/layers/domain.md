@@ -6,6 +6,8 @@
 
 **Only one sensible answer when:** the project has no real domain yet: say it can be added later with `/ontology-add`. Then say it in one line and move on.
 
+**Stack `claude-plugin`:** not applicable. A plugin marketplace has no business domain to model, so `ontology/` and `wiki/` are not generated; its glossary and decision records stay in its own docs. Say that in one line, record `status: not_applicable` with it as `why`, and move on.
+
 ## Options
 
 Offer two or three. Put anything the user already named on the list, even if you would not

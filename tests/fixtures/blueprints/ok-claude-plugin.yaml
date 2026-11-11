@@ -1,0 +1,47 @@
+version: 1
+status: approved
+depth: hand-over
+conversation_language: vi
+docs_language: en
+layers:
+  context:
+    status: decided
+    source: user
+    automation: automated
+    choice: {project_name: Sample Kit, description: "Plugins for a sample kit", owner: acme}
+    why: "Named by the user: a set of Claude Code plugins"
+  repo:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {license: MIT}
+    why: "One marketplace, one repo"
+  architecture:
+    status: not_applicable
+    why: "Archetypes structure an application. A plugin marketplace is one folder per plugin under plugins/."
+  ai:
+    status: not_applicable
+    why: "Plugins run inside Claude Code and call no model themselves."
+  stack:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {preset: claude-plugin}
+    why: "The repo ships Claude Code plugins"
+  domain:
+    status: not_applicable
+    why: "A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated."
+  design:
+    status: not_applicable
+    why: "A plugin marketplace has no screens: the design floor is for a web front end (react-vite)."
+  quality:
+    status: decided
+    source: proposed
+    automation: automated
+    choice: {level: starter}
+    why: "One maintainer"
+  delivery:
+    status: not_applicable
+    why: "Nothing is deployed: a plugin is delivered by its marketplace and a tagged release."
+  governance:
+    status: not_applicable

@@ -3,7 +3,11 @@
 
 Usage:
   doctor.py [--target DIR] [--level starter|team] [--json] [--min-score N]
-            [--checklist FILE]
+            [--checklist FILE] [--preset NAME]
+
+The repository is scored as its kind: the preset in .repo-setup.json, or `claude-plugin` when it
+has Claude Code plugin manifests. Checks that do not fit that kind are listed as not applicable,
+with the reason, and are not scored.
 
 Exit code is 1 when --min-score is given and the score is below it (useful in CI).
 Standard library only (Python 3.11+).
@@ -28,6 +32,9 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CHECKLIST = PLUGIN_ROOT / "checklists" / "top-tier.toml"
+PRESETS_DIR = PLUGIN_ROOT / "presets"
+# The manifest checks are the ones a claude-plugin repository runs itself (tools/plugin_lint.py).
+PLUGIN_TOOLS = PRESETS_DIR / "claude-plugin" / "starter" / "tools"
 LEVELS = ["starter", "team"]
 PRUNE = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build",
          ".mypy_cache", ".ruff_cache", ".pytest_cache", "coverage", ".next", ".turbo"}
@@ -91,6 +98,57 @@ class Repo:
         except (OSError, subprocess.SubprocessError):
             return []
         return [line for line in out.splitlines() if line.strip()]
+
+
+def plugin_lint():  # type: ignore[no-untyped-def]
+    if str(PLUGIN_TOOLS) not in sys.path:
+        sys.path.insert(0, str(PLUGIN_TOOLS))
+    import plugin_lint as module
+
+    return module
+
+
+def preset_chain(preset: str | None) -> set[str]:
+    """The preset and the presets it extends."""
+    chain: set[str] = set()
+    current = preset
+    while current and current not in chain:
+        chain.add(current)
+        try:
+            with (PRESETS_DIR / current / "preset.toml").open("rb") as fh:
+                current = tomllib.load(fh).get("extends")
+        except (OSError, tomllib.TOMLDecodeError):
+            break
+    return chain
+
+
+def repo_kind(root: Path, setup: dict, forced: str | None = None) -> tuple[str | None, str | None]:
+    """(preset, how we know): --preset, then .repo-setup.json, then what the files show."""
+    if forced:
+        return forced, "--preset"
+    if setup.get("preset"):
+        return str(setup["preset"]), ".repo-setup.json"
+    if plugin_lint().is_plugin_repo(root):
+        return "claude-plugin", "detected: Claude Code plugin manifests"
+    return None, None
+
+
+def not_applicable(repo: Repo, check: dict, chain: set[str]) -> str | None:
+    """The reason a check does not fit this kind of repository, or None when it applies.
+    `unless` lists files whose presence makes the check apply after all."""
+    for preset, rule in (check.get("not_applicable") or {}).items():
+        if preset not in chain:
+            continue
+        if isinstance(rule, str):
+            return rule
+        if not repo.match(rule.get("unless", [])):
+            return str(rule.get("reason", ""))
+    return None
+
+
+def summarise(problems: list[str], limit: int = 3) -> str:
+    more = len(problems) - limit
+    return "; ".join(problems[:limit]) + (f" (and {more} more)" if more > 0 else "")
 
 
 def eval_alternative(repo: Repo, alt: dict) -> tuple[bool, list[str]]:
@@ -180,6 +238,26 @@ class Remote:
             return "fail", ", ".join(f"{k}: {v}" for k, v in bad.items())
         return "pass", ", ".join(sorted(latest))
 
+    def releases_for_tags(self) -> tuple[str, str]:
+        """Version tags are published as GitHub Releases (the newest tag is the one checked)."""
+        try:
+            out = subprocess.run(["git", "tag", "--sort=-creatordate"], cwd=self.root,
+                                 capture_output=True, text=True, timeout=20, check=True).stdout
+        except (OSError, subprocess.SubprocessError):
+            return "skipped", "cannot list git tags"
+        tags = [line.strip() for line in out.splitlines() if line.strip()]
+        if not tags:
+            return "pass", "no tags yet"
+        ok, out = self._gh(["release", "list", "--limit", "100", "--json", "tagName"])
+        if not ok:
+            return "skipped", "cannot list GitHub Releases"
+        released = {r.get("tagName") for r in json.loads(out)}
+        if not released:
+            return "fail", f"{len(tags)} tag(s) and no GitHub Release"
+        if tags[0] not in released:
+            return "fail", f"the newest tag {tags[0]} has no GitHub Release"
+        return "pass", f"{tags[0]} is released"
+
 
 def blueprint_report(root: Path, setup: dict) -> dict[str, list[str]]:
     """Warnings from setup-blueprint.yaml. They never change the score."""
@@ -219,7 +297,11 @@ def skipped(check: dict, why: str) -> dict:
 
 
 def run_check(
-    repo: Repo, check: dict, remote: Remote | None = None, recorded: dict[str, str] | None = None
+    repo: Repo,
+    check: dict,
+    remote: Remote | None = None,
+    recorded: dict[str, str] | None = None,
+    chain: set[str] | None = None,
 ) -> dict:
     ctype = check.get("type", "exists")
     res = {k: check.get(k) for k in ("id", "level", "title", "why", "fix")}
@@ -235,6 +317,15 @@ def run_check(
             return res
         probe = getattr(remote, str(check.get("probe")))
         res["status"], res["detail"] = probe()
+        return res
+    if ctype == "plugin":
+        lint = plugin_lint()
+        probe = lint.PROBES[str(check.get("probe"))]
+        ok, problems = probe(lint.Marketplace(repo.root), **(check.get("params") or {}))
+        res["status"] = "skipped" if ok is None else "pass" if ok else "fail"
+        if problems:
+            res["detail"] = summarise(problems)
+            res["evidence"] = problems[:10]
         return res
     if ctype == "command":
         required = check.get("requires")
@@ -269,6 +360,9 @@ def run_check(
         res["evidence"] = tracked
         return res
     for alt in check.get("any", []):
+        # An alternative can be limited to some kinds of repository.
+        if "presets" in alt and not (chain or set()) & set(alt["presets"]):
+            continue
         ok, evidence = eval_alternative(repo, alt)
         if ok:
             res["status"] = "pass"
@@ -288,6 +382,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-score", type=int, default=None)
     ap.add_argument("--remote", action="store_true",
                     help="Also check GitHub (branch protection, CI status) with the gh CLI")
+    ap.add_argument("--preset", default=None,
+                    help="Score as this kind of repository (default: .repo-setup.json, else detected)")
     args = ap.parse_args(argv)
 
     root = Path(args.target).resolve()
@@ -311,6 +407,9 @@ def main(argv: list[str] | None = None) -> int:
     setup_vars = setup.get("vars") or {}
     if archetype == "service-api":
         caps.add("mcp")
+    preset, preset_source = repo_kind(root, setup, args.preset)
+    chain = preset_chain(preset)
+    repo = Repo(root)
 
     def applies(c: dict) -> bool:
         if c.get("level", "starter") not in allowed:
@@ -319,22 +418,29 @@ def main(argv: list[str] | None = None) -> int:
             return False
         if "capabilities" in c and not caps & set(c["capabilities"]):
             return False
-        if "presets" in c and setup.get("preset") not in c["presets"]:
+        if "presets" in c and not chain & set(c["presets"]):
             return False
         if any(setup_vars.get(k) != v for k, v in (c.get("vars") or {}).items()):
             return False
         return not ("deploy" in c and deploy not in c["deploy"])
 
-    checks = [c for c in checklist.get("check", []) if applies(c)]
+    checks, set_aside = [], []
+    for c in checklist.get("check", []):
+        if not applies(c):
+            continue
+        reason = not_applicable(repo, c, chain)
+        if reason is None:
+            checks.append(c)
+        else:
+            set_aside.append({"id": c.get("id"), "title": c.get("title"), "reason": reason})
 
-    repo = Repo(root)
     remote = Remote(root) if args.remote else None
     recorded = setup.get("files") or {}
 
     def evaluate(c: dict) -> dict:
         if setup.get("adopt") and c.get("skip_if_adopt"):
             return skipped(c, c["skip_if_adopt"])
-        res = run_check(repo, c, remote, recorded)
+        res = run_check(repo, c, remote, recorded, chain)
         # The files are there but the manifest dropped the capability: its checks are off.
         needed = c.get("needs_capability")
         if res["status"] == "pass" and needed and needed not in caps:
@@ -351,6 +457,8 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "target": str(root),
         "level": level,
+        "preset": preset,
+        "preset_source": preset_source,
         "score": score,
         # True when GitHub protection applies but was not verified: the score covers local files.
         "local_only": any(c.get("type") == "remote" for c in checks)
@@ -359,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
         "failed": sorted([r for r in results if r["status"] == "fail"], key=lambda r: -r["weight"]),
         "manual": [r for r in results if r["status"] == "manual"],
         "skipped": [r for r in results if r["status"] == "skipped"],
+        # Checks that do not fit this kind of repository: listed with the reason, never scored.
+        "not_applicable": set_aside,
         **blueprint_report(root, setup),
     }
 
@@ -367,7 +477,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         bar = "#" * (score // 5) + "-" * (20 - score // 5)
         print(f"Repo health ({level}): {score}/100  [{bar}]")
-        print(f"Passed {len(report['passed'])}/{len(scored)} scored checks\n")
+        print(f"Passed {len(report['passed'])}/{len(scored)} scored checks")
+        if preset and (set_aside or preset_source != ".repo-setup.json"):
+            print(f"Scored as: {preset} ({preset_source})")
+        print()
         if report["local_only"]:
             print("GitHub protection was not checked: this score covers local files only, and "
                   "the agent rules are only enforced by GitHub. Verify with --remote.\n")
@@ -391,6 +504,10 @@ def main(argv: list[str] | None = None) -> int:
             print("\nManual steps from setup-blueprint.yaml (not scored):")
             for line in report["manual_steps"]:
                 print(f"  [ ] {line}")
+        if set_aside:
+            print(f"\nNot applicable to a {preset} repository (not scored):")
+            for item in set_aside:
+                print(f"  - {item['title']}: {item['reason']}")
         if report["skipped"]:
             print("\nSkipped: " + ", ".join(f"{r['id']} ({r.get('detail', '')})" for r in report["skipped"]))
 

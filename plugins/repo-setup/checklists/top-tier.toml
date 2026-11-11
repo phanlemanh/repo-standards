@@ -7,10 +7,16 @@
 #   title    what good looks like
 #   why      one line: why top teams do this
 #   fix      how to fix (a repo-setup command or a manual step)
-#   type     "exists" (default) | "not_committed" | "manual"
+#   type     "exists" (default) | "not_committed" | "manual" | "command" | "remote" | "plugin"
 #   any      list of alternatives; the check passes if ANY alternative matches.
 #            Alternative fields: paths (globs, relative to repo root),
-#            pattern (regex searched in the matched files), min_lines.
+#            pattern (regex searched in the matched files), min_lines,
+#            presets (the alternative counts only for these kinds of repository).
+#   presets  the check exists only for these kinds of repository (the preset in
+#            .repo-setup.json, or the kind doctor detects).
+#   [check.not_applicable.<preset>]
+#            the check does not fit that kind: `reason` is shown to the user and the check is
+#            not scored. `unless` lists files whose presence makes it apply after all.
 #
 # Edit this file to encode YOUR team's standard. Doctor picks changes up immediately.
 
@@ -77,6 +83,9 @@ title = "Dependency lockfile committed"
 why = "Reproducible installs; no surprise upgrades."
 fix = "Run the preset install command (npm install / uv sync) and commit the lockfile."
 any = [{ paths = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock", "Cargo.lock", "go.sum"] }]
+[check.not_applicable.claude-plugin]
+reason = "No dependency manifest at the root: plugins ship Markdown and standard-library scripts, so there is nothing to lock."
+unless = ["package.json", "pyproject.toml", "requirements.txt", "Pipfile", "go.mod", "Cargo.toml"]
 
 [[check]]
 id = "task_runner"
@@ -104,6 +113,9 @@ any = [
   { paths = ["pyproject.toml"], pattern = '\[tool\.ruff' },
   { paths = [".golangci.yml", ".golangci.yaml"] },
 ]
+[check.not_applicable.claude-plugin]
+reason = "No application code at the root to format or lint: for a plugin repository the lint step is the manifest check, which is scored on its own."
+unless = ["package.json", "pyproject.toml"]
 
 [[check]]
 id = "type_check"
@@ -118,6 +130,9 @@ any = [
   { paths = ["mypy.ini", "pyrightconfig.json"] },
   { paths = ["go.mod"] },
 ]
+[check.not_applicable.claude-plugin]
+reason = "No typed application code at the root: skills are Markdown and the scripts use only the standard library."
+unless = ["tsconfig.json", "pyproject.toml"]
 
 [[check]]
 id = "tests"
@@ -130,6 +145,7 @@ any = [
   { paths = ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.test.js"] },
   { paths = ["**/test_*.py", "**/*_test.py"] },
   { paths = ["**/*_test.go"] },
+  { paths = ["tests/**/*.sh", "**/*.bats", "**/*.test.mjs", "**/*.test.cjs"], presets = ["claude-plugin"] },
 ]
 
 [[check]]
@@ -152,6 +168,8 @@ title = ".env.example documents required configuration"
 why = "New machines know which variables to set, without sharing secrets."
 fix = "Add .env.example with every variable and a dummy value."
 any = [{ paths = [".env.example", ".env.sample", ".env.template"] }]
+[check.not_applicable.claude-plugin]
+reason = "Plugins read no environment configuration of their own, so there is nothing to document."
 
 [[check]]
 id = "env_not_committed"
@@ -190,6 +208,8 @@ title = "Domain ontology: glossary + entity definitions"
 why = "One shared meaning for business concepts, for people, code and agents."
 fix = "Add ontology/glossary.md and ontology/entities/*.yaml (/repo-setup:new creates the skeleton)."
 any = [{ paths = ["ontology/glossary.md"] }]
+[check.not_applicable.claude-plugin]
+reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
 
 [[check]]
 id = "wiki"
@@ -202,6 +222,8 @@ any = [
   { paths = ["wiki/index.md"] },
   { paths = ["docs/adr/*.md", "docs/decisions/*.md"] },
 ]
+[check.not_applicable.claude-plugin]
+reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
 
 [[check]]
 id = "ontology_wiki_valid"
@@ -213,6 +235,8 @@ requires = "tools/wiki_lint.py"
 title = "ontology/ and wiki/ are consistent (wiki-lint passes)"
 why = "A wrong map is worse than no map: broken links and unknown entities mislead agents."
 fix = "Run: python3 tools/wiki_lint.py and fix the errors (or run /repo-setup:new to add the tool)."
+[check.not_applicable.claude-plugin]
+reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
 
 [[check]]
 id = "ontology_in_check"
@@ -222,6 +246,8 @@ title = "make check runs wiki-lint and verifies generated code"
 why = "CI keeps the ontology, the wiki and the generated types in sync automatically."
 fix = "Add an 'ontology' target (wiki_lint.py + ontology_codegen.py --check) to make check."
 any = [{ paths = ["Makefile", "justfile"], pattern = 'wiki_lint' }]
+[check.not_applicable.claude-plugin]
+reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
 
 # ---------------------------------------------------------------- team: collaboration & security
 [[check]]
@@ -273,6 +299,9 @@ any = [
   { paths = [".coveragerc", "pyproject.toml", "setup.cfg", "tox.ini"], pattern = 'fail_under' },
   { paths = [".nycrc", ".nycrc.json", ".c8rc.json"], pattern = '(?i)lines|check-coverage' },
 ]
+[check.not_applicable.claude-plugin]
+reason = "Shell and Markdown-driven test suites have no line coverage to measure."
+unless = ["package.json", "pyproject.toml"]
 
 [[check]]
 id = "conventional_commits"
@@ -351,6 +380,7 @@ fix = "Add CHANGELOG.md and a release-please workflow."
 any = [
   { paths = [".github/workflows/*.yml"], pattern = '(?i)release-please|semantic-release|changesets' },
   { paths = [".changeset/config.json", ".releaserc", ".releaserc.*"] },
+  { paths = [".github/workflows/*.yml", ".github/workflows/*.yaml"], pattern = 'gh release create|action-gh-release', presets = ["claude-plugin"] },
 ]
 
 # ---------------------------------------------------------------- AI-native SDLC
@@ -557,6 +587,103 @@ why = "Without a floor, every screen an agent builds drifts a little further fro
 fix = "Run: python3 <plugin>/scripts/apply.py --target . --with design"
 skip_if_adopt = "not applicable: adopt does not support the design capability yet"
 needs_capability = "design"
+
+# ---------------------------------------------------------------- Claude Code plugin marketplaces
+# These exist only for repositories that ship plugins (preset claude-plugin, or detected from
+# .claude-plugin/ manifests). Type "plugin" runs a probe of tools/plugin_lint.py.
+[[check]]
+id = "plugin_manifests"
+level = "starter"
+weight = 3
+presets = ["claude-plugin"]
+type = "plugin"
+probe = "manifests"
+title = "Marketplace and plugin manifests are valid and agree on names"
+why = "A manifest that does not parse, or a plugin listed under another name, cannot be installed, and the person installing only sees 'not found'."
+fix = "Run python3 tools/plugin_lint.py (the claude-plugin preset adds it) and fix what it lists."
+
+[[check]]
+id = "plugin_versions"
+level = "starter"
+weight = 2
+presets = ["claude-plugin"]
+type = "plugin"
+probe = "versions"
+title = "Plugin versions are consistent across manifests"
+why = "Claude Code decides whether to update from the version: two files that disagree mean some people never get the new release."
+fix = "Bump with python3 tools/bump_version.py so every manifest changes together. Plugins released on their own schedule: declare it with --var plugin_versioning=independent (\"vars\" in .repo-setup.json)."
+
+[[check]]
+id = "plugin_source_not_root"
+level = "starter"
+weight = 3
+presets = ["claude-plugin"]
+type = "plugin"
+probe = "sources"
+title = "No plugin uses the repository root as its source"
+why = "An install copies the whole source folder into every user's plugin cache, once per version: with the root as source that means tests, docs and every other plugin too."
+fix = "Move the plugin into its own folder (plugins/<name>/) and point its marketplace source there."
+
+[[check]]
+id = "plugin_description_short"
+level = "starter"
+weight = 2
+presets = ["claude-plugin"]
+type = "plugin"
+probe = "descriptions"
+# 1024 is the cap Claude Code puts on a skill description, and all but one of the 317 entries
+# in the official marketplace fit under it (median 181, measured 2026-11).
+params = { max_chars = 1024 }
+title = "Plugin and marketplace descriptions are short (at most 1024 characters)"
+why = "The description is what people and Claude read to decide whether to install or use a plugin; a changelog pasted into it buries that and is loaded again and again."
+fix = "Say what the plugin is for in one or two sentences and move the history to CHANGELOG.md."
+
+[[check]]
+id = "plugin_bump_tool"
+level = "starter"
+weight = 2
+presets = ["claude-plugin"]
+title = "One command bumps the version in every manifest"
+why = "A version written in several files and edited by hand drifts; one command keeps them the same and dates the changelog."
+fix = "Add tools/bump_version.py from the claude-plugin preset (/repo-setup:adopt)."
+any = [
+  { paths = ["tools/bump*", "scripts/bump*", "bin/bump*", "tools/release*", "scripts/release*"] },
+  { paths = ["Makefile", "makefile", "justfile", "Justfile"], pattern = '(?m)^(bump|release)\b' },
+  { paths = ["release-please-config.json"], pattern = 'plugin\.json' },
+]
+
+[[check]]
+id = "plugin_ci_validates"
+level = "starter"
+weight = 2
+presets = ["claude-plugin"]
+title = "CI validates the plugin manifests"
+why = "A broken manifest reaches users with the next push unless CI stops it; tests of the scripts do not read the manifests."
+fix = "Add a CI step that runs `claude plugin validate .` (and tools/plugin_lint.py), as in the preset's ci.yml."
+any = [
+  { paths = [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml"], pattern = '(?m)^[^#\n]*(plugin validate|plugin_lint\.py|make validate)' },
+]
+
+[[check]]
+id = "plugin_changelog"
+level = "starter"
+weight = 1
+presets = ["claude-plugin"]
+title = "A changelog says what changed in each version"
+why = "People who install a plugin need to know what an update brings; a changelog also keeps release notes out of the description."
+fix = "Add CHANGELOG.md with a section per version (tools/bump_version.py maintains it)."
+any = [{ paths = ["CHANGELOG.md", "CHANGELOG", "CHANGELOG.*", "HISTORY.md", "CHANGES.md"], min_lines = 3 }]
+
+[[check]]
+id = "plugin_releases"
+level = "team"
+weight = 1
+presets = ["claude-plugin"]
+type = "remote"
+probe = "releases_for_tags"
+title = "Version tags are published as GitHub Releases"
+why = "A tag alone tells nobody what changed; a Release is where people look and what tools announce."
+fix = "Add .github/workflows/release.yml from the claude-plugin team preset, or: gh release create <tag> --notes-file <notes>."
 
 # ---------------------------------------------------------------- GitHub (scored with --remote, otherwise reminders)
 [[check]]

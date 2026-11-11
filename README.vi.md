@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Marketplace này chứa một plugin là **repo-setup**. Plugin dựng, chuẩn hoá và kiểm tra repo theo từng tầng quyết định, dùng được cho cả người mới giao hết cho Claude lẫn người chuyên nghiệp đã có sẵn lựa chọn. Ontology sinh ra types, API contract và tool cho agent; mỗi repo có wiki và quy trình cho agent của riêng nó. Plugin dừng ở việc setup: muốn làm tính năng theo vòng có agent và cổng nghiệm thu, hãy dùng công cụ riêng như [Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit). Chi tiết: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
+Marketplace này chứa một plugin là **repo-setup**. Plugin dựng, chuẩn hoá và kiểm tra repo theo từng tầng quyết định, dùng được cho cả người mới giao hết cho Claude lẫn người chuyên nghiệp đã có sẵn lựa chọn. Ontology sinh ra types, API contract và tool cho agent; mỗi repo có wiki và quy trình cho agent của riêng nó. Repo chứa plugin cho Claude Code là một loại riêng (`claude-plugin`): được dựng manifest, một plugin mẫu, công cụ kiểm manifest và công cụ nâng phiên bản thay cho bộ công cụ của ứng dụng, và được chấm bằng các mục dành riêng cho repo plugin. Plugin dừng ở việc setup: muốn làm tính năng theo vòng có agent và cổng nghiệm thu, hãy dùng công cụ riêng như [Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit). Chi tiết: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
 
 ## Cài đặt
 

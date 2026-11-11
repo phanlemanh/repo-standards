@@ -1,0 +1,51 @@
+# {{project_name}} — guide for AI coding agents
+
+{{description}}
+
+Stack: {{stack}}
+
+## Commands (always use these, never ad-hoc tool invocations)
+
+- `make setup` — check that the tools this repo needs are present (nothing is installed)
+- `make lint` — check the marketplace and plugin manifests (`tools/plugin_lint.py`)
+- `make test` — run the tests (`tests/run.sh`)
+- `make check` — everything CI runs offline. **Run it before you say a task is done.**
+- `make validate` — the official Claude Code validator (needs network; CI runs it)
+- `make bump V=patch|minor|major` — set the next version in every manifest and the changelog
+
+## Before you change a plugin
+
+1. Read `.claude-plugin/marketplace.json` to see which plugins exist and where they live.
+2. Read the plugin's own `README.md` and the skill, command or hook you are about to change.
+3. Try the result from this checkout: `claude --plugin-dir plugins/<name>`.
+
+## Rules
+
+- One folder per plugin under `plugins/<name>/`, each with `.claude-plugin/plugin.json`. A plugin's
+  `source` in the marketplace is never the repository root: an install copies the whole source folder.
+- A skill is `skills/<name>/SKILL.md`, and `name` in its front matter equals the folder name.
+- Keep every `description` short (at most 1024 characters): it says what the plugin or skill is for
+  and when to use it. Release notes go in `CHANGELOG.md`, never in a description.
+- Never edit a version by hand. `make bump` changes every manifest together.
+- Scripts and hooks run on other people's machines: standard library only, no network call and no
+  write outside the project unless the skill says so and the user can see it.
+- Every behaviour change comes with a test and a line under "Unreleased" in `CHANGELOG.md`.
+- Never commit secrets or `.env`.
+- Keep changes small and focused; one concern per PR.
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+
+## After you finish a task
+
+- `make check` is green.
+- `CHANGELOG.md` has a line for the change, written for the people who install the plugin.
+- A significant choice (a new plugin, a changed contract between plugins, a dropped feature) gets a
+  short record in `docs/decisions/NNNN-title.md`: context, decision, consequences.
+
+## Project map
+
+- `.claude-plugin/marketplace.json` — the list of plugins this repository offers
+- `plugins/<name>/` — one plugin: manifest, skills, and its own README
+- `tests/` — offline tests
+- `tools/` — manifest lint and version bump (run through `make`)
+- `docs/decisions/` — decision records, when there are any
+- `.claude/skills/` — procedures for agents working on this repository (independent review)

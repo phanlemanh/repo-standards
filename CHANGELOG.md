@@ -36,6 +36,9 @@
   there it answers every request (`ready` when no scenario is named), so the checks never reach a
   real server. The restyle guard's message no longer sends the builder into `src/components/ui`.
   At `team` level the sample is left out of coverage.
+- A plugin marketplace (`claude-plugin`) has no screens: the `design` layer is recorded as not
+  applicable with its reason, next to architecture, AI, domain and delivery, and `apply.py` refuses
+  the `design` capability there.
 
 ### TypeScript presets
 - TypeScript presets (ts-node, ts-api, react-vite): check steps run quietly; a failing step prints its
@@ -52,6 +55,64 @@
   run code in the job that sets the risk tier.
 
 Re-apply to get these. The reviewer and its inline comments have not yet run on GitHub.
+
+## 0.5.0 — 2026-11-11
+
+### Plugin marketplaces
+- New stack preset `claude-plugin` for repositories that ship Claude Code plugins: a marketplace
+  manifest, one sample plugin with a skill, `tools/plugin_lint.py`, `tools/bump_version.py` (every
+  manifest and the changelog in one command), shell tests, a `Makefile`, a pinned Node version and
+  CI that runs `make check` and `claude plugin validate`. No `package.json`, type checker, linter
+  config, `.env.example`, ontology or wiki. Level `team` publishes a GitHub Release per version tag.
+- `detect.py` suggests `claude-plugin` when it finds plugin manifests, and lists the plugins.
+- `doctor` scores a repo as its kind: the preset in `.repo-setup.json`, plugin manifests it
+  detects, or `--preset`. Checks that do not fit are listed under "not applicable" with the reason
+  and are not scored. For a plugin marketplace these are the lockfile, formatter and linter, strict
+  types, `.env.example`, ontology, wiki and coverage threshold; the first three apply again when
+  the root has a `package.json`, `pyproject.toml` or `tsconfig.json`.
+- New checks for plugin repos: manifests parse and agree on names; versions agree across manifests,
+  unless `--var plugin_versioning=independent`; no plugin uses the repository root as its source;
+  descriptions stay within 1024 characters; a bump tool, a changelog and a CI step that validates
+  manifests exist; with `--remote`, version tags have GitHub Releases.
+- The layers architecture, AI, domain and delivery are recorded as not applicable for this stack,
+  each with a reason; `blueprint.py not-applicable <preset>` lists them and `check` rejects a
+  blueprint that would build one.
+- `apply.py` reports `not_applicable` (what a preset leaves out of the shared core, and why).
+
+### Changes
+- `--adopt`: a file of the repo's own at a sample path (for example `tests/run.sh`) is now listed
+  as skipped, no longer as a conflict. Nothing is written in either case.
+- A repository with plugin manifests and no `.repo-setup.json` is now scored as `claude-plugin`.
+  Its score changes; pass `--preset <name>` to score it as something else.
+
+### Fixes
+- `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its
+  run failed and low-tier auto-merge never happened. A custom bot in `AGENT_AUTHORS` must also be
+  added to `allowed_bots`.
+- The reviewer no longer runs PR code in a job that holds tokens: no dependency install, no `make`,
+  no MCP servers from the repo. It reads test results from `gh pr checks`.
+- The gate keeps its base-branch rules in `$RUNNER_TEMP`, so a PR cannot plant `.gate/yaml.py` and
+  run code in the job that sets the risk tier.
+
+Re-apply to get these. The reviewer and its inline comments have not yet run on GitHub.
+
+- `tools/boundaries.py` (`modular-monolith`): `@/` imports were never checked and `src/app` was
+  never scanned, so a Next.js repo could bypass every module boundary. Both now follow the same
+  rules as relative imports. `server` is a second public entry next to `index`, and a
+  `"use client"` file may not import one. These apply to every TypeScript repo: the client rule
+  does nothing without the directive, and `server` only makes one exact filename public.
+
+Re-applying does not replace a vendored tool: copy this file into an existing repo by hand, and
+expect it to report violations that were hidden before.
+
+### Verified
+- Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI on the
+  pull request that added the `claude-plugin` preset. Run by hand on an existing marketplace
+  repository with six plugins: detection, `doctor`, `--adopt --dry-run`, which left the
+  repository unchanged, and `--adopt` on a copy, which added six paths, merged lines into two
+  files and overwrote or deleted none; `doctor` on that copy went from 9 to 14 of 20 scored checks.
+- Not yet run: the `team` level's release workflow on GitHub, and the setup skills in a live
+  Claude Code session on a plugin repository.
 
 ## 0.4.0 — 2026-11-05
 

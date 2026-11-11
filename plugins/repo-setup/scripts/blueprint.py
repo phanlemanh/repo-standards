@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Read and check setup-blueprint.yaml, the record of the decisions taken during setup.
 
-  blueprint.py check FILE        print problems, exit 1 if there are any
-  blueprint.py dependents LAYER  layers to look at again when LAYER changes
+  blueprint.py check FILE             print problems, exit 1 if there are any
+  blueprint.py dependents LAYER       layers to look at again when LAYER changes
+  blueprint.py not-applicable PRESET  layers that do not apply to that stack, with the reason
 
 The blueprint records one setup session. Afterwards .repo-setup.json is the truth about what was
 applied: changing a decision later is manual work, because apply.py only ever adds files.
@@ -77,6 +78,21 @@ def _layers() -> list[dict[str, Any]]:
 LAYERS: tuple[str, ...] = tuple(str(layer["id"]) for layer in _layers())
 
 
+def not_applicable(preset: str | None) -> dict[str, str]:
+    """Layers that do not apply to a stack preset, with the reason to show the user."""
+    return {
+        str(layer["id"]): str(layer["not_applicable"][preset])
+        for layer in _layers()
+        if preset and preset in (layer.get("not_applicable") or {})
+    }
+
+
+def _preset(layers: dict[str, Any]) -> str | None:
+    stack = layers.get("stack")
+    choice = stack.get("choice") if isinstance(stack, dict) else None
+    return choice.get("preset") if isinstance(choice, dict) else None
+
+
 def load(path: Path) -> dict[str, Any]:
     sys.path.insert(0, str(CORE_TOOLS))
     from repo_ontology import load_yaml_file
@@ -94,6 +110,7 @@ def errors(bp: dict[str, Any]) -> list[str]:
     layers = bp.get("layers")
     if not isinstance(layers, dict):
         return [*problems, "layers must be a mapping"]
+    skip = not_applicable(_preset(layers))
     for name, layer in layers.items():
         if name not in LAYERS:
             problems.append(f"unknown layer: {name}")
@@ -114,6 +131,13 @@ def errors(bp: dict[str, Any]) -> list[str]:
             problems += _ai_errors(layer)
         if name == "design":
             problems += _design_errors(layer, bp)
+        # Nothing may be built for a layer that does not apply to the chosen stack. A `manual`
+        # note is fine: it is only recorded.
+        if name in skip and layer.get("status") == "decided" and layer.get("automation") != "manual":
+            problems.append(
+                f"{name}: not applicable with preset {_preset(layers)} ({skip[name]}) "
+                "Set status: not_applicable and give this reason as why."
+            )
     return problems
 
 
@@ -227,6 +251,10 @@ def to_apply_args(bp: dict[str, Any]) -> list[str]:
     for key in ("brand_primary", "locale", "currency"):
         if design.get(key):
             variables[key] = design[key]
+    # Stack claude-plugin: the sample plugin's name, and whether plugins share one version.
+    for key in ("plugin_name", "plugin_versioning"):
+        if (c.get("stack") or {}).get(key):
+            variables[key] = c["stack"][key]
     for key, value in variables.items():
         args += ["--var", f"{key}={value}"]
     return args
@@ -277,6 +305,10 @@ def main(argv: list[str]) -> int:
         return 1 if problems else 0
     if len(argv) == 2 and argv[0] == "dependents":
         print(" ".join(dependents(argv[1])))
+        return 0
+    if len(argv) == 2 and argv[0] == "not-applicable":
+        for name, reason in not_applicable(argv[1]).items():
+            print(f"{name}: {reason}")
         return 0
     print(__doc__)
     return 2

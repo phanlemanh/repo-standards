@@ -5,7 +5,9 @@
 This marketplace holds one plugin, **repo-setup**. It sets up, adopts and audits repositories
 through decision layers, for newcomers who hand everything to Claude and for professionals who bring
 their own choices. An ontology generates types, the API contract and agent tools, and each repo gets
-its own wiki and agent procedures. It stops at setup: to build features with an agent loop and
+its own wiki and agent procedures. A repository that ships Claude Code plugins is its own kind
+(`claude-plugin`): it gets manifests, a sample plugin, a manifest lint and a version bump instead
+of app tooling, and is scored by checks made for plugin repos. It stops at setup: to build features with an agent loop and
 acceptance gates, use a separate tool such as
 [Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit). Details: [plugins/repo-setup/README.md](plugins/repo-setup/README.md).
 

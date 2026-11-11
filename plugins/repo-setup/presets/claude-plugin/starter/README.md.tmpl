@@ -1,0 +1,63 @@
+# {{project_name}}
+
+{{description}}
+
+A Claude Code plugin marketplace. Each plugin lives in its own folder under `plugins/`.
+
+## Install
+
+In Claude Code, with the address of this repository:
+
+```
+/plugin marketplace add <owner>/<repo>
+/plugin install {{plugin_name}}@{{slug}}
+```
+
+## Develop
+
+Prerequisites: {{runtime}}, `make`, `git`.
+
+```bash
+git clone <this-repo-url>
+cd {{slug}}
+make setup     # checks the tools; there is nothing to install
+make check     # manifest lint + tests — should be green
+claude --plugin-dir plugins/{{plugin_name}}   # try a plugin from this checkout
+```
+
+## Everyday commands
+
+| Command               | What it does                                               |
+| --------------------- | ---------------------------------------------------------- |
+| `make lint`           | Check the marketplace and plugin manifests                 |
+| `make test`           | Run the tests                                              |
+| `make check`          | Everything CI runs offline — run before every PR           |
+| `make validate`       | The official Claude Code validator (needs network)         |
+| `make bump V=minor`   | Next version in every manifest, and a CHANGELOG section    |
+
+## Project map
+
+| Path                              | Purpose                                             |
+| --------------------------------- | --------------------------------------------------- |
+| `.claude-plugin/marketplace.json` | The plugins this repository offers                  |
+| `plugins/<name>/`                 | One plugin: manifest, skills, README                |
+| `tests/`                          | Offline tests                                       |
+| `tools/`                          | Manifest lint and version bump                      |
+| `CHANGELOG.md`                    | What changed in each version                        |
+| `CLAUDE.md`                       | Onboarding guide for AI coding agents               |
+
+## Release
+
+```bash
+make bump V=minor          # or patch / major
+git commit -am "chore(release): <version>" && git tag v<version>
+git push --follow-tags
+```
+
+## Stack
+
+{{stack}}
+
+## License
+
+See [LICENSE](LICENSE).

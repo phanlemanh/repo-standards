@@ -5,7 +5,9 @@ Keep the file name in English. Sections:
 
 1. **Where things stand**: one or two sentences, including that a scaffold is not a finished
    product. Say what the sample code does.
-2. **Three everyday commands**: `make dev`, `make format`, `make check`.
+2. **Three everyday commands**: `make dev`, `make format`, `make check`. For a plugin marketplace
+   (`claude-plugin`): `make check`, `make validate`, `make bump V=minor`, and how to try a plugin
+   with `claude --plugin-dir plugins/<name>`.
 3. **What is in the repo**: a table of path, what it is, what you need to do. Group paths and list
    only what exists. With the `design` capability, introduce `src/example` as the sample screen the
    AI will copy when it builds new screens (open `/example` under `make dev`; `/` is left for the

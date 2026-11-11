@@ -6,6 +6,8 @@
 
 **Only one sensible answer when:** the user said the product has no AI. Then say it in one line and move on.
 
+**Stack `claude-plugin`:** not applicable. This layer scaffolds an app that calls a model through the SDK; plugins run inside Claude Code and call no model themselves. Say that in one line, record `status: not_applicable` with it as `why`, and move on.
+
 ## Options
 
 Offer two or three. Put anything the user already named on the list, even if you would not
