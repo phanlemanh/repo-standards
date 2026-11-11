@@ -9,12 +9,15 @@
   (`design_present` and related checks).
 - A `react-vite` repo built before this will fail `design_present` until you turn on the `design`
   capability. Turning it on there (`apply.py --with design`): if you edited `src/App.tsx`,
-  `vite.config.ts` or `eslint.config.js`, they show as conflicts and are left alone (`--diff` shows
-  why); your own `src/index.css` is kept, with a note, and its design tokens must be merged by hand.
+  `tests/App.test.tsx`, `vite.config.ts` or `eslint.config.js`, they show as conflicts and are left
+  alone (`--diff` shows why); a kept `tests/App.test.tsx` costs the `design_guards_bite` points
+  until you take the plugin's copy. Your own `src/index.css` is kept, with a note, and its design
+  tokens must be merged by hand.
 - `adopt` does not support the `design` capability yet: `apply.py` refuses it in adopt mode, and
   `doctor` reports `design_present` as not applicable there.
-- `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` are owned by the plugin:
-  change them in the plugin and re-apply; a local edit costs the `design_guards_bite` points.
+- `tools/design_guards.mjs`, `mk/design.mk`, `tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and
+  `tests/e2e/routes.ts` are owned by the plugin: change them in the plugin and re-apply; a local
+  edit costs the `design_guards_bite` points.
 - Cheaper for the builder: screens and states are registered once in `src/screens.ts`; the `ui`
   skill is folded into `.claude/rules/ui.md` (delete `.claude/skills/ui/` in older repos by hand);
   `make check` prints one short result per step and the full output of a failing one; the
@@ -24,17 +27,20 @@
   `?scenario=`; `src/screens.ts` lists, per state, the scenario, the user's steps and the text shown.
 - Less for the builder to read and wire: a screen in `src/screens.ts` may have a path with parts
   (`/orders/:id`) plus `visit`, the real address the checks open, and receives the parts as
-  `params`. `tests/App.test.tsx` is now a short generic walk over that list and, with
-  `tests/e2e/routes.ts`, is owned by the plugin (a local edit costs the `design_guards_bite`
-  points). The sample screen moved to `/example`; an unknown or malformed address shows a not-found
-  page that links to every registered screen (the browser checks visit it too) instead of the sample. The `?scenario=` test hook answers only in unit tests and in the browser checks'
-  own build (`vite build --mode floor` into `coverage/floor`), never in `npm run build`. The
-  restyle guard's message no longer sends the builder into `src/components/ui`. At `team` level the
-  sample is left out of coverage.
+  `params`; a fixed path wins over a path with parts, whatever the order. `tests/App.test.tsx` is
+  now a short generic walk over that list that waits for each state. The sample screen moved to
+  `/example`; an unknown or malformed address shows a not-found page, and a screen whose code fails
+  to load shows an error page, both with links to every registered screen (the browser checks visit
+  the not-found page too). The `?scenario=` test hook answers only in unit tests and in the browser
+  checks' own build (`vite build --mode floor` into `coverage/floor`), never in `npm run build`;
+  there it answers every request (`ready` when no scenario is named), so the checks never reach a
+  real server. The restyle guard's message no longer sends the builder into `src/components/ui`.
+  At `team` level the sample is left out of coverage.
 
 ### TypeScript presets
 - TypeScript presets (ts-node, ts-api, react-vite): check steps run quietly; a failing step prints its
-  full report; `make check` ends with one line.
+  full report; `make check` ends with one line. At `team`, a passing coverage run still prints its
+  table, except with the `design` capability.
 
 ### Fixes
 - `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its

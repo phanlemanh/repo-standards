@@ -763,6 +763,8 @@ ref_red() { # <file> <replacement content> <expected text>
   cp "$TMP/ref.bak" "$d/$1"
 }
 ref_red src/screens.ts 'export const SCREENS = [];' "src/screens.ts lists no screen path starting with /"
+ref_red src/screens.ts $'// A path may name parts (`/orders/:id`), visit `/orders/1`.\nexport const SCREENS = [];' \
+  "src/screens.ts lists no screen path starting with /"
 ref_red tests/e2e/routes.ts 'export const ROUTES = ["/"];' "tests/e2e/routes.ts does not take its routes from src/screens.ts"
 # 31g. one page for the builder: the rule holds the component steps and the traps, the skill is gone
 [ ! -e "$d/.claude/skills/ui" ] || miss "design: the ui skill is still generated"
@@ -781,7 +783,10 @@ for d in "$TMP/design-plain" "$TMP/design-content"; do
     grep -qF "$s" "$d/src/example/data.ts" || miss "design: $d/src/example/data.ts lacks $s"
   done
   # The test hook sits at the top of each request, apart from the request itself.
-  [ "$(grep -c '^  if (test) return test;$' "$d/src/example/data.ts")" -eq 2 ] || miss "design: $d data.ts test hook not at the top of list and delete"
+  [ "$(grep -c '^  if (test) return test;$' "$d/src/example/data.ts")" -eq 3 ] || miss "design: $d data.ts test hook not at the top of list, delete and create"
+  # In the checks the hook also answers the normal path, so a real request never runs there.
+  grep -q 'ready: items' "$d/src/example/data.ts" && grep -q '?? "ready"' "$d/src/example/data.ts" \
+    || miss "design: $d data.ts hook does not answer the normal path in the checks"
   grep -q 'replace each function body' "$d/src/example/data.ts" && miss "design: $d data.ts tells the builder to delete the test hook"
   # The hook answers only in the checks' builds; nothing else in the source depends on the mode.
   grep -qF 'if (import.meta.env.MODE !== "test" && import.meta.env.MODE !== "floor") return null;' "$d/src/example/data.ts" \
@@ -789,7 +794,8 @@ for d in "$TMP/design-plain" "$TMP/design-content"; do
   [ "$(grep -c 'MODE' "$d/src/example/data.ts")" -eq 1 ] || miss "design: $d data.ts has a test-only branch besides the hook"
   grep -q 'onAction={addFirst}' "$f" && grep -q 'open={asking}' "$f" || miss "design: $f empty action does not add, or the dialog loses its item while closing"
 done
-grep -q 'useFakeTimers' "$TMP/design-team/tests/App.test.tsx" || miss "design: unit tests wait for real time"
+grep -q 'findAllByText(shows)' "$TMP/design-team/tests/App.test.tsx" && grep -q 'findByRole("button"' "$TMP/design-team/tests/App.test.tsx" \
+  || miss "design: the unit walk does not wait for each step and state"
 d="$TMP/design-team"
 grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/screens.ts" \
   && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"

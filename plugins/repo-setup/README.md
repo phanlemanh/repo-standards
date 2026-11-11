@@ -49,7 +49,7 @@ change them in the plugin and re-apply. A local edit costs the `design_guards_bi
 as `/orders/:id`, with a real address to visit); the sample screen sits at `/example`. The builder
 reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the fast loop. The data source's test
 hook (`?scenario=`) answers only in the unit tests and the browser checks' own build, never in
-`npm run build`.
+`npm run build`; there it answers every request, so the checks never reach a real server.
 
 ### AI in the product
 

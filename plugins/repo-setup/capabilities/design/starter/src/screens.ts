@@ -49,20 +49,22 @@ export function address(screen: Screen): string {
   return screen.visit ?? screen.path;
 }
 
-// The first screen whose path matches, with the named parts; null if none does.
+// The matching screen, fixed paths first (`/orders/new` before `/orders/:id`), and its parts.
 export function pick(pathname: string): { screen: Screen; params: Params } | null {
-  for (const screen of SCREENS) {
+  const fixed = SCREENS.filter((s) => !s.path.includes(":"));
+  for (const screen of [...fixed, ...SCREENS.filter((s) => !fixed.includes(s))]) {
     const bits = screen.path.split(/:(\w+)/);
     const re = bits.map((b, i) => (i % 2 ? "([^/]+)" : b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     const found = new RegExp(`^${re.join("")}$`).exec(pathname);
     if (!found) continue;
+    const params: Params = {};
     try {
-      const values = found.slice(1).map(decodeURIComponent);
-      const names = bits.filter((_, i) => i % 2);
-      return { screen, params: Object.fromEntries(names.map((n, i) => [n, values[i] ?? ""])) };
+      for (let i = 1; i < bits.length; i += 2)
+        params[bits[i]!] = decodeURIComponent(found[(i + 1) / 2]!);
     } catch {
       return null; // a malformed address
     }
+    return { screen, params };
   }
   return null;
 }

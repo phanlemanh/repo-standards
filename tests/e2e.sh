@@ -91,6 +91,11 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     f=src/example/data.ts; cp "$f" "$TMP/d.bak"; sed 's/ fail: "fail", empty/ empty/' "$TMP/d.bak" > "$f"
     changed "$TMP/d.bak" "$f" "the list request that cannot fail"
     red "error state without a failing request" "reaches /example error" make test; cp "$TMP/d.bak" "$f"
+    # A real request behind the hook: the checks still pass, because the hook answers them.
+    sed 's#^  return respond(() => \[\.\.\.items\]);$#  return fetch("/api/items").then((r) => r.json() as Promise<Item[]>);#' "$TMP/d.bak" > "$f"
+    changed "$TMP/d.bak" "$f" "the real list request"
+    make check >"$TMP/fetch.txt" 2>&1 || { echo "FAIL: a real request in the data source broke the checks"; cat "$TMP/fetch.txt"; exit 1; }
+    cp "$TMP/d.bak" "$f"
     # The reference screen shows a destructive badge: shadcn's own red must fail the floor there.
     cp src/index.css "$TMP/i.bak"; sed 's/--destructive: oklch(0.48 0.2 27.325)/--destructive: oklch(0.55 0.245 27.325)/' "$TMP/i.bak" > src/index.css
     changed "$TMP/i.bak" src/index.css "restoring the shadcn destructive red"

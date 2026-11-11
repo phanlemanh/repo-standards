@@ -1,34 +1,26 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { address, pick, SCREENS } from "../src/screens.ts";
 import { ROUTES } from "./e2e/routes.ts";
 
-const answer = () => act(() => vi.advanceTimersByTimeAsync(200));
-
 async function open(url: string) {
   window.history.replaceState(null, "", url);
-  vi.resetModules(); // a fresh data source for each test
+  vi.resetModules(); // a fresh data source
   const { App } = await import("../src/App.tsx");
   render(<App />);
-  await screen.findAllByRole("main", { hidden: true });
 }
 
-beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
-afterEach(() => {
-  vi.useRealTimers();
-  window.history.replaceState(null, "", "/");
-});
+afterEach(() => window.history.replaceState(null, "", "/"));
 
 it.each(ROUTES)("reaches $title under one main and one h1", async ({ url, steps, shows }) => {
   await open(url);
-  await answer();
   for (const step of steps) {
-    if ("press" in step) fireEvent.click(screen.getByRole("button", { name: step.press }));
-    else fireEvent.change(screen.getByLabelText(step.fill), { target: { value: step.text } });
-    await answer();
+    if ("press" in step) fireEvent.click(await screen.findByRole("button", { name: step.press }));
+    else
+      fireEvent.change(await screen.findByLabelText(step.fill), { target: { value: step.text } });
   }
-  expect(screen.getAllByText(shows)).not.toHaveLength(0);
+  expect(await screen.findAllByText(shows)).not.toHaveLength(0);
   expect(screen.getAllByRole("main", { hidden: true })).toHaveLength(1);
   expect(screen.getAllByRole("heading", { level: 1, hidden: true })).toHaveLength(1);
 });
@@ -36,12 +28,12 @@ it.each(ROUTES)("reaches $title under one main and one h1", async ({ url, steps,
 it("gives every screen a real address that leads back to it", () => {
   for (const s of SCREENS) {
     expect(address(s)).not.toContain("/:");
-    expect(pick(address(s))?.screen).toBe(s);
+    expect(pick(new URL(address(s), "http://x").pathname)?.screen).toBe(s);
   }
 });
 
 it("links every screen from the page for an address none claims", async () => {
   await open("/no/such/page");
-  const links = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
-  expect(links).toEqual(SCREENS.map(address));
+  const links = await screen.findAllByRole("link");
+  expect(links.map((a) => a.getAttribute("href"))).toEqual(SCREENS.map(address));
 });

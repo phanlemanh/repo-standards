@@ -92,6 +92,7 @@ it("fails for real when the browser is offline, with no scenario", async () => {
 });
 
 it("reaches the empty state by deleting every item, and Add item brings one back", async () => {
+  vi.stubEnv("MODE", "development"); // the fake server's own store, not the checks' answers
   await show();
   const rowButtons = screen.getAllByRole("button", {
     name: new RegExp(`^${LABELS.deleteItem("")}`),
@@ -198,6 +199,41 @@ it("opens the page for a malformed address, not a blank one", async () => {
   const { App } = await import("../src/App.tsx");
   render(<App />);
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(LABELS.notFound);
+});
+
+it("prefers a fixed path to a path with parts, whatever the order", async () => {
+  const fresh = await import("../src/screens.ts");
+  const detail = { ...fresh.SCREENS[0]!, path: "/orders/:id" };
+  const create = { ...fresh.SCREENS[0]!, path: "/orders/new" };
+  fresh.SCREENS.unshift(detail, create);
+  expect(fresh.pick("/orders/new")?.screen).toBe(create);
+  expect(fresh.pick("/orders/7")?.params).toEqual({ id: "7" });
+});
+
+it("keeps the query of a visit address and adds the scenario to it", async () => {
+  const fresh = await import("../src/screens.ts");
+  fresh.SCREENS.unshift({
+    ...fresh.SCREENS[0]!,
+    path: "/orders/:id",
+    visit: "/orders/1?tab=items",
+    states: [{ name: "error", scenario: "fail", shows: "x" }],
+  });
+  const { ROUTES } = await import("./e2e/routes.ts");
+  expect(ROUTES[0]?.url).toBe("/orders/1?tab=items&scenario=fail");
+});
+
+it("says the page could not load, with links, when a screen's code fails to load", async () => {
+  const fresh = await import("../src/screens.ts");
+  fresh.SCREENS.unshift({
+    ...fresh.SCREENS[0]!,
+    path: "/broken",
+    load: () => Promise.reject(new Error("chunk")),
+  });
+  window.history.replaceState(null, "", "/broken");
+  const { App } = await import("../src/App.tsx");
+  render(<App />);
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(LABELS.errorTitle);
+  expect(screen.getAllByRole("link")).toHaveLength(fresh.SCREENS.length);
 });
 
 it("formats money and dates", () => {

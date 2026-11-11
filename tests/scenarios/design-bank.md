@@ -37,16 +37,18 @@ Nền thử mang các dấu mốc cố định để cắt máy móc: trong `AGE
 **Nền đối chứng.** Đúng nền thử, rồi cắt các thứ sau, không làm gì thêm trừ trường hợp ghi ở cuối mục:
 
 - xoá `.claude/rules/ui.md`
-- xoá `.claude/skills/ui/`
 - xoá `design/`
-- xoá `tools/design_guards.mjs`
+- xoá `tools/design_guards.mjs` và `tools/patch_ui.mjs`
 - xoá `mk/design.mk` (an toàn vì `Makefile` dùng `-include mk/*.mk`)
-- xoá `tests/e2e/`
-- xoá `src/example/`
-- xoá `src/screens.ts`
+- xoá `tests/e2e/`, `tests/App.test.tsx` và `playwright.config.ts`
+- xoá `src/example/` và `src/screens.ts`
 - xoá khỏi `AGENTS.md` mục từ `## Design floor` đến tiêu đề `## ` kế tiếp
 - xoá khỏi `eslint.config.js` mọi thứ giữa `// design-floor:start` và `// design-floor:end`, và dòng import `@shadcn/lint`
 - đổi `src/App.tsx` về trang một tiêu đề
+- cài lại `table` gốc bằng `npx shadcn@4.23.0 add table -y --overwrite` rồi `make format`
+- dựng lại nền đối chứng thành một commit duy nhất không có lịch sử
+
+Danh sách trên là danh sách của lần đo bốn. Mỗi lần thêm hay bớt một mục đều có dòng riêng, kèm lý do, ở "Nhật ký thay đổi". `src/lib/labels.ts` được giữ lại có chủ ý (xem dòng lần đo bốn trong nhật ký).
 
 Phần phụ thuộc trong `package.json` giữ nguyên. Nền đối chứng vẫn còn shadcn và các linh kiện cài sẵn, chỉ mất tầng thiết kế.
 
@@ -311,3 +313,4 @@ Tổng: trạng thái thiếu 0 / 14; lỗi rào còn lại 0 / 84; token 21.766
 | 2026-11-11 | Đo lần hai sau khi sửa tầng thiết kế để giảm chi phí (danh sách màn chung, sửa hai linh kiện, bước kiểm in ít chữ, gộp tài liệu). Bản sao để đo nằm ở `/private/tmp/dm`. Nền đối chứng cắt thêm `src/screens.ts`, `tests/App.test.tsx`, `tools/patch_ui.mjs` và cài lại `table` gốc bằng `npx shadcn@4.23.0 add table -y --overwrite` rồi `make format`; sau khi cắt, nền đối chứng được dựng lại thành một commit duy nhất không có lịch sử. Lệnh dựng, bảng trạng thái, cách đếm và ngưỡng giữ nguyên | Lần đo thứ nhất không đạt (token x1,50 trên các lần dựng được). Đường dẫn dài làm bốn lần chạy gõ sai đường dẫn và không ghi được tệp. Một tác tử đối chứng đọc lại màn mẫu qua lịch sử git. Bản vá `table` thuộc tầng thiết kế nên không được để lại ở nền đối chứng |
 | 2026-11-11 | Đo lần ba sau khi sửa màn mẫu để trạng thái đến từ dữ liệu. Khoá luật chấm chặt trước khi chạy: một trạng thái chỉ được tính là có khi một điều kiện thật trong ứng dụng đang chạy dẫn tới nó (yêu cầu đang chờ hoặc thất bại, kết quả rỗng, bộ lọc không khớp, thao tác của người dùng); trạng thái chỉ mở được bằng công tắc (`?state=`, tham số, mục trong danh sách màn) mà dữ liệu thật không bao giờ gây ra thì tính là thiếu. Nguồn dữ liệu giả có độ trễ hay có thể báo lỗi được tính là điều kiện thật. Ngưỡng, màn, lệnh dựng và cách dựng nền như lần hai | Lần hai đạt theo luật cũ nhưng đọc chặt thì nền thử kém hơn (15 / 6): màn mẫu dạy bật trạng thái bằng công tắc. Chủ repo chọn sửa rồi đo lại với luật chặt |
 | 2026-11-11 | Đo lần bốn sau khi cắt chi phí đọc của tầng thiết kế (danh sách màn nhận đường dẫn có tham số, test ứng dụng gọn và thuộc plugin, màn mẫu dời sang `/example`, móc kiểm thử tắt trong bản build thường, bẫy ô bảng, rút một phần ba lượng chữ phải đọc). Bản sao để đo nằm ở `/private/tmp/dm4`. Nền đối chứng cắt như lần ba và thêm `playwright.config.ts`. Cả hai nền được chấm trên bản `npm run build` thường; người chấm không nhận bản build cho bài kiểm trình duyệt. Luật chấm chặt, ngưỡng, màn và lệnh dựng giữ nguyên. Công khai: trang luật của nền thử có một dòng "bài kiểm trình duyệt là bước xem giao diện, không cần chụp màn hình"; dòng này chỉ có ở nền thử. Nền đối chứng vẫn giữ `src/lib/labels.ts` như ba lần trước (nghiêng về phía đối chứng) | Lần ba đạt chất lượng (0 / 18) nhưng token x1,43. Đọc nhật ký cho thấy token thêm đến từ tệp đọc lúc đầu, lượt nối danh sách màn bằng tay và vòng sửa do rào ô bảng. Chủ repo chọn cắt rồi đo lại |
+| 2026-11-11 | Mục 2 viết lại theo danh sách cắt của lần đo bốn: thêm `tests/App.test.tsx`, `tools/patch_ui.mjs`, cài lại `table`, `playwright.config.ts` và bước dựng lại một commit; bỏ dòng `.claude/skills/ui/` | Rà soát cuối thấy mục 2 chỉ được sửa một nửa: các mục cắt sau này chỉ nằm trong nhật ký. Không đổi gì so với cách lần đo bốn đã dựng nền |

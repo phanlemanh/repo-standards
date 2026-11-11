@@ -154,7 +154,7 @@ function gate() {
 
 function reference() {
   if (!existsSync("design/behaviors.md")) problems.push("design/behaviors.md is missing");
-  if (!/["'`]\//.test(read("src/screens.ts")))
+  if (!/\bpath:\s*["'`]\//.test(read("src/screens.ts")))
     problems.push("src/screens.ts lists no screen path starting with /");
   if (!/from\s+["'][./]*src\/screens(\.ts)?["']/.test(read("tests/e2e/routes.ts")))
     problems.push("tests/e2e/routes.ts does not take its routes from src/screens.ts");

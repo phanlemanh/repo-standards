@@ -113,7 +113,7 @@ Màu thương hiệu được kiểm ngay ở bước quyết định. Máy ch�
 | Rào máy | Khối luật trong cấu hình ESLint: sáu luật `@shadcn/lint`, thang khoảng cách, thang kích thước, control trần, tự định dạng số và ngày | `make check` và bài đưa lỗi vào |
 | Kiểm trình duyệt | `tests/e2e/floor.spec.ts`: đúng một vùng chính, đúng một tiêu đề cấp một, không tràn ngang, không lỗi truy cập, ở 1440 và 390 px, trên từng đường dẫn trong danh sách | `make check` |
 | Lớp nạp cho Claude Code | Một luật ngắn chỉ nạp khi đụng màn hình, gồm lệnh tra cứu linh kiện và danh sách bẫy hay gặp, cùng một đoạn trong `AGENTS.md`. Sau phép đo 2026-11-11, skill `ui` được gộp vào luật này | Giới hạn độ dài trong bài kiểm |
-| Câu trả lời đóng | `design/behaviors.md`, một trang: mỗi trạng thái (chờ, trống, lỗi, không có kết quả, đang lưu, xác nhận xoá) một câu trả lời và linh kiện cụ thể | Màn mẫu thể hiện đủ, kiểm bằng test |
+| Câu trả lời đóng | `design/behaviors.md`, một trang: mỗi trạng thái (chờ, trống, lỗi, không có kết quả, đang lưu, xác nhận xoá, xoá thất bại) một câu trả lời và linh kiện cụ thể | Màn mẫu thể hiện đủ, kiểm bằng test |
 | Một nguồn cho chữ và số | Hàm định dạng tiền, số, ngày theo `locale` và `currency` đã chốt; từ điển nhãn dùng chung; danh sách từ cấm | Luật cấm tự định dạng; bài quét từ cấm |
 | Màn mẫu | Thay trang demo, đủ trạng thái, chỉ dùng linh kiện có sẵn, có test đơn vị và kiểm trình duyệt cho từng trạng thái | `make check` |
 
@@ -123,7 +123,7 @@ Plugin chỉ chứa tiếng Anh, `tests/run.sh` chặn tiếng Việt trong plug
 
 Linh kiện cài sẵn: button, input, label, table, card, badge, dialog, select, skeleton, empty, alert. Không cài `sonner` cho tới khi hết lỗi kiểu chặt.
 
-Màn mẫu lấy trạng thái từ nguồn dữ liệu cạnh nó (`src/example/data.ts`): độ trễ thật, lỗi khi mất mạng, thêm và xoá thật trong bộ nhớ. Móc kiểm thử `?scenario=` là một dòng ở đầu mỗi yêu cầu và chỉ trả lời khi chạy test đơn vị (chế độ `test` của Vite) hoặc trong bản dựng riêng của bài trình duyệt (chế độ `floor`, ra `coverage/floor`, không đụng `dist/`). Bản `npm run build` cho người dùng không mang móc này: người ngoài không ép được trạng thái "không bao giờ tải" hay "lỗi" bằng đường dẫn.
+Màn mẫu lấy trạng thái từ nguồn dữ liệu cạnh nó (`src/example/data.ts`): độ trễ thật, lỗi khi mất mạng, thêm và xoá thật trong bộ nhớ. Móc kiểm thử `?scenario=` là một dòng ở đầu mỗi yêu cầu và chỉ trả lời khi chạy test đơn vị (chế độ `test` của Vite) hoặc trong bản dựng riêng của bài trình duyệt (chế độ `floor`, ra `coverage/floor`, không đụng `dist/`). Ở hai chế độ đó móc trả lời mọi yêu cầu: câu trả lời `ready` khi không có kịch bản, nên test đơn vị và bài trình duyệt không bao giờ gọi tới máy chủ thật, kể cả khi người dựng đã nối API thật bên dưới dòng móc (đổi sau rà soát cuối 2026-11-11: trước đó yêu cầu thật đầu tiên làm đỏ bài đi qua danh sách màn, mà bài đó thuộc plugin). Bài đi qua danh sách chờ từng bước và từng trạng thái hiện ra, không chờ một độ trễ cố định. Bản `npm run build` cho người dùng không mang móc này: người ngoài không ép được trạng thái "không bao giờ tải" hay "lỗi" bằng đường dẫn.
 
 Một danh sách chung `src/screens.ts` ghi mỗi màn và các trạng thái của nó; ứng dụng, bài trình duyệt và test đơn vị đều đọc từ danh sách này. Đường dẫn có phần thay đổi (`/orders/:id`) khai thêm `visit`, một địa chỉ thật cho bài kiểm mở (`/orders/1`), và màn nhận các phần đó qua `params`. Repo thêm màn thật hay thêm trạng thái thì chỉ thêm một mục ở đó. `tests/App.test.tsx` chỉ đi qua danh sách này, không có gì riêng của màn mẫu; nó và `tests/e2e/routes.ts` thuộc plugin như `floor.spec.ts`, sửa tại chỗ thì mất điểm `design_guards_bite`. Hành vi riêng của màn mẫu (thử lại, thêm khi rỗng, huỷ xoá, mất mạng, móc tắt ở bản dựng thật) được kiểm trong `tests/e2e.sh` của plugin bằng `tests/fixtures/design/reference.test.tsx`, và cấp `team` không tính màn mẫu vào độ phủ.
 
@@ -193,6 +193,9 @@ Bảng chấm không tính phần trăm quyết định đã xác định. Con s
 | `scripts/blueprint.py` | `expected_setup` thêm capability `design`; `to_apply_args` truyền các biến; kiểm `base`, `surface`, mã màu |
 | `scripts/apply.py` | `derive_vars` tính `design_brand` và màu chữ trên nền thương hiệu |
 | `capabilities/design/` | `preset.toml` với `stacks = ["react-vite"]`, `src/index.css` là `user_owned`, thư mục `starter/` và `team/` |
+| `capabilities/design/starter/tools/patch_ui.mjs`, `make ui-patch` | Vá `table` của shadcn sau khi cài: vùng cuộn ngang nhận focus và bắt buộc `aria-label`. `preset.toml` chạy `make ui-patch` giữa `shadcn add` và `make format` |
+| `capabilities/design/starter/src/screens.ts` | Danh sách màn chung: đường dẫn (có thể có phần thay đổi), `visit`, cách nạp màn, các trạng thái. `pick()` chọn đường dẫn cố định trước đường dẫn có phần thay đổi |
+| `presets/ts-node/starter/Makefile`, `package.json.tmpl`; `presets/react-vite/starter/package.json.tmpl` | Bước kiểm chạy im, bước hỏng in đủ báo cáo, `make check` kết thúc bằng một dòng (dùng chung cho mọi khung TypeScript) |
 | `presets/_core` | Định dạng bốn skill đang báo xung đột khi áp lại sau `npm run format`. Lỗi này có sẵn, không do tầng mới |
 | `checklists/top-tier.toml` | Ba mục gắn `capabilities = ["design"]` và mục `design_present` |
 | `scripts/doctor.py` | `applies` hiểu thêm trường lọc `presets` |

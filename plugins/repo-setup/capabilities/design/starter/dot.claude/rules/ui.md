@@ -30,7 +30,8 @@ paths: ["src/**/*.tsx"]
 - Inside a `Card`, put content in its slots (`CardHeader`, `CardContent`, `CardFooter`); for a
   stack inside a slot, wrap it in a `div` with `flex flex-col gap-*`.
 - No colour or type class on `TableCell`: wrap the text in a `span` and put the class there.
-- Wide tables on phones: the `Table` container scrolls sideways; do not force column widths.
+- Wide tables on phones: the `Table` (it needs an `aria-label`) scrolls sideways; do not force
+  column widths.
 - Statuses stay visually distinct. If a `Badge` fails contrast, pick another variant; never give
   two statuses the same look.
 - A state appears because of a real condition: a pending or failed request, an empty result, a
