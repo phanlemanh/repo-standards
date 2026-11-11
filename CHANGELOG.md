@@ -20,6 +20,10 @@
   `make check` prints one short result per step and the full output of a failing one; the
   destructive badge and the wide table pass the browser checks out of the box.
 
+### TypeScript presets
+- TypeScript presets (ts-node, ts-api, react-vite): check steps run quietly; a failing step prints its
+  full report; `make check` ends with one line.
+
 ### Fixes
 - `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its
   run failed and low-tier auto-merge never happened. A custom bot in `AGENT_AUTHORS` must also be
