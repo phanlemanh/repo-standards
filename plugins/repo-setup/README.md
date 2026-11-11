@@ -44,7 +44,9 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 
 `--with design` adds the design floor. `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and
 `mk/design.mk` are owned by the plugin: change them in the plugin and re-apply. A local edit costs
-the `design_guards_bite` points in `doctor`.
+the `design_guards_bite` points in `doctor`. Screens and their states are listed once, in
+`src/screens.ts`; the builder reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the
+fast loop.
 
 ### AI in the product
 

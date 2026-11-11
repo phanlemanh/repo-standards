@@ -15,6 +15,10 @@
   `doctor` reports `design_present` as not applicable there.
 - `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` are owned by the plugin:
   change them in the plugin and re-apply; a local edit costs the `design_guards_bite` points.
+- Cheaper for the builder: screens and states are registered once in `src/screens.ts`; the `ui`
+  skill is folded into `.claude/rules/ui.md` (delete `.claude/skills/ui/` in older repos by hand);
+  `make check` prints one short result per step and the full output of a failing one; the
+  destructive badge and the wide table pass the browser checks out of the box.
 
 ### Fixes
 - `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its
