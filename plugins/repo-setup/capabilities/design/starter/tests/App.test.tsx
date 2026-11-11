@@ -63,6 +63,19 @@ it("gives the empty and no-results buttons something to do", () => {
   expect(screen.queryByText(LABELS.noResultsTitle)).not.toBeInTheDocument();
 });
 
+it("gives every status its own badge, one of them destructive", () => {
+  render(<ReferenceScreen state="ready" />);
+  const look = new Map(
+    [...document.querySelectorAll("[data-slot=badge]")].map((b) => [
+      b.textContent,
+      b.getAttribute("data-variant"),
+    ]),
+  );
+  expect(look.size).toBeGreaterThan(1);
+  expect(new Set(look.values()).size).toBe(look.size);
+  expect([...look.values()]).toContain("destructive");
+});
+
 it("has a browser route for every state but ready", () => {
   for (const state of STATES.filter((s) => s !== "ready"))
     expect(ROUTES).toContain(`/?state=${state}`);

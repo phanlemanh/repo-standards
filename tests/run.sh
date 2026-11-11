@@ -680,6 +680,10 @@ grep -q 'brand' "$d/src/index.css" && miss "design: brand block without a brand"
 d="$TMP/design-content"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design --var design_surface=content \
   --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: content surface apply failed"
 grep -q 'TableRow' "$d/src/example/ReferenceScreen.tsx" && miss "design: content surface got the table screen"
+grep -q 'variant: "destructive"' "$d/src/example/ReferenceScreen.tsx" || miss "design: content screen shows no destructive badge"
+for v in default outline destructive; do
+  grep -q "variant: \"$v\"" "$TMP/design-plain/src/example/ReferenceScreen.tsx" || miss "design: tool screen has no $v badge"
+done
 grep -q 'text-base' "$d/design/behaviors.md" || miss "design: content surface lacks its density"
 grep -q 'text-sm' "$TMP/design-plain/design/behaviors.md" || miss "design: tool surface lacks its density"
 if python3 "$S/apply.py" --target "$TMP/design-py" --preset fastapi --with design \

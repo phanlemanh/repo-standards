@@ -87,6 +87,10 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     f=src/example/ReferenceScreen.tsx; cp "$f" "$TMP/r.bak"; sed 's#<h1#<h2#; s#</h1>#</h2>#' "$TMP/r.bak" > "$f"
     changed "$TMP/r.bak" "$f" "the heading mutation"
     red "missing heading" "getByRole('heading', { includeHidden: true, level: 1 })" make ui-floor; cp "$TMP/r.bak" "$f"
+    # The reference screen shows a destructive badge: shadcn's own red must fail the floor there.
+    cp src/index.css "$TMP/i.bak"; sed 's/--destructive: oklch(0.48 0.2 27.325)/--destructive: oklch(0.55 0.245 27.325)/' "$TMP/i.bak" > src/index.css
+    changed "$TMP/i.bak" src/index.css "restoring the shadcn destructive red"
+    red "destructive badge contrast" '"color-contrast"' make ui-floor; cp "$TMP/i.bak" src/index.css
     node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 >/dev/null 2>&1 & PREVIEW=$!
     for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/4173) 2>/dev/null && break; sleep 0.2; done
     red "busy port" "http://127.0.0.1:4173 is already used" make ui-floor

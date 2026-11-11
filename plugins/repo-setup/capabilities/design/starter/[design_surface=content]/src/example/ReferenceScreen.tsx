@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -33,11 +34,29 @@ import { LABELS } from "@/lib/labels";
 export type ScreenState =
   "ready" | "loading" | "empty" | "error" | "no-results" | "saving" | "confirm-delete";
 
-type Row = { name: string; date: Date; body: string };
+type Status = "active" | "overdue";
+type Row = { name: string; status: Status; date: Date; body: string };
+
+type Variant = ComponentProps<typeof Badge>["variant"];
+// Each status keeps its own look. Never give two statuses the same variant to pass a check.
+const STATUS: Record<Status, { label: string; variant: Variant }> = {
+  active: { label: LABELS.statusActive, variant: "secondary" },
+  overdue: { label: LABELS.statusOverdue, variant: "destructive" },
+};
 
 const ROWS: Row[] = [
-  { name: LABELS.sampleFirstName, date: new Date(2026, 0, 15), body: LABELS.sampleFirstBody },
-  { name: LABELS.sampleSecondName, date: new Date(2026, 1, 3), body: LABELS.sampleSecondBody },
+  {
+    name: LABELS.sampleFirstName,
+    status: "active",
+    date: new Date(2026, 0, 15),
+    body: LABELS.sampleFirstBody,
+  },
+  {
+    name: LABELS.sampleSecondName,
+    status: "overdue",
+    date: new Date(2026, 1, 3),
+    body: LABELS.sampleSecondBody,
+  },
 ];
 
 // Stands in for the real request. Replace it with the call to your API.
@@ -164,7 +183,10 @@ export function ReferenceScreen({ state }: { state: ScreenState }) {
               </CardAction>
             </CardHeader>
             <CardContent>
-              <p className="text-base">{row.body}</p>
+              <div className="flex flex-col gap-2">
+                <Badge variant={STATUS[row.status].variant}>{STATUS[row.status].label}</Badge>
+                <p className="text-base">{row.body}</p>
+              </div>
             </CardContent>
           </Card>
         ))}
