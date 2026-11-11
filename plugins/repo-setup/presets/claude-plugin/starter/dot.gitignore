@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Dependencies of test suites and scripts, if any
+node_modules/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+
+# Bytecode of the Python tools in tools/
+__pycache__/
+*.pyc

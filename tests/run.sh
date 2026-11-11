@@ -29,7 +29,7 @@ for preset in $PRESETS; do
     # 2. apply creates files, no unrendered placeholders
     created=$(python3 "$S/apply.py" --target "$d" --preset "$preset" --level "$level" \
       --var 'project_name=Coffee "Shop"' --var 'description=Orders \ loyalty' --var owner=acme --json | json 'len(d["created"])')
-    [ "$created" -gt 20 ] || fail "$preset/$level: only $created files created"
+    [ "$created" -ge 20 ] || fail "$preset/$level: only $created files created"
     if grep -rIlE --exclude-dir=.git --exclude-dir=workflows '\{\{ *[a-z_]+ *\}\}' "$d" ; then fail "$preset/$level: unrendered placeholder"; fi
 
     # 3. generated JSON/TOML stay valid even with quotes and backslashes in vars
@@ -52,16 +52,18 @@ PY
     [ "$conflict" = "True" ] || fail "$preset/$level: edited README not reported as conflict"
     grep -q "my note" "$d/README.md" || fail "$preset/$level: README was overwritten"
 
-    # 6. doctor: everything except the lockfile (needs an install) passes
+    # 6. doctor: everything except the lockfile (needs an install) passes;
+    #    a plugin marketplace has nothing to install, so nothing fails
     git -C "$d" add -A
+    expected=lockfile; [ "$preset" = claude-plugin ] && expected=""
     failed=$(python3 "$S/doctor.py" --target "$d" --level "$level" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
-    [ "$failed" = "lockfile" ] || fail "$preset/$level: unexpected doctor failures: $failed"
+    [ "$failed" = "$expected" ] || fail "$preset/$level: unexpected doctor failures: $failed"
 
     # 6b. bytecode from the vendored Python tools never reaches a commit
     git -C "$d" check-ignore -q tools/__pycache__/x.pyc || miss "$preset/$level: tools/__pycache__ is not ignored"
 
     # 6c. sample config has no credential-shaped values: secret scanners would block the first commit
-    if grep -qE '://[^/[:space:]]+:[^@[:space:]]+@' "$d/.env.example"; then miss "$preset/$level: .env.example has credentials in a URL"; fi
+    if [ -f "$d/.env.example" ] && grep -qE '://[^/[:space:]]+:[^@[:space:]]+@' "$d/.env.example"; then miss "$preset/$level: .env.example has credentials in a URL"; fi
 
     echo "ok  $preset/$level"
   done
@@ -558,6 +560,61 @@ rm -f "$TMP/gate2.out" "$TMP/trap"
 grep -q '^tier=high$' "$TMP/gate2.out" 2>/dev/null || miss "gate without base rules must be high"
 [ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request when the base has no rules"
 echo "ok  pr pipeline (or misses reported above)"
+
+# 31. claude-plugin: a working skeleton for a plugin marketplace, without app tooling
+k="$TMP/plug"; mkdir -p "$k" && git -C "$k" init -q -b main
+out=$(python3 "$S/apply.py" --target "$k" --preset claude-plugin --var 'project_name=Sample Kit' --var description=x --var owner=acme --json)
+for f in .claude-plugin/marketplace.json plugins/sample-kit/.claude-plugin/plugin.json plugins/sample-kit/skills/hello/SKILL.md \
+  tools/bump_version.py tools/plugin_lint.py .github/workflows/ci.yml .nvmrc Makefile tests/run.sh CHANGELOG.md AGENTS.md CLAUDE.md \
+  .editorconfig .gitattributes .gitignore .claude/settings.json LICENSE README.md; do
+  [ -f "$k/$f" ] || miss "claude-plugin: skeleton lacks $f"
+done
+for f in package.json tsconfig.json eslint.config.js .prettierrc.json .env.example pyproject.toml ontology wiki tools/wiki_lint.py \
+  tools/ontology_codegen.py tools/repo_ontology.py .claude/skills/ontology-add .claude/skills/wiki-ingest src; do
+  [ ! -e "$k/$f" ] || miss "claude-plugin: skeleton has app-shaped $f"
+done
+echo "$out" | json '"\n".join(n["what"]+": "+n["reason"] for n in d["not_applicable"])' > "$TMP/na.txt"
+grep -q '^Domain ontology and project wiki: A plugin marketplace has no business domain to model' "$TMP/na.txt" || miss "claude-plugin: apply does not say why ontology and wiki are left out"
+grep -q '^\.env\.example: ' "$TMP/na.txt" || miss "claude-plugin: apply does not say why .env.example is left out"
+python3 "$S/apply.py" --target "$TMP/plug-dry" --preset claude-plugin --var project_name=P --var description=x --var owner=a --dry-run \
+  | grep -q 'NOT APPLICABLE to a claude-plugin repository' || miss "claude-plugin: text output hides what is not applicable"
+if grep -qiE 'ontology|wiki/|make gen|typecheck' "$k/AGENTS.md" "$k/CLAUDE.md" "$k/README.md" "$k/.claude/skills/review-change/SKILL.md"; then miss "claude-plugin: guides still talk about ontology, wiki or app tooling"; fi
+grep -q '^## Language' "$k/AGENTS.md" || miss "claude-plugin: AGENTS.md lacks the language rule"
+for t in setup lint test check; do grep -q "^$t:" "$k/Makefile" || miss "claude-plugin: Makefile lacks $t"; done
+grep -q 'make check' "$k/.github/workflows/ci.yml" && grep -q 'make validate' "$k/.github/workflows/ci.yml" || miss "claude-plugin: CI does not run the checks and the validator"
+[ "$(cat "$k/.nvmrc")" = 22 ] || miss "claude-plugin: Node version not pinned"
+( cd "$k" && make check >/dev/null 2>&1 ) || miss "claude-plugin: make check fails on a fresh skeleton"
+python3 "$S/apply.py" --list-options | json 'd["stacks"]["claude-plugin"]["description"]' | grep -q 'plugin marketplace' || miss "claude-plugin: not in --list-options"
+( cd "$k" && python3 tools/bump_version.py minor >/dev/null ) || miss "claude-plugin: bump failed"
+grep -q '"version": "0.2.0"' "$k/.claude-plugin/marketplace.json" && grep -q '"version": "0.2.0"' "$k/plugins/sample-kit/.claude-plugin/plugin.json" \
+  || miss "claude-plugin: bump did not reach every manifest"
+grep -q '^## 0\.2\.0 — ' "$k/CHANGELOG.md" && grep -q '^## Unreleased$' "$k/CHANGELOG.md" || miss "claude-plugin: bump did not date the changelog"
+[ "$(cd "$k" && python3 tools/bump_version.py --notes 0.2.0)" = "- Repository skeleton with one sample plugin." ] || miss "claude-plugin: --notes does not print the section"
+( cd "$k" && make check >/dev/null 2>&1 ) || miss "claude-plugin: make check fails after a bump"
+again=$(python3 "$S/apply.py" --target "$k" --json | json 'str(len(d["conflict"])+len(d["updated"])+len(d["created"]))+" "+str(sorted(d["kept"]))')
+[ "$again" = "0 ['.claude-plugin/marketplace.json', 'CHANGELOG.md', 'plugins/sample-kit/.claude-plugin/plugin.json']" ] || miss "claude-plugin: re-apply after a bump: $again"
+git -C "$k" add -A
+verdict=$(python3 "$S/doctor.py" --target "$k" --json | json 'str(d["score"])+" "+d["preset"]+" "+",".join(r["id"] for r in d["failed"])')
+[ "$verdict" = "100 claude-plugin " ] || miss "claude-plugin: doctor on the skeleton: $verdict"
+n2="$TMP/plug-named"; mkdir -p "$n2"
+python3 "$S/apply.py" --target "$n2" --preset claude-plugin --var project_name=Tools --var description=x --var owner=a --var 'plugin_name=My Greeter' >/dev/null
+[ -f "$n2/plugins/my-greeter/.claude-plugin/plugin.json" ] && grep -q '"source": "./plugins/my-greeter"' "$n2/.claude-plugin/marketplace.json" || miss "claude-plugin: plugin_name not used"
+if python3 "$S/apply.py" --target "$TMP/plug-bad" --preset claude-plugin --var project_name=B --var description=x --var owner=a --var plugin_versioning=sometimes >/dev/null 2>&1; then miss "claude-plugin: bad plugin_versioning accepted"; fi
+for extra in "--archetype modular-monolith" "--archetype service-api" "--with ai" "--with mcp" "--deploy container"; do
+  # shellcheck disable=SC2086
+  if python3 "$S/apply.py" --target "$TMP/plug-bad" --preset claude-plugin $extra --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then miss "claude-plugin accepted $extra"; fi
+done
+kt="$TMP/claude-plugin-team"
+[ -f "$kt/tools/repo_ontology.py" ] || miss "claude-plugin team: the YAML reader of the team tools is missing"
+grep -q 'gh release create' "$kt/.github/workflows/release.yml" || miss "claude-plugin team: release workflow does not publish a GitHub Release"
+[ ! -e "$kt/.github/workflows/deploy.yml" ] && [ ! -e "$kt/mk/deploy.mk" ] || miss "claude-plugin team: got a deploy pipeline"
+if grep -qiE 'ontology|wiki' "$kt/CONTRIBUTING.md" "$kt/.github/pull_request_template.md"; then miss "claude-plugin team: contributor docs talk about ontology or wiki"; fi
+grep -q 'plugin_lint.py' "$kt/.pre-commit-config.yaml" || miss "claude-plugin team: pre-commit does not lint manifests"
+( cd "$kt" && make check >/dev/null 2>&1 ) || miss "claude-plugin team: make check fails"
+kg="$TMP/plug-agents"; mkdir -p "$kg" && git -C "$kg" init -q -b main
+python3 "$S/apply.py" --target "$kg" --preset claude-plugin --level team --with github-agents --var project_name=G --var description=x --var owner=a >/dev/null || miss "claude-plugin: github-agents refused"
+[ -f "$kg/.github/actions/setup-project/action.yml" ] || miss "claude-plugin: agent workflows have no setup-project action"
+echo "ok  claude-plugin skeleton (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

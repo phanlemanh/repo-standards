@@ -1,0 +1,26 @@
+name: Release
+
+# Pushing a version tag publishes a GitHub Release with that version's CHANGELOG section:
+# v1.2.0, or <plugin>-v1.2.0 when plugins are versioned independently.
+# Before tagging: python3 tools/bump_version.py <patch|minor|major>, then commit.
+on:
+  push:
+    tags: ["v[0-9]*", "*-v[0-9]*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Manifests must be consistent before a release
+        run: python3 tools/plugin_lint.py
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 tools/bump_version.py --notes "${TAG##*v}" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

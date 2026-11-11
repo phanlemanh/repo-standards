@@ -1,0 +1,77 @@
+description = "Claude Code plugin marketplace: marketplace and plugin manifests, a sample plugin with one skill, manifest lint, one-command version bump, shell tests"
+when = "The repo ships Claude Code plugins (skills, commands, agents, hooks) through a marketplace"
+
+# Rewritten by tools/bump_version.py and by the team; never reported as conflicts once they exist.
+user_owned = [".claude-plugin/marketplace.json", "plugins/*/.claude-plugin/plugin.json", "CHANGELOG.md"]
+
+# The sample plugin, the marketplace that lists it and the sample tests: not added in --adopt mode.
+sample = [".claude-plugin/marketplace.json", "plugins/**", "tests/**"]
+
+# Core files that only the team-level tools need (a YAML reader): left out at starter.
+team_only = ["tools/repo_ontology.py"]
+
+# Parts of the shared core that do not fit this kind of repository. apply.py leaves them out and
+# says why. The matching doctor checks and decision layers are marked the same way in
+# checklists/top-tier.toml and skills/new/references/layers.toml.
+[[not_applicable]]
+what = "Domain ontology and project wiki"
+reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
+paths = [
+  "ontology/**",
+  "wiki/**",
+  "tools/ontology_actions.py",
+  "tools/ontology_codegen.py",
+  "tools/wiki_lint.py",
+  ".claude/skills/ontology-add/**",
+  ".claude/skills/wiki-ingest/**",
+  ".claude/skills/wiki-query/**",
+  ".claude/skills/wiki-health/**",
+]
+
+[[not_applicable]]
+what = ".env.example"
+reason = "Plugins read no environment configuration of their own, so there is nothing to document."
+paths = [".env.example"]
+
+[[not_applicable]]
+what = "Deploy pipeline"
+reason = "Nothing is deployed: a plugin is delivered by its marketplace and a tagged release."
+paths = [".github/workflows/deploy.yml", "mk/deploy.mk"]
+
+[vars]
+lang = "none"
+stack = "Claude Code plugin marketplace — Markdown skills, JSON manifests, standard-library scripts"
+runtime = "Python 3.8+ and Node.js 22 (see .nvmrc)"
+
+[starter]
+# Nothing to install: the tools use only the standard library.
+verify = ["make check"]
+
+[team]
+install = ["pre-commit install"]
+verify = ["pre-commit run --all-files"]
+
+
+[[equivalents]]
+files = [".nvmrc"]
+existing = [".nvmrc", ".node-version", ".tool-versions", "mise.toml", ".mise.toml"]
+
+[[equivalents]]
+files = ["Makefile"]
+existing = ["Makefile", "makefile", "justfile", "Justfile", "Taskfile.yml"]
+
+[[equivalents]]
+files = [".github/workflows/ci.yml"]
+existing = [".github/workflows/*.yml", ".github/workflows/*.yaml", ".gitlab-ci.yml", "azure-pipelines.yml"]
+
+[[equivalents]]
+files = ["tools/bump_version.py"]
+existing = ["tools/bump*", "scripts/bump*", "bin/bump*", "tools/release*", "scripts/release*", "release-please-config.json"]
+
+[[equivalents]]
+files = [".github/dependabot.yml"]
+existing = ["renovate.json", ".renovaterc", ".renovaterc.*", ".github/renovate.json"]
+
+[[equivalents]]
+files = [".pre-commit-config.yaml"]
+existing = ["lefthook.yml", "lefthook.yaml", ".husky/*"]
