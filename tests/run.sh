@@ -629,5 +629,187 @@ lone="$TMP/lone-plugin"; mkdir -p "$lone/plugins/solo/.claude-plugin"; echo '{"n
 [ "$(kind "$lone")" = "claude-plugin True" ] || miss "detect: plugin manifests without a marketplace give $(kind "$lone")"
 echo "ok  detection of plugin repos (or misses reported above)"
 
+# 33. adopt on an existing plugin repo: only what fits, nothing overwritten
+PF="$ROOT/tests/fixtures/plugin-repos/intact"
+fresh() { rm -rf "$1"; cp -R "$PF" "$1"; git -C "$1" init -q -b main; git -C "$1" add -A; }
+ad="$TMP/plug-adopt"; fresh "$ad"
+before=$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs shasum | shasum)
+out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starter --adopt --dry-run \
+  --var project_name=Sample --var description=x --var owner=acme --json)
+[ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs shasum | shasum)" ] || miss "adopt plugin repo: dry run changed files"
+padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'tools/plugin_lint.py']"
+padopt "d['merged'] == ['.gitignore']"
+padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
+padopt "d['conflict'] == ['LICENSE', 'README.md']"
+padopt "all(s in d['skipped'] for s in ['plugins/sample/.claude-plugin/plugin.json', 'plugins/sample/skills/hello/SKILL.md', 'plugins/sample/README.md', 'tests/run.sh', 'tools/bump_version.py', '.github/workflows/ci.yml'])"
+padopt "d['skip_reasons']['tools/bump_version.py'] == 'repo already has scripts/bump.sh'"
+padopt "d['skip_reasons']['tests/run.sh'] == 'sample code (adopt mode)'"
+padopt "not [f for f in d['created'] + d['merged'] if f.split('/')[0] in ('ontology', 'wiki', 'src', 'plugins', 'tests') or f in ('package.json', 'tsconfig.json', 'eslint.config.js', '.prettierrc.json', '.env.example', 'tools/wiki_lint.py', 'tools/repo_ontology.py')]"
+padopt "[n['what'] for n in d['not_applicable']] == ['Domain ontology and project wiki', '.env.example']"
+python3 "$S/apply.py" --target "$ad" --preset claude-plugin --adopt --var project_name=Sample --var description=x --var owner=acme >/dev/null
+for f in .claude-plugin/marketplace.json README.md LICENSE CHANGELOG.md tests/run.sh scripts/bump.sh .github/workflows/test.yml plugins/alpha/.claude-plugin/plugin.json; do
+  cmp -s "$PF/$f" "$ad/$f" || miss "adopt plugin repo: $f was changed"
+done
+grep -q '^node_modules/$' "$ad/.gitignore" && grep -q '^\.env$' "$ad/.gitignore" || miss "adopt plugin repo: .gitignore not merged"
+( cd "$ad" && make check >/dev/null 2>&1 ) || miss "adopt plugin repo: make check fails after adopting"
+git -C "$ad" add -A
+after=$(python3 "$S/doctor.py" --target "$ad" --json | json 'str(d["score"])+" "+",".join(r["id"] for r in d["failed"])')
+[ "$after" = "100 " ] || miss "adopt plugin repo: doctor after adopting: $after"
+echo "ok  adopt on a plugin repo (or misses reported above)"
+
+# 34. doctor profile for plugin repos: each check fails on a broken repo and passes on an intact one
+verdict() { # dir, check id, extra doctor flags -> "pass" | "fail: ..." | "na: reason" | "skipped: ..." | "absent"
+  python3 "$S/doctor.py" --target "$1" --json ${3:-} | python3 -c '
+import json, sys
+d, cid = json.load(sys.stdin), sys.argv[1]
+out = ["pass"] if cid in d["passed"] else []
+for key, label in (("failed", "fail"), ("skipped", "skipped"), ("not_applicable", "na")):
+    out += [label + ": " + " | ".join(str(r.get(k)) for k in ("detail", "reason", "title", "why", "fix") if r.get(k)) for r in d[key] if r["id"] == cid]
+print(out[0] if out else "absent")' "$2"; }
+expect() { # dir, check id, regex the verdict must match, extra doctor flags
+  got=$(verdict "$1" "$2" "${4:-}"); echo "$got" | grep -qE "$3" || miss "doctor on $(basename "$1"): $2 gave '$got', want /$3/"; }
+edit_json() { python3 - "$1" "$2" <<'PY'
+import json, sys
+path, code = sys.argv[1:]
+d = json.load(open(path))
+exec(code)
+json.dump(d, open(path, "w"), indent=2)
+PY
+}
+ok="$TMP/pd-intact"; fresh "$ok"
+for id in plugin_manifests plugin_versions plugin_source_not_root plugin_description_short plugin_bump_tool plugin_ci_validates plugin_changelog tests ci; do
+  expect "$ok" "$id" '^pass$'
+done
+expect "$ok" lockfile '^na: No dependency manifest at the root'
+expect "$ok" type_check '^na: No typed application code'
+expect "$ok" formatter_linter '^na: No application code at the root'
+expect "$ok" env_example '^na: Plugins read no environment configuration'
+for id in ontology wiki ontology_wiki_valid ontology_in_check; do expect "$ok" "$id" '^na: A plugin marketplace has no business domain to model'; done
+text=$(python3 "$S/doctor.py" --target "$ok")
+echo "$text" | grep -q 'Scored as: claude-plugin (detected: Claude Code plugin manifests)' || miss "doctor text does not say how the repo was scored"
+echo "$text" | grep -q 'Not applicable to a claude-plugin repository (not scored):' || miss "doctor text hides the checks that do not apply"
+echo "$text" | grep -q 'Domain ontology: glossary + entity definitions: A plugin marketplace has no business domain' || miss "doctor text gives no reason for skipping the ontology"
+# An app profile still demands what an app needs, and has none of the plugin checks.
+expect "$ok" lockfile '^fail' '--preset python'
+expect "$ok" ontology '^fail' '--preset python'
+expect "$ok" tests '^fail' '--preset python'
+expect "$ok" plugin_manifests '^absent$' '--preset python'
+expect "$TMP/python-starter" plugin_manifests '^absent$'
+expect "$TMP/python-starter" ontology '^pass$'
+# A root dependency manifest makes the app checks apply again.
+x="$TMP/pd-deps"; fresh "$x"; echo '{"name":"tooling"}' > "$x/package.json"
+expect "$x" lockfile '^fail: .*Dependency lockfile committed'
+expect "$x" type_check '^na: '
+# manifests
+x="$TMP/pd-badjson"; fresh "$x"; printf '{ "name": "beta", ' > "$x/plugins/beta/.claude-plugin/plugin.json"
+expect "$x" plugin_manifests '^fail: plugins/beta/.claude-plugin/plugin.json is not valid JSON'
+x="$TMP/pd-name"; fresh "$x"; edit_json "$x/plugins/alpha/.claude-plugin/plugin.json" 'd["name"] = "alfa"'
+expect "$x" plugin_manifests "^fail: plugins/alpha/.claude-plugin/plugin.json says 'alfa' but the marketplace lists it as 'alpha'"
+x="$TMP/pd-unlisted"; fresh "$x"; mkdir -p "$x/plugins/gamma/.claude-plugin"; echo '{"name":"gamma","version":"1.2.0"}' > "$x/plugins/gamma/.claude-plugin/plugin.json"
+expect "$x" plugin_manifests '^fail: plugins/gamma has a plugin.json but is not listed'
+x="$TMP/pd-missing"; fresh "$x"; rm -rf "$x/plugins/beta"
+expect "$x" plugin_manifests "^fail: plugin 'beta': source folder plugins/beta/ does not exist"
+x="$TMP/pd-market"; fresh "$x"; echo 'not json' > "$x/.claude-plugin/marketplace.json"
+expect "$x" plugin_manifests '^fail: .claude-plugin/marketplace.json is not valid JSON'
+expect "$x" plugin_versions '^skipped: .claude-plugin/marketplace.json is not valid JSON'
+# versions
+x="$TMP/pd-version"; fresh "$x"; edit_json "$x/plugins/beta/.claude-plugin/plugin.json" 'd["version"] = "1.3.0"'
+expect "$x" plugin_versions "^fail: plugin 'beta': the marketplace says 1.2.0 but plugin.json says 1.3.0"
+x="$TMP/pd-drift"; fresh "$x"; edit_json "$x/plugins/beta/.claude-plugin/plugin.json" 'd["version"] = "2.0.0"'
+edit_json "$x/.claude-plugin/marketplace.json" 'd["plugins"][1]["version"] = "2.0.0"'
+expect "$x" plugin_versions '^fail: plugins are at different versions \(alpha 1.2.0, beta 2.0.0\) and no independent versioning is declared'
+echo '{"preset": "claude-plugin", "vars": {"plugin_versioning": "independent"}}' > "$x/.repo-setup.json"
+expect "$x" plugin_versions '^pass$'
+x="$TMP/pd-noversion"; fresh "$x"; edit_json "$x/plugins/alpha/.claude-plugin/plugin.json" 'del d["version"]'
+edit_json "$x/.claude-plugin/marketplace.json" 'del d["plugins"][0]["version"]'
+expect "$x" plugin_versions "^fail: plugin 'alpha' states no version"
+x="$TMP/pd-oneplace"; fresh "$x"; edit_json "$x/.claude-plugin/marketplace.json" 'del d["plugins"][0]["version"]; del d["plugins"][1]["version"]'
+expect "$x" plugin_versions '^pass$'
+# source
+x="$TMP/pd-root"; fresh "$x"; mv "$x/plugins/alpha/.claude-plugin/plugin.json" "$x/.claude-plugin/plugin.json"
+edit_json "$x/.claude-plugin/marketplace.json" 'd["plugins"][0]["source"] = "./"'
+expect "$x" plugin_source_not_root "^fail: plugin 'alpha' uses the repository root as its source \('./'\): every install copies the whole repository"
+expect "$x" plugin_manifests '^pass$'
+x="$TMP/pd-outside"; fresh "$x"; edit_json "$x/.claude-plugin/marketplace.json" 'd["plugins"][0]["source"] = "../elsewhere"'
+expect "$x" plugin_source_not_root "^fail: plugin 'alpha': source '../elsewhere' points outside the repository"
+x="$TMP/pd-hosted"; fresh "$x"; edit_json "$x/.claude-plugin/marketplace.json" 'd["plugins"].append({"name": "far", "source": {"source": "github", "repo": "acme/far"}})'
+expect "$x" plugin_source_not_root '^pass$'
+expect "$x" plugin_manifests '^pass$'
+# description
+x="$TMP/pd-long"; fresh "$x"; edit_json "$x/plugins/alpha/.claude-plugin/plugin.json" 'd["description"] = "x" * 2000'
+expect "$x" plugin_description_short '^fail: plugins/alpha/.claude-plugin/plugin.json: description is 2,000 characters \(limit 1,024\)'
+edit_json "$x/plugins/alpha/.claude-plugin/plugin.json" 'd["description"] = "x" * 1024'
+expect "$x" plugin_description_short '^pass$'
+edit_json "$x/.claude-plugin/marketplace.json" 'd["plugins"][1]["description"] = "y" * 1025'
+expect "$x" plugin_description_short "^fail: marketplace entry 'beta': description is 1,025 characters"
+[ "$(python3 -c "import tomllib; print([c['params']['max_chars'] for c in tomllib.load(open('$ROOT/plugins/repo-setup/checklists/top-tier.toml','rb'))['check'] if c['id']=='plugin_description_short'][0])")" \
+  = "$(sed -n 's/^MAX_DESCRIPTION = //p' "$S/../presets/claude-plugin/starter/tools/plugin_lint.py")" ] || miss "description limit differs between the checklist and plugin_lint.py"
+# bump tool, CI, changelog, tests
+x="$TMP/pd-nobump"; fresh "$x"; rm "$x/scripts/bump.sh"
+expect "$x" plugin_bump_tool '^fail: One command bumps the version in every manifest .*tools/bump_version.py'
+x="$TMP/pd-ci"; fresh "$x"; printf 'name: Test\non: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      # later: claude plugin validate .\n      - run: bash tests/run.sh\n' > "$x/.github/workflows/test.yml"
+expect "$x" plugin_ci_validates '^fail: CI validates the plugin manifests .*claude plugin validate'
+expect "$x" ci '^pass$'
+rm -rf "$x/.github"
+expect "$x" ci '^fail'
+x="$TMP/pd-nolog"; fresh "$x"; rm "$x/CHANGELOG.md"
+expect "$x" plugin_changelog '^fail: A changelog says what changed in each version'
+x="$TMP/pd-notests"; fresh "$x"; rm -rf "$x/tests"
+expect "$x" tests '^fail: Automated tests exist'
+# the repo's own lint command says the same thing
+if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-drift" >/dev/null 2>&1; then :; else miss "plugin_lint: independent versions rejected despite the declared policy"; fi
+if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-version" >/dev/null 2>"$TMP/lint.err"; then miss "plugin_lint: version mismatch accepted"; fi
+grep -q "\[versions\] plugin 'beta': the marketplace says 1.2.0 but plugin.json says 1.3.0" "$TMP/lint.err" || miss "plugin_lint: no message for a version mismatch"
+{ python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep -q '^False False$' || miss "plugin_lint --json"
+echo "ok  doctor profile for plugin repos (or misses reported above)"
+
+# 35. version tags without GitHub Releases (--remote, with a stand-in gh)
+rl="$TMP/pd-releases"; fresh "$rl"
+git -C "$rl" -c user.name=t -c user.email=t@example.com -c core.hooksPath=/dev/null commit -qm base
+mkdir -p "$TMP/fakebin"
+cat > "$TMP/fakebin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample-market","defaultBranchRef":{"name":"main"}}' ;;
+  "release list") cat "$FAKE_RELEASES" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$TMP/fakebin/gh"
+remote_verdict() { PATH="$TMP/fakebin:$PATH" FAKE_RELEASES="$TMP/releases.json" verdict "$rl" plugin_releases '--level team --remote'; }
+echo '[]' > "$TMP/releases.json"
+remote_verdict | grep -q '^pass$' || miss "releases: a repo without tags must pass: $(remote_verdict)"
+git -C "$rl" tag v1.1.0; git -C "$rl" tag v1.2.0
+remote_verdict | grep -q '^fail: 2 tag(s) and no GitHub Release' || miss "releases: tags without releases: $(remote_verdict)"
+echo '[{"tagName":"v1.1.0"},{"tagName":"v1.2.0"}]' > "$TMP/releases.json"
+remote_verdict | grep -q '^pass$' || miss "releases: released tags must pass: $(remote_verdict)"
+verdict "$rl" plugin_releases '--level team' | grep -q '^absent$' || miss "releases: must be a reminder without --remote"
+python3 "$S/doctor.py" --target "$rl" --level team | grep -q 'Version tags are published as GitHub Releases' || miss "releases: no reminder without --remote"
+echo "ok  releases for tags (or misses reported above)"
+
+# 36. bump tool: every manifest together, or one plugin when versions are independent
+BT="$S/../presets/claude-plugin/starter/tools/bump_version.py"
+ver() { python3 -c "import json; m=json.load(open('$1/.claude-plugin/marketplace.json')); print(' '.join(str(p.get('version'))+'/'+json.load(open('$1/'+p['source']+'/.claude-plugin/plugin.json')).get('version','-') for p in m['plugins']))"; }
+b="$TMP/bump-all"; fresh "$b"
+python3 "$BT" --root "$b" minor --dry-run >/dev/null; [ "$(ver "$b")" = "1.2.0/1.2.0 1.2.0/1.2.0" ] || miss "bump: dry run wrote files"
+python3 "$BT" --root "$b" minor >/dev/null; [ "$(ver "$b")" = "1.3.0/1.3.0 1.3.0/1.3.0" ] || miss "bump: lockstep gave $(ver "$b")"
+grep -q '^## 1\.3\.0 — ' "$b/CHANGELOG.md" && [ "$(grep -n '^## ' "$b/CHANGELOG.md" | head -1 | cut -d: -f2 | cut -c1-8)" = "## 1.3.0" ] || miss "bump: changelog section missing or not first"
+b="$TMP/pd-version"   # beta's two files disagree
+if python3 "$BT" --root "$b" patch --plugin alpha >/dev/null 2>&1; then :; else miss "bump: --plugin refused"; fi
+b="$TMP/bump-drift"; fresh "$b"; edit_json "$b/plugins/beta/.claude-plugin/plugin.json" 'd["version"] = "2.0.0"'
+if python3 "$BT" --root "$b" patch >/dev/null 2>"$TMP/bump.err"; then miss "bump: guessed a version for plugins that differ"; fi
+grep -q 'plugins are at different versions (alpha 1.2.0, beta 2.0.0)' "$TMP/bump.err" || miss "bump: no message for differing versions"
+python3 "$BT" --root "$b" 3.0.0 >/dev/null; [ "$(ver "$b")" = "3.0.0/3.0.0 3.0.0/3.0.0" ] || miss "bump: explicit version gave $(ver "$b")"
+b="$TMP/bump-own"; fresh "$b"; echo '{"vars": {"plugin_versioning": "independent"}}' > "$b/.repo-setup.json"
+if python3 "$BT" --root "$b" patch >/dev/null 2>"$TMP/bump.err"; then miss "bump: bumped every plugin despite independent versioning"; fi
+grep -q 'pass --plugin NAME' "$TMP/bump.err" || miss "bump: no hint to pass --plugin"
+python3 "$BT" --root "$b" patch --plugin beta >/dev/null; [ "$(ver "$b")" = "1.2.0/1.2.0 1.2.1/1.2.1" ] || miss "bump: --plugin gave $(ver "$b")"
+grep -q '^## beta 1\.2\.1 — ' "$b/CHANGELOG.md" || miss "bump: changelog does not name the plugin"
+python3 "$BT" --root "$b" --notes 1.2.0 | grep -q 'alpha greets' || miss "bump: --notes"
+b="$TMP/bump-kitlike"; fresh "$b"; edit_json "$b/.claude-plugin/marketplace.json" 'del d["plugins"][0]["version"]; del d["plugins"][1]["version"]'
+python3 "$BT" --root "$b" patch >/dev/null; [ "$(ver "$b")" = "None/1.2.1 None/1.2.1" ] || miss "bump: added a version to marketplace entries that had none: $(ver "$b")"
+echo "ok  bump tool (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
