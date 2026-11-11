@@ -785,6 +785,10 @@ grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/scre
   && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"
 grep -q 'getByRole("button", { name: step.press' "$d/tests/e2e/floor.spec.ts" && grep -q 'route.shows' "$d/tests/e2e/floor.spec.ts" \
   || miss "design: the browser floor does not drive the steps or wait for the state"
+for f in design/behaviors.md .claude/rules/ui.md; do
+  grep -q 'A state appears because of a real condition' "$d/$f" || miss "design: $f lacks the real-condition rule"
+done
+grep -q 'A state reachable only from a switch is not a state' "$d/.claude/rules/ui.md" || miss "design: ui.md traps lack the switch trap"
 # 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"

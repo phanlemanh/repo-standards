@@ -4,9 +4,14 @@ paths: ["src/**/*.tsx"]
 
 # Building screens
 
-- Copy the structure of a new screen from `src/example`: one `main`, one `h1`, and every state the
-  screen can reach. `design/behaviors.md` says what each state shows and the text density.
-- Register every new screen in `src/screens.ts`, with its path and states. The app, the unit tests
+- Copy the structure of a new screen from `src/example`: one `main`, one `h1`, its data from a
+  source module next to it (`data.ts`), and every state the screen can reach.
+  `design/behaviors.md` says what each state shows and the text density.
+- A state appears because of a real condition: a pending or failed request, an empty result, a
+  filter with no match, a user action. Never because of a prop or a URL value in the view. Tests
+  choose the condition through the data source.
+- Register every new screen in `src/screens.ts`, with its path and how to reach each state: the
+  data source's scenario, the user's steps, and the text the state shows. The app, the unit tests
   and the browser checks read that list; there is nothing else to wire.
 - Use the components in `src/components/ui`. Never write a raw `button`, `input`, `select`,
   `textarea` or `table`.
@@ -35,6 +40,7 @@ paths: ["src/**/*.tsx"]
 - Statuses must stay visually distinct. If a `Badge` fails contrast, pick another variant; never
   give two statuses the same look to pass a check.
 - A new screen that the browser checks never visit is missing from `src/screens.ts`.
+- A state reachable only from a switch is not a state: the running app never shows it.
 
 ## Adding a component
 
