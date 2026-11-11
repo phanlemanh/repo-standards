@@ -52,10 +52,11 @@ expect it to report violations that were hidden before.
 ### Verified
 - Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI on the
   pull request that added the `claude-plugin` preset. Run by hand on an existing marketplace
-  repository with six plugins: detection, `doctor`, and `--adopt --dry-run`, which left the
-  repository unchanged.
-- Not yet run: `--adopt` writing into an existing plugin repository, the `team` level's release
-  workflow on GitHub, and the setup skills in a live Claude Code session on a plugin repository.
+  repository with six plugins: detection, `doctor`, `--adopt --dry-run`, which left the
+  repository unchanged, and `--adopt` on a copy, which added six paths, merged lines into two
+  files and overwrote or deleted none; `doctor` on that copy went from 9 to 14 of 20 scored checks.
+- Not yet run: the `team` level's release workflow on GitHub, and the setup skills in a live
+  Claude Code session on a plugin repository.
 
 ## 0.4.0 — 2026-11-05
 
