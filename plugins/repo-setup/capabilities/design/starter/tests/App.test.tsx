@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { App } from "../src/App.tsx";
+import { App, STATES } from "../src/App.tsx";
 import { ReferenceScreen, type ScreenState } from "../src/example/ReferenceScreen.tsx";
 import { formatDate, formatMoney } from "../src/lib/format.ts";
 import { LABELS } from "../src/lib/labels.ts";
+import { ROUTES } from "./e2e/routes.ts";
 
 const SHOWN: [ScreenState, string][] = [
   ["ready", LABELS.sampleFirstName],
@@ -60,6 +61,11 @@ it("gives the empty and no-results buttons something to do", () => {
   render(<ReferenceScreen state="no-results" />);
   fireEvent.click(screen.getByRole("button", { name: LABELS.noResultsAction }));
   expect(screen.queryByText(LABELS.noResultsTitle)).not.toBeInTheDocument();
+});
+
+it("has a browser route for every state but ready", () => {
+  for (const state of STATES.filter((s) => s !== "ready"))
+    expect(ROUTES).toContain(`/?state=${state}`);
 });
 
 it("opens the state named in the address", () => {

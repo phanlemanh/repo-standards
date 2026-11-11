@@ -1,6 +1,6 @@
 import { ReferenceScreen, type ScreenState } from "@/example/ReferenceScreen";
 
-const STATES: ScreenState[] = [
+export const STATES: ScreenState[] = [
   "ready",
   "loading",
   "empty",
