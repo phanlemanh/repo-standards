@@ -19,6 +19,9 @@
   skill is folded into `.claude/rules/ui.md` (delete `.claude/skills/ui/` in older repos by hand);
   `make check` prints one short result per step and the full output of a failing one; the
   destructive badge and the wide table pass the browser checks out of the box.
+- The sample screen takes its states from data, not from `?state=`: it loads from
+  `src/example/data.ts`, which can be slow, fail or find nothing, and tests pick that answer with
+  `?scenario=`; `src/screens.ts` lists, per state, the scenario, the user's steps and the text shown.
 
 ### TypeScript presets
 - TypeScript presets (ts-node, ts-api, react-vite): check steps run quietly; a failing step prints its
