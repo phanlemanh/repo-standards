@@ -5,7 +5,7 @@ import { App } from "../src/App.tsx";
 import { ReferenceScreen, type ScreenState } from "../src/example/ReferenceScreen.tsx";
 import { formatDate, formatMoney } from "../src/lib/format.ts";
 import { LABELS } from "../src/lib/labels.ts";
-import { SCREENS } from "../src/screens.ts";
+import { pick, SCREENS } from "../src/screens.ts";
 import { ROUTES } from "./e2e/routes.ts";
 
 const SHOWN: [ScreenState, string][] = [
@@ -97,6 +97,12 @@ it("gives the browser checks a route for every state of every screen", () => {
     expect(ROUTES).toContain(path);
     for (const state of states.slice(1)) expect(ROUTES).toContain(`${path}?state=${state}`);
   }
+});
+
+it("falls back to the first state for an unknown state, and the first screen for an unknown path", () => {
+  expect(pick("/", "?state=unknown")).toEqual({ screen: SCREENS[0], state: "ready" });
+  expect(pick("/", "?state=error")?.state).toBe("error");
+  expect(pick("/nowhere", "")?.screen).toBe(SCREENS[0]);
 });
 
 it("opens the state named in the address", async () => {

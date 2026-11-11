@@ -755,7 +755,7 @@ cp "$TMP/mk.bak" "$d/mk/design.mk"; cp "$TMP/manifest.bak" "$d/.repo-setup.json"
 # 31f. one registry of screens: the browser routes come from src/screens.ts
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only reference >/dev/null 2>&1 ) || miss "design reference: red on a fresh repo"
-grep -q 'SCREENS' "$d/src/App.tsx" || miss "design: App.tsx does not read src/screens.ts"
+grep -q 'from "@/screens"' "$d/src/App.tsx" || miss "design: App.tsx does not read src/screens.ts"
 ref_red() { # <file> <replacement content> <expected text>
   cp "$d/$1" "$TMP/ref.bak"; printf '%s\n' "$2" > "$d/$1"
   out=$(cd "$d" && node tools/design_guards.mjs --only reference 2>&1) && miss "design reference: stayed green with $1 = $2"

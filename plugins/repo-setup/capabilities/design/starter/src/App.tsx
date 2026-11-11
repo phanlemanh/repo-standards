@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType } from "react";
 
-import { SCREENS } from "@/screens";
+import { pick } from "@/screens";
 
 type Shown = { Screen: ComponentType<{ state: string }>; state: string };
 
@@ -8,11 +8,9 @@ type Shown = { Screen: ComponentType<{ state: string }>; state: string };
 export function App() {
   const [shown, setShown] = useState<Shown | null>(null);
   useEffect(() => {
-    const page = SCREENS.find((s) => s.path === window.location.pathname) ?? SCREENS[0];
-    if (!page) return;
-    const asked = new URLSearchParams(window.location.search).get("state");
-    const state = asked !== null && page.states.includes(asked) ? asked : page.states[0];
-    void page.load().then((Screen) => setShown({ Screen, state }));
+    const picked = pick(window.location.pathname, window.location.search);
+    if (!picked) return;
+    void picked.screen.load().then((Screen) => setShown({ Screen, state: picked.state }));
   }, []);
   return shown ? <shown.Screen state={shown.state} /> : null;
 }

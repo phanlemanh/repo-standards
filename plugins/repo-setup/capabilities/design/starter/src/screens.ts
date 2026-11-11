@@ -25,3 +25,13 @@ export const SCREENS: Screen[] = [
     () => import("@/example/ReferenceScreen").then((m) => m.ReferenceScreen),
   ),
 ];
+
+// The screen for an address: the path picks the screen (else the first), `?state=` picks the state
+// (else the screen's first).
+export function pick(pathname: string, search: string): { screen: Screen; state: string } | null {
+  const screen = SCREENS.find((s) => s.path === pathname) ?? SCREENS[0];
+  if (!screen) return null;
+  const asked = new URLSearchParams(search).get("state");
+  const state = asked !== null && screen.states.includes(asked) ? asked : screen.states[0];
+  return { screen, state };
+}
