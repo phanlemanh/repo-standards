@@ -147,6 +147,7 @@ Việc gỡ tham chiếu treo trên nền đối chứng: xoá `tests/App.test.t
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 7 / 8 | 0 | 25.197.624 / 19.742.124 (x1,28) | Không | Ngưỡng 1 trượt (cần <= 4). Ngưỡng 2 và 3 đạt. Tổng chi phí 34,86 USD gồm 1,79 USD chạy thử |
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế). chủ repo cho phép chạy | 0 / 6 | 0 | 24.796.847 / 20.004.042 (x1.24) | Có. theo luật khoá | Lần đo hai. Đọc chặt (trạng thái phải do điều kiện thật dẫn tới): 15 / 6. nền thử kém hơn. Xem mục Lần đo hai |
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 0 / 18 | 0 | 35.445.848 / 24.824.052 (x1,43) | Không | Lần đo ba, luật chấm chặt khoá trước. Ngưỡng 1 và 2 đạt, ngưỡng 3 trượt. Chi phí 41,81 USD gồm 1,57 USD chạy thử. Xem mục Lần đo ba |
+| 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 0 / 14 | 0 | 21.766.485 / 24.743.621 (x0,88) | Có | Lần đo bốn, luật chấm chặt, sau khi cắt chi phí đọc. Đạt cả ba ngưỡng. Chi phí 35,15 USD gồm 1,59 USD chạy thử. Xem mục Lần đo bốn |
 
 ### Đọc kết quả
 
@@ -249,6 +250,53 @@ Tổng: trạng thái thiếu 0 / 18; lỗi rào còn lại 0 / 76; token 35.445
 - **Rào bảng mâu thuẫn trang luật:** rào bắt ô bảng ở 4 trên 12 bản và lời báo lỗi trái với trang luật, gây vòng sửa (ước 0,8-1 triệu).
 - **Hỏng mà không chỉ số nào bắt:** mọi bản nền thử giữ nguyên màn mẫu (9 trên 12 bản để nó ở trang chủ) và móc kiểm thử `?scenario=` trong mã chạy thật.
 - **Làm được mà nền đối chứng không có:** các trạng thái hiện thật trên ứng dụng đang chạy và được kiểm ở khổ 390 px cùng kiểm truy cập; không bản đối chứng nào làm vậy.
+
+### Lần đo bốn (2026-11-11)
+
+Sau khi cắt chi phí đọc của tầng thiết kế (nhật ký thay đổi, dòng lần bốn). Bản sao để đo nằm ở `/private/tmp/dm4`. Cả 24 lần chạy đều ghi được tệp, thoát không lỗi và build được sau `make gen`; mọi lần nền thử kết thúc với `make check` qua. Bốn tác tử chấm, mỗi màn một tác tử, bản dựng đổi nhãn A-F, chấm trên bản `npm run build` thường, cổng 4174-4177.
+
+| Màn | Nền | Lần | Trạng thái thiếu (luật chặt) | Lỗi rào còn lại | Số vòng sửa | Token | Chi phí (USD) |
+|---|---|---|---|---|---|---|---|
+| 1 | thử | 1 | 0 | 0 | 0 | 2.375.091 | 1,59 |
+| 1 | thử | 2 | 0 | 0 | 0 | 1.741.512 | 1,35 |
+| 1 | thử | 3 | 0 | 0 | 0 | 1.957.860 | 1,49 |
+| 1 | đối chứng | 1 | 0 | 17 | 0 | 3.060.115 | 2,01 |
+| 1 | đối chứng | 2 | 0 | 7 | 0 | 3.534.423 | 2,08 |
+| 1 | đối chứng | 3 | 0 | 7 | 0 | 2.086.592 | 1,46 |
+| 2 | thử | 1 | 0 | 0 | 0 | 1.493.961 | 1,23 |
+| 2 | thử | 2 | 0 | 0 | 0 | 1.838.944 | 1,39 |
+| 2 | thử | 3 | 0 | 0 | 0 | 2.173.024 | 1,50 |
+| 2 | đối chứng | 1 | 2 | 3 | 0 | 1.716.543 | 1,29 |
+| 2 | đối chứng | 2 | 2 | 8 | 0 | 1.281.614 | 1,14 |
+| 2 | đối chứng | 3 | 1 | 9 | 0 | 1.844.756 | 1,33 |
+| 3 | thử | 1 | 0 | 0 | 0 | 1.775.636 | 1,32 |
+| 3 | thử | 2 | 0 | 0 | 0 | 2.004.132 | 1,41 |
+| 3 | thử | 3 | 0 | 0 | 0 | 1.749.378 | 1,26 |
+| 3 | đối chứng | 1 | 1 | 6 | 0 | 1.664.017 | 1,21 |
+| 3 | đối chứng | 2 | 1 | 9 | 0 | 1.791.594 | 1,40 |
+| 3 | đối chứng | 3 | 1 | 8 | 0 | 2.313.286 | 1,45 |
+| 4 | thử | 1 | 0 | 0 | 0 | 1.461.597 | 1,25 |
+| 4 | thử | 2 | 0 | 0 | 0 | 1.531.413 | 1,19 |
+| 4 | thử | 3 | 0 | 0 | 0 | 1.663.937 | 1,28 |
+| 4 | đối chứng | 1 | 2 | 2 | 0 | 2.037.390 | 1,35 |
+| 4 | đối chứng | 2 | 2 | 5 | 0 | 1.467.127 | 1,18 |
+| 4 | đối chứng | 3 | 2 | 3 | 0 | 1.946.164 | 1,38 |
+
+Tổng: trạng thái thiếu 0 / 14; lỗi rào còn lại 0 / 84; token 21.766.485 / 24.743.621 (x0,88); chi phí 16,28 / 17,28 USD.
+
+**Theo mục 7: đạt cả ba ngưỡng.** Ngưỡng 1: 0 <= 7. Ngưỡng 2: 0. Ngưỡng 3: x0,88 <= x1,30.
+
+- **Phán đoán của người chấm:** người chấm màn 1 và màn 3 lần này tính trạng thái đang tải là có khi dữ liệu mẫu không có độ trễ mà khung chờ vẫn hiện được một khung hình; người chấm lần ba tính là thiếu. Đọc theo cách lần ba thì đối chứng thiếu thêm 5 (19), nền thử không đổi. Đọc khắt hơn nữa (dữ liệu mẫu phải tự gây ra trạng thái rỗng và lỗi) thì nền thử thiếu 3, đối chứng ít nhất 23. Không cách đọc nào đổi kết luận.
+- **Token giảm là việc thật bớt đi, không phải bỏ việc:** ngữ cảnh mỗi lượt hai nền ngang nhau (77,7 so với 79,0 nghìn token); nền thử ít lượt hơn (277 so với 310). Nền đối chứng tốn thêm ở lệnh bị từ chối, đào `node_modules`, mở trình duyệt (8 trên 12 lần; nền thử không lần nào) và các vòng `make check`. Lượng mã hai nền như nhau. Tệp tầng thiết kế mang theo giảm từ 3,5 triệu xuống khoảng 1,4 triệu token.
+- **Những gì lần cắt đã sửa:** không bản nào sửa tệp thuộc plugin; rào ô bảng không còn bắt lần nào (lần ba 4 trên 12); danh sách màn chỉ còn một cách ghi đường dẫn (lần ba sáu cách); móc kiểm thử không còn trong bản build thường.
+- **Biến động lớn theo màn:** màn 1 x0,70, màn 4 x0,85, màn 3 x0,96, màn 2 x1,14, mỗi ô chỉ 3 lần chạy. Ngưỡng tính trên tổng nên vẫn đạt, nhưng không nên đọc x0,88 là nền thử luôn rẻ hơn.
+
+Đọc nhật ký (mục 6), tám lần chạy và tổng 24 lần:
+
+- **Nền thử viết ít test đơn vị hơn** (74 so với 127) và ít trang quyết định trong wiki hơn (1 so với 5); ở màn 3 và 4 thiếu vài thực thể và vai trò trong ontology. Nút thử lại và xoá tìm kiếm ở màn 1 có trên màn nhưng không test nào bấm. Mọi trạng thái vẫn được bài kiểm trình duyệt ghé ở hai khổ.
+- **Màn mẫu vẫn đi theo bản phát hành:** `/example` có trong mọi bản build và được liệt kê trên trang không tìm thấy (màn 3 không có trang ở `/`).
+- **Điều hướng phía khách tự chế ở màn 4:** cả ba bản viết lại `src/App.tsx` với một `navigate` riêng, mỗi bản một kiểu.
+- **Một bản nền thử ở màn 1 sửa nguồn dữ liệu của màn mẫu** để dời hàm móc kiểm thử sang tệp dùng chung, như lần ba.
 
 ## Nhật ký thay đổi
 
