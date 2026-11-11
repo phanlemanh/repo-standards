@@ -52,7 +52,7 @@ export function createItem(): Promise<Item> {
   });
 }
 
-// The answer `?scenario=` asks for, or null for the real request. Live only in the checks' builds.
+// The answer `?scenario=` asks for in the checks' builds, or null for the real request.
 function testAnswer<T>(answers: Record<string, T | "never" | "fail">): Promise<T> | null {
   if (import.meta.env.MODE !== "test" && import.meta.env.MODE !== "floor") return null;
   const scenario = new URLSearchParams(window.location.search).get("scenario");

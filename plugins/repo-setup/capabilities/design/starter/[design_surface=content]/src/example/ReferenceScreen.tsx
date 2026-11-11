@@ -94,17 +94,14 @@ export function ReferenceScreen() {
     if (!target) return;
     setSaving(true);
     setDeleteFailed(false);
-    const deleted = await deleteItem(target.id).then(
-      () => true,
-      () => false,
-    );
-    setSaving(false);
-    if (deleted) {
+    try {
+      await deleteItem(target.id);
       setItems((current) => current?.filter((item) => item.id !== target.id) ?? null);
       setAsking(false);
-    } else {
+    } catch {
       setDeleteFailed(true);
     }
+    setSaving(false);
   }
 
   const shown = (items ?? []).filter((item) =>

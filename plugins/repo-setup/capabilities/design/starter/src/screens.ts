@@ -2,10 +2,10 @@ import type { ComponentType } from "react";
 
 import { LABELS } from "@/lib/labels";
 
-// Every screen and its states; the app, the unit tests and the browser checks read this list. A
-// path may name parts (`/orders/:id`): the screen gets them as `params`, and `visit` is a real
-// address for the checks (`/orders/1`). Per state: `scenario` picks the data source's answer,
-// `steps` is what the user then does, `shows` is text on the page once the state is there.
+// Every screen and its states. A path may name parts (`/orders/:id`): `visit` is then a real
+// address for the checks (`/orders/1`), and the screen takes `{ params }: { params: Params }` and
+// reads `params.id ?? ""`. Per state: `scenario` picks the data source's answer, `steps` is what
+// the user then does, `shows` is text on the page once the state is there.
 export type Params = Record<string, string>;
 export type Step = { fill: string; text: string } | { press: string };
 export type State = { name: string; scenario?: string; steps?: Step[]; shows: string };
@@ -52,13 +52,16 @@ export function address(screen: Screen): string {
 // The first screen whose path matches, with the named parts; null if none does.
 export function pick(pathname: string): { screen: Screen; params: Params } | null {
   for (const screen of SCREENS) {
-    const found = new RegExp(`^${screen.path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`).exec(pathname);
-    if (found) {
-      const parts = Object.entries(found.groups ?? {});
-      return {
-        screen,
-        params: Object.fromEntries(parts.map(([k, v]) => [k, decodeURIComponent(v)])),
-      };
+    const bits = screen.path.split(/:(\w+)/);
+    const re = bits.map((b, i) => (i % 2 ? "([^/]+)" : b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    const found = new RegExp(`^${re.join("")}$`).exec(pathname);
+    if (!found) continue;
+    try {
+      const values = found.slice(1).map(decodeURIComponent);
+      const names = bits.filter((_, i) => i % 2);
+      return { screen, params: Object.fromEntries(names.map((n, i) => [n, values[i] ?? ""])) };
+    } catch {
+      return null; // a malformed address
     }
   }
   return null;

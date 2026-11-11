@@ -26,8 +26,8 @@
   (`/orders/:id`) plus `visit`, the real address the checks open, and receives the parts as
   `params`. `tests/App.test.tsx` is now a short generic walk over that list and, with
   `tests/e2e/routes.ts`, is owned by the plugin (a local edit costs the `design_guards_bite`
-  points). The sample screen moved to `/example`; an unknown address shows a not-found page instead
-  of the sample. The `?scenario=` test hook answers only in unit tests and in the browser checks'
+  points). The sample screen moved to `/example`; an unknown or malformed address shows a not-found
+  page that links to every registered screen (the browser checks visit it too) instead of the sample. The `?scenario=` test hook answers only in unit tests and in the browser checks'
   own build (`vite build --mode floor` into `coverage/floor`), never in `npm run build`. The
   restyle guard's message no longer sends the builder into `src/components/ui`. At `team` level the
   sample is left out of coverage.

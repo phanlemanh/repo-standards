@@ -127,7 +127,7 @@ Màn mẫu lấy trạng thái từ nguồn dữ liệu cạnh nó (`src/example
 
 Một danh sách chung `src/screens.ts` ghi mỗi màn và các trạng thái của nó; ứng dụng, bài trình duyệt và test đơn vị đều đọc từ danh sách này. Đường dẫn có phần thay đổi (`/orders/:id`) khai thêm `visit`, một địa chỉ thật cho bài kiểm mở (`/orders/1`), và màn nhận các phần đó qua `params`. Repo thêm màn thật hay thêm trạng thái thì chỉ thêm một mục ở đó. `tests/App.test.tsx` chỉ đi qua danh sách này, không có gì riêng của màn mẫu; nó và `tests/e2e/routes.ts` thuộc plugin như `floor.spec.ts`, sửa tại chỗ thì mất điểm `design_guards_bite`. Hành vi riêng của màn mẫu (thử lại, thêm khi rỗng, huỷ xoá, mất mạng, móc tắt ở bản dựng thật) được kiểm trong `tests/e2e.sh` của plugin bằng `tests/fixtures/design/reference.test.tsx`, và cấp `team` không tính màn mẫu vào độ phủ.
 
-Màn mẫu nằm ở `/example`, để màn thật đầu tiên lấy `/`. Địa chỉ không màn nào nhận thì hiện một trang báo không tồn tại, không rơi về màn mẫu.
+Màn mẫu nằm ở `/example`, để màn thật đầu tiên lấy `/`. Địa chỉ không màn nào nhận, hay địa chỉ hỏng, thì hiện một trang báo không tồn tại kèm liên kết tới mọi màn đã đăng ký, không rơi về màn mẫu; bài trình duyệt kiểm cả trang này ở hai khổ. Luật "trạng thái đến từ điều kiện thật, không từ công tắc" ghi đủ ở cả `.claude/rules/ui.md` và `design/behaviors.md`: đây là luật đứng sau kết quả 0 / 18, nên trùng lặp là cố ý.
 
 (Đổi sau phép đo lần ba 2026-11-11: 9 trên 12 tác tử vẫn sửa `tests/App.test.tsx` và tự đặt sáu tên trường khác nhau cho đường dẫn có tham số; 9 trên 12 bản để màn mẫu ở trang chủ; móc kiểm thử chạy cả trong bản phát hành.)
 

@@ -123,6 +123,8 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     rm tests/reference.test.tsx
     # The test hook is in the browser checks' build and gone from the build for users.
     npx vite build --mode floor --outDir coverage/floor --logLevel warn
+    npm run --silent build >/dev/null
+    ls dist/assets/*.js >/dev/null 2>&1 || { echo "FAIL: npm run build left no script to check"; exit 1; }
     grep -q 'Test scenario' coverage/floor/assets/*.js || { echo "FAIL: the browser checks' build lost the test hook"; exit 1; }
     if grep -q 'Test scenario' dist/assets/*.js; then echo "FAIL: the test hook ships in npm run build"; exit 1; fi
     echo "/* kept */" >> src/index.css

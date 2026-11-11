@@ -1,7 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { LABELS } from "../src/lib/labels.ts";
 import { address, pick, SCREENS } from "../src/screens.ts";
 import { ROUTES } from "./e2e/routes.ts";
 
@@ -29,7 +28,6 @@ it.each(ROUTES)("reaches $title under one main and one h1", async ({ url, steps,
     else fireEvent.change(screen.getByLabelText(step.fill), { target: { value: step.text } });
     await answer();
   }
-  // A dialog renders outside the screen and hides the page behind it.
   expect(screen.getAllByText(shows)).not.toHaveLength(0);
   expect(screen.getAllByRole("main", { hidden: true })).toHaveLength(1);
   expect(screen.getAllByRole("heading", { level: 1, hidden: true })).toHaveLength(1);
@@ -42,7 +40,8 @@ it("gives every screen a real address that leads back to it", () => {
   }
 });
 
-it("shows no screen at an address none claims", async () => {
+it("links every screen from the page for an address none claims", async () => {
   await open("/no/such/page");
-  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(LABELS.notFound);
+  const links = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+  expect(links).toEqual(SCREENS.map(address));
 });

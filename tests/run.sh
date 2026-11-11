@@ -795,15 +795,22 @@ grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/scre
   && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"
 grep -q 'getByRole("button", { name: step.press' "$d/tests/e2e/floor.spec.ts" && grep -q 'route.shows' "$d/tests/e2e/floor.spec.ts" \
   || miss "design: the browser floor does not drive the steps or wait for the state"
-grep -q 'A state appears because of a real condition' "$d/design/behaviors.md" && grep -q 'Never because of a switch' "$d/design/behaviors.md" \
-  || miss "design: behaviors.md lacks the real-condition rule"
-grep -q 'A state appears because of a real condition' "$d/.claude/rules/ui.md" && miss "design: ui.md repeats the state rule kept in behaviors.md"
-grep -q 'A state reachable only from a switch is not a state' "$d/.claude/rules/ui.md" || miss "design: ui.md traps lack the switch trap"
+# The rule in full on both pages: what a real condition is and what a switch is.
+for f in design/behaviors.md .claude/rules/ui.md; do
+  text=$(tr -s ' \n' '  ' < "$d/$f")
+  for s in 'A state appears because of a real condition: a pending or failed request, an empty result, a filter with no match, a user action.' \
+    'Never because of a switch' 'a prop or URL value that exists only to pick the state'; do
+    grep -qF "$s" <<<"$text" || miss "design: $f lacks the real-condition rule ($s)"
+  done
+done
+grep -qi 'A state reachable only from a switch is not a state' "$d/.claude/rules/ui.md" || miss "design: ui.md traps lack the switch trap"
 # 31i. the registry is enough on its own: paths with parts, the sample off the home page, the test
 # files owned by the plugin, a guard message that agrees with the rule, no screenshots.
 grep -q 'path: "/example"' "$d/src/screens.ts" && grep -q 'visit?: string' "$d/src/screens.ts" \
   && grep -q 'params: Params' "$d/src/screens.ts" || miss "design: src/screens.ts lacks the sample at /example or the visit and params shape"
-grep -q 'LABELS.notFound' "$d/src/App.tsx" || miss "design: an unknown address does not get its own page"
+grep -q 'LABELS.notFound' "$d/src/App.tsx" && grep -q 'SCREENS.map' "$d/src/App.tsx" \
+  || miss "design: an unknown address does not get its own page with links to the screens"
+grep -q 'url: "/no/such/page"' "$d/tests/e2e/routes.ts" || miss "design: the browser floor does not visit the not-found page"
 grep -q 'ROUTES' "$d/tests/App.test.tsx" && ! grep -qE 'ReferenceScreen|example' "$d/tests/App.test.tsx" \
   || miss "design: tests/App.test.tsx is not a generic walk over the registry"
 for f in tests/App.test.tsx tests/e2e/routes.ts tests/e2e/floor.spec.ts; do

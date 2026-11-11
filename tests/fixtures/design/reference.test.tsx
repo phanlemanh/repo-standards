@@ -174,9 +174,30 @@ it("hands a screen the named parts of its path", () => {
   try {
     expect(pick("/things/a%20b/c")).toEqual({ screen: detail, params: { id: "a b", part: "c" } });
     expect(pick("/things/a")).toBeNull();
+    expect(pick("/things/%E0%A4/c")).toBeNull(); // a malformed address is no match
   } finally {
     SCREENS.shift();
   }
+});
+
+it("matches the text of a path literally, and survives a part name used twice", () => {
+  const dotted = { ...SCREENS[0]!, path: "/v1.0/:id/x/:id" };
+  SCREENS.unshift(dotted);
+  try {
+    expect(pick("/v1a0/1/x/2")).toBeNull();
+    expect(pick("/v1.0/1/x/2")?.screen).toBe(dotted);
+  } finally {
+    SCREENS.shift();
+  }
+});
+
+it("opens the page for a malformed address, not a blank one", async () => {
+  const fresh = await import("../src/screens.ts"); // the copy App reads after resetModules
+  fresh.SCREENS.unshift({ ...fresh.SCREENS[0]!, path: "/things/:id" });
+  window.history.replaceState(null, "", "/things/%E0%A4");
+  const { App } = await import("../src/App.tsx");
+  render(<App />);
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(LABELS.notFound);
 });
 
 it("formats money and dates", () => {
