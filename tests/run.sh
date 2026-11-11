@@ -635,6 +635,8 @@ for level in starter team; do
   grep -q -- '--primary: #0246ff' "$d/src/index.css" || miss "design: brand block missing"
   [ "$(tail -6 "$d/src/index.css" | grep -c primary)" -ge 2 ] || miss "design: brand block must come last"
   grep -q 'lang="vi"' "$d/index.html" || miss "design: page language"
+  # shadcn's destructive red fails 4.5:1 on its own 10% tint (badge, button); e2e pins it in the browser.
+  grep -q -- '--destructive: oklch(0.48 0.2 27.325);' "$d/src/index.css" || miss "design: destructive token not darkened"
   grep -q '"vi-VN"' "$d/src/lib/format.ts" && grep -q '"VND"' "$d/src/lib/format.ts" || miss "design: locale"
   grep -q 'CHECK_TARGETS += design-guards ui-floor' "$d/mk/design.mk" || miss "design: not in the gate"
   [ -f "$d/.mcp.json" ] && miss "design: must not add .mcp.json"
