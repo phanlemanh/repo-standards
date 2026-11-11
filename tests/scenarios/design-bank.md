@@ -145,6 +145,7 @@ Việc gỡ tham chiếu treo trên nền đối chứng: xoá `tests/App.test.t
 | Ngày | Người chạy | Trạng thái thiếu (thử / đối chứng) | Lỗi còn lại (thử) | Token (thử / đối chứng) | Đạt | Ghi chú |
 |---|---|---|---|---|---|---|
 | 2026-11-11 | Claude (phiên dựng tầng thiết kế), chủ repo cho phép chạy | 7 / 8 | 0 | 25.197.624 / 19.742.124 (x1,28) | Không | Ngưỡng 1 trượt (cần <= 4). Ngưỡng 2 và 3 đạt. Tổng chi phí 34,86 USD gồm 1,79 USD chạy thử |
+| 2026-11-11 | Claude (phiên dựng tầng thiết kế). chủ repo cho phép chạy | 0 / 6 | 0 | 24.796.847 / 20.004.042 (x1.24) | Có. theo luật khoá | Lần đo hai. Đọc chặt (trạng thái phải do điều kiện thật dẫn tới): 15 / 6. nền thử kém hơn. Xem mục Lần đo hai |
 
 ### Đọc kết quả
 
@@ -164,6 +165,41 @@ Việc gỡ tham chiếu treo trên nền đối chứng: xoá `tests/App.test.t
 - **Hai lỗi nằm sẵn trong bộ linh kiện của capability** làm mọi tác tử vấp: nhãn huỷ không đủ tương phản, và vùng cuộn của bảng không nhận được tiêu điểm bàn phím.
 
 Theo mục 7: không đạt, phải sửa thiết kế trước khi phát hành. Không sửa ngưỡng.
+
+### Lần đo hai (2026-11-11)
+
+Sau khi sửa tầng thiết kế để giảm chi phí. Cách dựng nền ghi ở nhật ký thay đổi. Cả 24 lần chạy đều ghi được tệp và build được. Chi phí 35,04 USD gồm 1,60 USD chạy thử. Cột "đọc chặt" tính thêm là thiếu những trạng thái chỉ mở được bằng công tắc trạng thái (`?state=` hay mục trong `src/screens.ts`) mà không điều kiện thật nào trong ứng dụng dẫn tới; cột này không thuộc luật đã khoá và không dùng để xét đạt.
+
+| Màn | Nền | Lần | Trạng thái thiếu (luật khoá) | Thiếu (đọc chặt) | Lỗi rào còn lại | Số vòng sửa | Token |
+|---|---|---|---|---|---|---|---|
+| 1 | thử | 1 | 0 | 3 | 0 | 0 | 1.893.633 |
+| 1 | thử | 2 | 0 | 3 | 0 | 0 | 1.398.807 |
+| 1 | thử | 3 | 0 | 3 | 0 | 0 | 1.980.935 |
+| 1 | đối chứng | 1 | 0 | 0 | 8 | 0 | 1.926.498 |
+| 1 | đối chứng | 2 | 0 | 0 | 8 | 0 | 1.508.871 |
+| 1 | đối chứng | 3 | 0 | 0 | 7 | 0 | 2.316.970 |
+| 2 | thử | 1 | 0 | 0 | 0 | 0 | 2.056.338 |
+| 2 | thử | 2 | 0 | 0 | 0 | 0 | 1.936.495 |
+| 2 | thử | 3 | 0 | 0 | 0 | 0 | 2.692.934 |
+| 2 | đối chứng | 1 | 0 | 0 | 7 | 0 | 2.354.651 |
+| 2 | đối chứng | 2 | 1 | 1 | 5 | 0 | 1.833.717 |
+| 2 | đối chứng | 3 | 1 | 1 | 9 | 0 | 1.862.513 |
+| 3 | thử | 1 | 0 | 2 | 0 | 0 | 2.154.447 |
+| 3 | thử | 2 | 0 | 2 | 0 | 0 | 2.783.502 |
+| 3 | thử | 3 | 0 | 2 | 0 | 0 | 2.547.848 |
+| 3 | đối chứng | 1 | 0 | 0 | 7 | 0 | 1.609.809 |
+| 3 | đối chứng | 2 | 0 | 0 | 8 | 1 | 1.321.939 |
+| 3 | đối chứng | 3 | 2 | 2 | 6 | 0 | 1.104.135 |
+| 4 | thử | 1 | 0 | 0 | 0 | 0 | 1.545.144 |
+| 4 | thử | 2 | 0 | 0 | 0 | 0 | 1.855.532 |
+| 4 | thử | 3 | 0 | 0 | 0 | 0 | 1.951.232 |
+| 4 | đối chứng | 1 | 0 | 0 | 3 | 0 | 1.183.331 |
+| 4 | đối chứng | 2 | 2 | 2 | 2 | 0 | 1.156.706 |
+| 4 | đối chứng | 3 | 0 | 0 | 4 | 0 | 1.824.902 |
+
+Tổng: trạng thái thiếu 0 / 6 theo luật khoá. 15 / 6 khi đọc chặt; lỗi rào còn lại 0 / 74; token 24.796.847 / 20.004.042 (x1.24).
+
+**Theo luật đã khoá: đạt cả ba ngưỡng.** Khi đọc chặt thì ngược lại: nền thử thiếu nhiều hơn nền đối chứng. Lý do đọc được trong mã: màn mẫu lấy trạng thái từ công tắc trên đường dẫn. và danh sách màn chung khiến việc thêm một trạng thái chỉ là thêm một mục; tác tử nền thử chép đúng cách đó. nên trạng thái đang tải và lỗi có giao diện nhưng dữ liệu mẫu nạp tức thì và không bao giờ lỗi. Tác tử đối chứng. không có màn mẫu. thường viết một hàm nạp dữ liệu bất đồng bộ có thể trả rỗng hay báo lỗi. Ghi lại để chủ repo quyết định. không đổi luật đã khoá.
 
 ## Nhật ký thay đổi
 
