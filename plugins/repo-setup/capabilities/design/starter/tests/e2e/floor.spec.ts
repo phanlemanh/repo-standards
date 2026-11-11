@@ -16,6 +16,15 @@ for (const route of ROUTES) {
       // An open dialog hides the page behind it from assistive tech; the structure must still be there.
       await expect(page.getByRole("main", { includeHidden: true })).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1, includeHidden: true })).toHaveCount(1);
+      // Let opening animations (a dialog fading in) finish, so contrast is measured on the final look.
+      await page.evaluate(() =>
+        Promise.all(
+          document
+            .getAnimations()
+            .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+            .map((a) => a.finished.catch(() => undefined)),
+        ),
+      );
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
