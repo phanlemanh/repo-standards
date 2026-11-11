@@ -28,7 +28,7 @@ paths: ["src/**/*.tsx"]
   `@/components/ui/button`. Never copy button classes onto an `<a>` by hand.
 - Spacing inside a `Card`: put content in its slots (`CardHeader`, `CardContent`, `CardFooter`).
   For a stack inside a slot, wrap it in a plain `div` with `flex flex-col gap-*`; `gap` on the
-  `Card` or a slot is rejected.
+  `Card` or a slot is rejected. For tighter cards use `size="sm"`.
 - Numbers, money and dates only through `@/lib/format`, never `toLocaleString` or `Intl`.
 - Wide tables on phones: the `Table` container scrolls sideways. Give `Table` an `aria-label` and
   do not force column widths.
