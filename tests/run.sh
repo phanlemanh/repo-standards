@@ -633,10 +633,10 @@ echo "ok  detection of plugin repos (or misses reported above)"
 PF="$ROOT/tests/fixtures/plugin-repos/intact"
 fresh() { rm -rf "$1"; cp -R "$PF" "$1"; git -C "$1" init -q -b main; git -C "$1" add -A; }
 ad="$TMP/plug-adopt"; fresh "$ad"
-before=$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs shasum | shasum)
+before=$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)
 out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starter --adopt --dry-run \
   --var project_name=Sample --var description=x --var owner=acme --json)
-[ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs shasum | shasum)" ] || miss "adopt plugin repo: dry run changed files"
+[ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
 padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'tools/plugin_lint.py']"
 padopt "d['merged'] == ['.gitignore']"
