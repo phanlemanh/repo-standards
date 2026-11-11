@@ -95,7 +95,8 @@ async function guards() {
   } catch {
     problems.push("design/terms.json is missing or not valid JSON");
   }
-  const probeRules = (await eslint.calculateConfigForFile("src/pages/guard-probe.tsx"))?.rules ?? {};
+  const probeRules =
+    (await eslint.calculateConfigForFile("src/pages/guard-probe.tsx"))?.rules ?? {};
   const floorRules = Object.keys(probeRules).filter(isFloorRule);
   for (const rule of ["shadcn/no-restyle", "no-restricted-syntax"])
     if (!isError(probeRules[rule])) problems.push(`${rule} is not an error for the probe page`);
@@ -143,7 +144,9 @@ function gate() {
   for (const f of ["Makefile", ...mkFiles.map((n) => join("mk", n))]) {
     const text = read(f);
     if (/^\s*\.IGNORE\s*:/m.test(text)) problems.push(`${f} ignores errors with .IGNORE`);
-    const flags = text.split("\n").filter((line) => /^\s*((export|override)\s+)*MAKEFLAGS\b/.test(line));
+    const flags = text
+      .split("\n")
+      .filter((line) => /^\s*((export|override)\s+)*MAKEFLAGS\b/.test(line));
     if (flags.some((line) => /(^|[\s=])(-[a-zA-Z]*i[a-zA-Z]*|--ignore-errors)\b/.test(line)))
       problems.push(`${f} ignores errors through MAKEFLAGS`);
   }
