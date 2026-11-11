@@ -91,6 +91,22 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     cp src/index.css "$TMP/i.bak"; sed 's/--destructive: oklch(0.48 0.2 27.325)/--destructive: oklch(0.55 0.245 27.325)/' "$TMP/i.bak" > src/index.css
     changed "$TMP/i.bak" src/index.css "restoring the shadcn destructive red"
     red "destructive badge contrast" '"color-contrast"' make ui-floor; cp "$TMP/i.bak" src/index.css
+    # A new screen is one entry in src/screens.ts, and the floor visits it. Its wide table has no
+    # focusable cell, so only the patched scroll region keeps it reachable by keyboard.
+    cp src/screens.ts "$TMP/sc.bak"; mkdir -p src/wide
+    printf '%s\n' 'import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";' \
+      'export function Wide({ state }: { state: "ready" }) {' \
+      '  const cells = Array.from({ length: 12 }, (_, i) => <TableCell key={i}>cell number {i}</TableCell>);' \
+      '  return (<main><h1>{state}</h1><Table aria-label="wide"><TableBody><TableRow>{cells}</TableRow></TableBody></Table></main>);' \
+      '}' > src/wide/Wide.tsx
+    awk '{ print } /^export const SCREENS/ { print "  screen(\"/wide\", [\"ready\"], () => import(\"@/wide/Wide\").then((m) => m.Wide)),"; }' "$TMP/sc.bak" > src/screens.ts
+    changed "$TMP/sc.bak" src/screens.ts "registering a screen"
+    npx playwright test --list | grep -qF 'floor /wide at 390px' || { echo "FAIL: the floor does not visit a registered screen"; exit 1; }
+    make ui-floor >/dev/null || { echo "FAIL: a wide table failed the floor"; make ui-floor; exit 1; }
+    cp src/components/ui/table.tsx "$TMP/t.bak"; grep -v 'tabIndex={0}' "$TMP/t.bak" > src/components/ui/table.tsx
+    changed "$TMP/t.bak" src/components/ui/table.tsx "dropping the table patch"
+    red "table scroll region" '"scrollable-region-focusable"' make ui-floor
+    cp "$TMP/t.bak" src/components/ui/table.tsx; cp "$TMP/sc.bak" src/screens.ts; rm -r src/wide
     node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 >/dev/null 2>&1 & PREVIEW=$!
     for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/4173) 2>/dev/null && break; sleep 0.2; done
     red "busy port" "http://127.0.0.1:4173 is already used" make ui-floor

@@ -1,17 +1,18 @@
-import { ReferenceScreen, type ScreenState } from "@/example/ReferenceScreen";
+import { useEffect, useState, type ComponentType } from "react";
 
-// eslint-disable-next-line react-refresh/only-export-components -- the unit test reads this list
-export const STATES: ScreenState[] = [
-  "ready",
-  "loading",
-  "empty",
-  "error",
-  "no-results",
-  "saving",
-  "confirm-delete",
-];
+import { SCREENS } from "@/screens";
 
+type Shown = { Screen: ComponentType<{ state: string }>; state: string };
+
+// Shows the screen registered for this path, in the state named by `?state=` or else its first.
 export function App() {
-  const asked = new URLSearchParams(window.location.search).get("state") as ScreenState | null;
-  return <ReferenceScreen state={asked && STATES.includes(asked) ? asked : "ready"} />;
+  const [shown, setShown] = useState<Shown | null>(null);
+  useEffect(() => {
+    const page = SCREENS.find((s) => s.path === window.location.pathname) ?? SCREENS[0];
+    if (!page) return;
+    const asked = new URLSearchParams(window.location.search).get("state");
+    const state = asked !== null && page.states.includes(asked) ? asked : page.states[0];
+    void page.load().then((Screen) => setShown({ Screen, state }));
+  }, []);
+  return shown ? <shown.Screen state={shown.state} /> : null;
 }

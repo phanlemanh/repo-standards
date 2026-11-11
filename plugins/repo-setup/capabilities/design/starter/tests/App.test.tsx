@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
-import { App, STATES } from "../src/App.tsx";
+import { App } from "../src/App.tsx";
 import { ReferenceScreen, type ScreenState } from "../src/example/ReferenceScreen.tsx";
 import { formatDate, formatMoney } from "../src/lib/format.ts";
 import { LABELS } from "../src/lib/labels.ts";
+import { SCREENS } from "../src/screens.ts";
 import { ROUTES } from "./e2e/routes.ts";
 
 const SHOWN: [ScreenState, string][] = [
@@ -20,6 +21,21 @@ const SHOWN: [ScreenState, string][] = [
 afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
+
+it("lists at least one screen", () => {
+  expect(SCREENS.length).toBeGreaterThan(0);
+});
+
+it.each(SCREENS.flatMap((s) => s.states.map((state) => [s.path, state, s] as const)))(
+  "renders %s in the %s state with one main and one h1",
+  async (_path, state, entry) => {
+    const Screen = await entry.load();
+    render(<Screen state={state} />);
+    // A dialog hides the page behind it from assistive tech; the structure must still be there.
+    expect(screen.getAllByRole("main", { hidden: true })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1, hidden: true })).toHaveLength(1);
+  },
+);
 
 it.each(SHOWN)("shows the %s state under the page title", (state, text) => {
   render(<ReferenceScreen state={state} />);
@@ -76,21 +92,23 @@ it("gives every status its own badge, one of them destructive", () => {
   expect([...look.values()]).toContain("destructive");
 });
 
-it("has a browser route for every state but ready", () => {
-  for (const state of STATES.filter((s) => s !== "ready"))
-    expect(ROUTES).toContain(`/?state=${state}`);
+it("gives the browser checks a route for every state of every screen", () => {
+  for (const { path, states } of SCREENS) {
+    expect(ROUTES).toContain(path);
+    for (const state of states.slice(1)) expect(ROUTES).toContain(`${path}?state=${state}`);
+  }
 });
 
-it("opens the state named in the address", () => {
+it("opens the state named in the address", async () => {
   window.history.replaceState(null, "", "/?state=error");
   render(<App />);
-  expect(screen.getByText(LABELS.errorTitle)).toBeInTheDocument();
+  expect(await screen.findByText(LABELS.errorTitle)).toBeInTheDocument();
 });
 
-it("falls back to the ready state for an unknown address", () => {
-  window.history.replaceState(null, "", "/?state=unknown");
+it("falls back to the first state for an unknown state or path", async () => {
+  window.history.replaceState(null, "", "/nowhere?state=unknown");
   render(<App />);
-  expect(screen.getByText(LABELS.sampleFirstName)).toBeInTheDocument();
+  expect(await screen.findByText(LABELS.sampleFirstName)).toBeInTheDocument();
 });
 
 it("formats money and dates", () => {

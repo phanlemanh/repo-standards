@@ -752,6 +752,18 @@ m["files"]["mk/design.mk"] = hashlib.sha256(open(f, "rb").read()).hexdigest(); j
 PY
 case "$(floor)" in *"changed since apply"*) miss "design floor: compared with the plugin copy although a hash is recorded" ;; esac
 cp "$TMP/mk.bak" "$d/mk/design.mk"; cp "$TMP/manifest.bak" "$d/.repo-setup.json"
+# 31f. one registry of screens: the browser routes come from src/screens.ts
+d="$TMP/design-team"
+( cd "$d" && node tools/design_guards.mjs --only reference >/dev/null 2>&1 ) || miss "design reference: red on a fresh repo"
+grep -q 'SCREENS' "$d/src/App.tsx" || miss "design: App.tsx does not read src/screens.ts"
+ref_red() { # <file> <replacement content> <expected text>
+  cp "$d/$1" "$TMP/ref.bak"; printf '%s\n' "$2" > "$d/$1"
+  out=$(cd "$d" && node tools/design_guards.mjs --only reference 2>&1) && miss "design reference: stayed green with $1 = $2"
+  case "$out" in *"$3"*) ;; *) miss "design reference: $1 went red for another reason: $out" ;; esac
+  cp "$TMP/ref.bak" "$d/$1"
+}
+ref_red src/screens.ts 'export const SCREENS = [];' "src/screens.ts lists no screen path starting with /"
+ref_red tests/e2e/routes.ts 'export const ROUTES = ["/"];' "tests/e2e/routes.ts does not take its routes from src/screens.ts"
 # 31e. the gate check goes red when make could skip the guards or ignore their failure
 d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"

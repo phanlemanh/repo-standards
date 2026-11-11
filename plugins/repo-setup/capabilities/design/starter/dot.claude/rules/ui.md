@@ -13,7 +13,7 @@ paths: ["src/**/*.tsx"]
   `src/lib/format.ts`.
 - Use the token classes (`bg-primary`, `text-muted-foreground`) and the spacing and size scales.
   `make lint` rejects raw colours, arbitrary values and inline styles.
-- Add every new screen to `tests/e2e/routes.ts`, with one entry per state, so `make ui-floor`
-  checks it at both widths.
+- Register every new screen in `src/screens.ts`, with its path and states. The app, the unit tests
+  and `make ui-floor` read that list.
 - `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` belong to the plugin. Do
   not edit them here: change them in the plugin and re-apply, or `doctor` loses points.

@@ -154,8 +154,10 @@ function gate() {
 
 function reference() {
   if (!existsSync("design/behaviors.md")) problems.push("design/behaviors.md is missing");
-  if (!/["'`]\//.test(read("tests/e2e/routes.ts")))
-    problems.push("tests/e2e/routes.ts lists no path starting with /");
+  if (!/["'`]\//.test(read("src/screens.ts")))
+    problems.push("src/screens.ts lists no screen path starting with /");
+  if (!/from\s+["'][./]*src\/screens(\.ts)?["']/.test(read("tests/e2e/routes.ts")))
+    problems.push("tests/e2e/routes.ts does not take its routes from src/screens.ts");
   for (const [file, max] of [
     [".claude/rules/ui.md", 40],
     [".claude/skills/ui/SKILL.md", 60],

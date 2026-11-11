@@ -43,6 +43,7 @@ Nền thử mang các dấu mốc cố định để cắt máy móc: trong `AGE
 - xoá `mk/design.mk` (an toàn vì `Makefile` dùng `-include mk/*.mk`)
 - xoá `tests/e2e/`
 - xoá `src/example/`
+- xoá `src/screens.ts`
 - xoá khỏi `AGENTS.md` mục từ `## Design floor` đến tiêu đề `## ` kế tiếp
 - xoá khỏi `eslint.config.js` mọi thứ giữa `// design-floor:start` và `// design-floor:end`, và dòng import `@shadcn/lint`
 - đổi `src/App.tsx` về trang một tiêu đề
@@ -172,3 +173,4 @@ Theo mục 7: không đạt, phải sửa thiết kế trước khi phát hành.
 | 2026-11-10 | Siết giao thức: bỏ gợi ý trạng thái khỏi mô tả màn, khoá bảng trạng thái cần có, cách gộp, dấu mốc cắt nền đối chứng, lệnh chạy rào và điều kiện chạy | Sau rà soát, giao thức chưa tái lập được; sửa trước khi chạy lần nào |
 | 2026-11-11 | Lệnh dựng thêm --permission-mode acceptEdits --allowedTools "Bash(npm:*)" "Bash(npx:*)", như nhau trên hai nền | Repo sinh ra chỉ cho chạy make và đọc git; ở chế độ -p tác tử dựng không ghi được tệp nào, phép đo sẽ vô nghĩa |
 | 2026-11-11 | Lượt chạy thứ nhất (24 lần, chưa chấm) bị huỷ. Lệnh dựng thay bằng --permission-mode acceptEdits --allowedTools "Bash(make:*)" "Bash(git status:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(python3 tools/:*)" "Bash(npm:*)" "Bash(npx:*)", như nhau trên hai nền. Lần chạy nền thử chạy lần lượt từng lần một | Bản sao để đo là thư mục chưa được tin cậy nên Claude Code bỏ qua quyền trong .claude/settings.json; lệnh cũ chỉ cho npm và npx, cả 24 lần đều bị từ chối make, nền thử chưa từng chạy được make check và 12/24 bản không build được vì không chạy được make gen. Lệnh mới cho đúng các quyền repo vốn cho. make check của nền thử mở cổng 4173 cho bài trình duyệt nên hai lần nền thử không được chạy cùng lúc |
+| 2026-11-11 | Nền đối chứng xoá thêm `src/screens.ts` | Sau phép đo, danh sách màn chung `src/screens.ts` thay cho việc nối từng màn vào `App.tsx`, `routes.ts` và test đơn vị; tệp này nhập `src/example/`, nên để lại thì nền đối chứng không build được |
