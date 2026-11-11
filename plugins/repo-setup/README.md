@@ -42,11 +42,14 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 
 ### Design (React/Vite)
 
-`--with design` adds the design floor. `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and
-`mk/design.mk` are owned by the plugin: change them in the plugin and re-apply. A local edit costs
-the `design_guards_bite` points in `doctor`. Screens and their states are listed once, in
-`src/screens.ts`; the builder reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the
-fast loop.
+`--with design` adds the design floor. `tools/design_guards.mjs`, `mk/design.mk`,
+`tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and `tests/e2e/routes.ts` are owned by the plugin:
+change them in the plugin and re-apply. A local edit costs the `design_guards_bite` points in
+`doctor`. Screens and their states are listed once, in `src/screens.ts` (a path may have parts, such
+as `/orders/:id`, with a real address to visit); the sample screen sits at `/example`. The builder
+reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the fast loop. The data source's test
+hook (`?scenario=`) answers only in the unit tests and the browser checks' own build, never in
+`npm run build`.
 
 ### AI in the product
 

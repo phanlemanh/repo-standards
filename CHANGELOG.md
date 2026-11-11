@@ -22,6 +22,15 @@
 - The sample screen takes its states from data, not from `?state=`: it loads from
   `src/example/data.ts`, which can be slow, fail or find nothing, and tests pick that answer with
   `?scenario=`; `src/screens.ts` lists, per state, the scenario, the user's steps and the text shown.
+- Less for the builder to read and wire: a screen in `src/screens.ts` may have a path with parts
+  (`/orders/:id`) plus `visit`, the real address the checks open, and receives the parts as
+  `params`. `tests/App.test.tsx` is now a short generic walk over that list and, with
+  `tests/e2e/routes.ts`, is owned by the plugin (a local edit costs the `design_guards_bite`
+  points). The sample screen moved to `/example`; an unknown address shows a not-found page instead
+  of the sample. The `?scenario=` test hook answers only in unit tests and in the browser checks'
+  own build (`vite build --mode floor` into `coverage/floor`), never in `npm run build`. The
+  restyle guard's message no longer sends the builder into `src/components/ui`. At `team` level the
+  sample is left out of coverage.
 
 ### TypeScript presets
 - TypeScript presets (ts-node, ts-api, react-vite): check steps run quietly; a failing step prints its

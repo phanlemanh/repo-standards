@@ -123,7 +123,13 @@ Plugin chỉ chứa tiếng Anh, `tests/run.sh` chặn tiếng Việt trong plug
 
 Linh kiện cài sẵn: button, input, label, table, card, badge, dialog, select, skeleton, empty, alert. Không cài `sonner` cho tới khi hết lỗi kiểu chặt.
 
-Màn mẫu nhận trạng thái qua tham số trên đường dẫn. Một danh sách chung `src/screens.ts` ghi mỗi màn và các trạng thái của nó; ứng dụng, bài trình duyệt và test đơn vị đều đọc từ danh sách này. Repo thêm màn thật hay thêm trạng thái thì chỉ thêm một mục ở đó (đổi sau phép đo 2026-11-11, vì nối tay vào ba chỗ làm tác tử tốn lượt).
+Màn mẫu lấy trạng thái từ nguồn dữ liệu cạnh nó (`src/example/data.ts`): độ trễ thật, lỗi khi mất mạng, thêm và xoá thật trong bộ nhớ. Móc kiểm thử `?scenario=` là một dòng ở đầu mỗi yêu cầu và chỉ trả lời khi chạy test đơn vị (chế độ `test` của Vite) hoặc trong bản dựng riêng của bài trình duyệt (chế độ `floor`, ra `coverage/floor`, không đụng `dist/`). Bản `npm run build` cho người dùng không mang móc này: người ngoài không ép được trạng thái "không bao giờ tải" hay "lỗi" bằng đường dẫn.
+
+Một danh sách chung `src/screens.ts` ghi mỗi màn và các trạng thái của nó; ứng dụng, bài trình duyệt và test đơn vị đều đọc từ danh sách này. Đường dẫn có phần thay đổi (`/orders/:id`) khai thêm `visit`, một địa chỉ thật cho bài kiểm mở (`/orders/1`), và màn nhận các phần đó qua `params`. Repo thêm màn thật hay thêm trạng thái thì chỉ thêm một mục ở đó. `tests/App.test.tsx` chỉ đi qua danh sách này, không có gì riêng của màn mẫu; nó và `tests/e2e/routes.ts` thuộc plugin như `floor.spec.ts`, sửa tại chỗ thì mất điểm `design_guards_bite`. Hành vi riêng của màn mẫu (thử lại, thêm khi rỗng, huỷ xoá, mất mạng, móc tắt ở bản dựng thật) được kiểm trong `tests/e2e.sh` của plugin bằng `tests/fixtures/design/reference.test.tsx`, và cấp `team` không tính màn mẫu vào độ phủ.
+
+Màn mẫu nằm ở `/example`, để màn thật đầu tiên lấy `/`. Địa chỉ không màn nào nhận thì hiện một trang báo không tồn tại, không rơi về màn mẫu.
+
+(Đổi sau phép đo lần ba 2026-11-11: 9 trên 12 tác tử vẫn sửa `tests/App.test.tsx` và tự đặt sáu tên trường khác nhau cho đường dẫn có tham số; 9 trên 12 bản để màn mẫu ở trang chủ; móc kiểm thử chạy cả trong bản phát hành.)
 
 Luật cho phép thêm linh kiện từ kho, nhưng khối dựng sẵn (dashboard, login và tương tự) chỉ được đọc để tham khảo, không `add` thẳng vào repo.
 
@@ -143,6 +149,7 @@ Luật cho phép thêm linh kiện từ kho, nhưng khối dựng sẵn (dashboa
 - Công cụ trong `tools/` cần khai `globals.node`; `vite.config.ts` dùng `import.meta.dirname`.
 - Mọi tệp trong capability phải đã qua Prettier, nếu không cổng đỏ ngay và lần áp lại báo xung đột.
 - Hạ `--destructive` trong bản chụp cấu hình để Alert kiểu lỗi đạt ngưỡng.
+- Lời báo của `shadcn/no-restyle` được thay qua tuỳ chọn `message` của luật: lời gốc bảo thêm biến thể trong `src/components/ui/table.tsx`, trái với luật không sửa `src/components/ui`. Lời mới bảo bọc chữ trong `span` và mang lớp ở đó.
 - Playwright ghi kết quả vào thư mục đã được bỏ qua và không sinh báo cáo HTML, để khỏi sửa `.gitignore` của khung.
 - Đích kiểm trình duyệt luôn gọi cài Chromium trước khi chạy (đã có thì mất nửa giây), để bản clone mới không đỏ vì thiếu trình duyệt. Thêm `--with-deps` khi có biến `CI`, nên không phải đụng `ci.yml`.
 
