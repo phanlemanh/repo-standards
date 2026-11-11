@@ -33,8 +33,8 @@ const CLEAN = [
   '<Button size="lg" className="mt-4 w-full" />',
 ];
 const HEAD = 'import { Button } from "@/components/ui/button";\nexport const a = ';
-// Rules every source file outside the vendor folder must get as errors.
-const FLOOR_RULES = ["shadcn/no-restyle", "no-restricted-syntax"];
+// Every source file outside the vendor folder must get the floor rules exactly as a probe page does.
+const isFloorRule = (r) => r.startsWith("shadcn/") || r === "no-restricted-syntax";
 const VENDOR = join("src", "components", "ui");
 // The one place allowed to format, and the generated types that `make ontology` checks.
 const OUTSIDE_FLOOR = [join("src", "lib", "format.ts"), join("src", "generated", "ontology.ts")];
@@ -44,7 +44,7 @@ function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) return p === VENDOR ? [] : walk(p);
-    return /\.[jt]sx?$/.test(p) ? [p] : [];
+    return /\.[cm]?[jt]sx?$/.test(p) ? [p] : [];
   });
 }
 
@@ -95,13 +95,18 @@ async function guards() {
   } catch {
     problems.push("design/terms.json is missing or not valid JSON");
   }
+  const probeRules = (await eslint.calculateConfigForFile("src/pages/guard-probe.tsx"))?.rules ?? {};
+  const floorRules = Object.keys(probeRules).filter(isFloorRule);
+  for (const rule of ["shadcn/no-restyle", "no-restricted-syntax"])
+    if (!isError(probeRules[rule])) problems.push(`${rule} is not an error for the probe page`);
   for (const f of existsSync("src") ? walk("src") : []) {
     if (!OUTSIDE_FLOOR.includes(f)) {
       if (await eslint.isPathIgnored(f)) problems.push(`ignored by eslint: ${f}`);
       else {
         const rules = (await eslint.calculateConfigForFile(f))?.rules ?? {};
-        for (const rule of FLOOR_RULES)
-          if (!isError(rules[rule])) problems.push(`${rule} is not an error for ${f}`);
+        for (const rule of floorRules)
+          if (JSON.stringify(rules[rule]) !== JSON.stringify(probeRules[rule]))
+            problems.push(`${rule} differs from the floor for ${f}`);
       }
     }
     const text = read(f);

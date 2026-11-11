@@ -18,7 +18,7 @@ export default defineConfig([
   },
   // design-floor:start
   {
-    files: ["src/**/*.{ts,tsx,js,jsx}"],
+    files: ["src/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}"],
     ignores: ["src/components/ui/**", "src/lib/format.ts"],
     plugins: { shadcn },
     rules: {
