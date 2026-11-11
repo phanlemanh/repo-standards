@@ -13,6 +13,8 @@
   why); your own `src/index.css` is kept, with a note, and its design tokens must be merged by hand.
 - `adopt` does not support the `design` capability yet: `apply.py` refuses it in adopt mode, and
   `doctor` reports `design_present` as not applicable there.
+- `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` are owned by the plugin:
+  change them in the plugin and re-apply; a local edit costs the `design_guards_bite` points.
 
 ### Fixes
 - `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its

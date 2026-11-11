@@ -15,3 +15,5 @@ paths: ["src/**/*.tsx"]
   `make lint` rejects raw colours, arbitrary values and inline styles.
 - Add every new screen to `tests/e2e/routes.ts`, with one entry per state, so `make ui-floor`
   checks it at both widths.
+- `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and `mk/design.mk` belong to the plugin. Do
+  not edit them here: change them in the plugin and re-apply, or `doctor` loses points.

@@ -40,6 +40,12 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 
 `apply.py --list-options` lists them with when to use each.
 
+### Design (React/Vite)
+
+`--with design` adds the design floor. `tools/design_guards.mjs`, `tests/e2e/floor.spec.ts` and
+`mk/design.mk` are owned by the plugin: change them in the plugin and re-apply. A local edit costs
+the `design_guards_bite` points in `doctor`.
+
 ### AI in the product
 
 `--with ai --var ai_tier=call|workflow|agent` uses the official Anthropic SDK. The agent tier builds
