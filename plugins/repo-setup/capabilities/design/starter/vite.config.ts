@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
   test: {
     environment: "jsdom",
+    reporters: ["dot"],
     exclude: ["node_modules/**", "tests/e2e/**"],
     setupFiles: ["./tests/setup.ts"],
   },

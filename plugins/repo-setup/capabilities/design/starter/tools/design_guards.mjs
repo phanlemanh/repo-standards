@@ -131,9 +131,9 @@ function gate() {
   if (!/^node tools\/design_guards\.mjs$/m.test(plan))
     problems.push("make check does not run the design guards");
   const mk = read("mk/design.mk");
-  if (!/^\tnpx playwright test$/m.test(mk))
+  if (!/^\t@?npx playwright test$/m.test(mk))
     problems.push("the browser step can no longer fail the gate");
-  if (!/^\tnode tools\/design_guards\.mjs$/m.test(mk))
+  if (!/^\t@?node tools\/design_guards\.mjs$/m.test(mk))
     problems.push("the design guards can no longer fail the gate");
   // A make setting that ignores errors would turn every step above into decoration.
   if (existsSync("GNUmakefile"))

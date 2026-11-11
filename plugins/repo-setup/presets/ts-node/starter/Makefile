@@ -6,6 +6,8 @@ CHECK_TARGETS := lint typecheck test ontology
 
 # Extra targets from repo-setup layers (architecture, governance...) live in mk/*.mk.
 # They append to CHECK_TARGETS, so `make check` grows with the setup.
+# Check steps run quietly: a passing step prints only its tool's short result, a failing
+# step prints the tool's full report.
 -include mk/*.mk
 
 .PHONY: help setup dev build format lint typecheck test gen ontology check clean
@@ -26,22 +28,23 @@ format: ## Auto-format all files
 	npm run format
 
 lint: ## Lint and check formatting
-	npm run lint
+	@npm run --silent lint
 
 typecheck: ## Strict type check
-	npm run typecheck
+	@npm run --silent typecheck
 
 test: ## Run tests
-	npm test
+	@npm run --silent test
 
 gen: ## Regenerate types from ontology/
 	python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT)
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
-	python3 tools/wiki_lint.py
-	python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT) --check
+	@python3 tools/wiki_lint.py
+	@python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT) --check
 
 check: $(CHECK_TARGETS) ## Everything CI runs
+	@echo "make check passed: $(CHECK_TARGETS)"
 
 clean: ## Remove build output
 	rm -rf dist coverage

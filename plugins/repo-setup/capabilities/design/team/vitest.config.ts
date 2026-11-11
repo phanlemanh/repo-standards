@@ -9,6 +9,8 @@ export default mergeConfig(
       coverage: {
         enabled: true,
         provider: "v8",
+        // The console shows only a missed threshold; coverage/index.html has the table per file.
+        reporter: ["html", "json-summary"],
         include: ["src/**"],
         // Entry points and generated code are covered by other means.
         exclude: [

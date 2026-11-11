@@ -78,7 +78,7 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     red "other floor rule off for one folder" "shadcn/no-raw-colors differs from the floor for src/x/a.ts" node tools/design_guards.mjs --only guards; rm -r src/x; cp "$TMP/e.bak" eslint.config.js
     mkdir -p src/feature/components/ui; printf '// eslint-disable-next-line\nexport const x = 1;\n' > src/feature/components/ui/thing.ts
     red "disable in a nested ui folder" "eslint-disable without a reason: src/feature/components/ui/thing.ts" node tools/design_guards.mjs --only guards; rm -r src/feature
-    cp mk/design.mk "$TMP/m.bak"; awk '{ if ($0 == "\tnpx playwright test") print "\t-npx playwright test"; else print }' "$TMP/m.bak" > mk/design.mk
+    cp mk/design.mk "$TMP/m.bak"; awk '{ if ($0 == "\t@npx playwright test") print "\t@-npx playwright test"; else print }' "$TMP/m.bak" > mk/design.mk
     changed "$TMP/m.bak" mk/design.mk "the ignored-step mutation"
     red "ignored browser step" "the browser step can no longer fail the gate" node tools/design_guards.mjs --only gate; cp "$TMP/m.bak" mk/design.mk
     cp src/main.tsx "$TMP/s.bak"; grep -v 'index.css' "$TMP/s.bak" > src/main.tsx

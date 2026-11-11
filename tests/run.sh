@@ -786,6 +786,22 @@ case "$out" in *"GNUmakefile exists: make reads it before Makefile"*) ;; *) miss
 rm -f "$d/GNUmakefile"
 ( cd "$d" && printf 'MAKEFLAGS += --no-print-directory\n' >> Makefile && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) \
   || miss "design gate: an unrelated MAKEFLAGS setting went red"
+# Quiet steps: a silent recipe (@) still counts, an error-ignoring one (- in any order) does not.
+for prefix in '@-' '-@'; do
+  cp "$d/mk/design.mk" "$TMP/gate.bak"
+  subst "s/^	@npx playwright test\$/	${prefix}npx playwright test/" "$d/mk/design.mk"
+  cmp -s "$TMP/gate.bak" "$d/mk/design.mk" && miss "design gate: the $prefix mutation did not change mk/design.mk"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}npx playwright test"
+  case "$out" in *"the browser step can no longer fail the gate"*) ;; *) miss "design gate: $prefix went red for another reason: $out" ;; esac
+  cp "$TMP/gate.bak" "$d/mk/design.mk"
+done
+# make check is quiet: no echoed commands, no npm banners, one dot per test, coverage table in a file.
+grep -q '^	@npm run --silent lint$' "$d/Makefile" && grep -q '^	@npm run --silent test$' "$d/Makefile" \
+  && grep -q '^	@echo "make check passed' "$d/Makefile" || miss "quiet check: Makefile steps echo their commands"
+grep -q 'prettier --check --log-level warn' "$d/package.json" || miss "quiet check: prettier prints on success"
+grep -q 'reporter: "dot"' "$d/playwright.config.ts" && grep -q 'reporters: \["dot"\]' "$d/vite.config.ts" \
+  && grep -q 'reporter: \["html", "json-summary"\]' "$d/vitest.config.ts" || miss "quiet check: a test step prints every test"
+grep -q 'tsc --noEmit >&2' "$d/playwright.config.ts" || miss "quiet check: build errors hidden from the browser step"
 python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "design checks wired wrongly"
 import sys, tomllib, pathlib
 checks = {c["id"]: c for c in tomllib.loads((pathlib.Path(sys.argv[1]) / "checklists/top-tier.toml").read_text())["check"]}
