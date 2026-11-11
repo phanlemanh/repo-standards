@@ -43,7 +43,7 @@ shadcn is pinned to one version; always call it with that version.
 1. Find it: `npx shadcn@4.23.0 search @shadcn -q "date picker"`.
 2. Read how it is used: `npx shadcn@4.23.0 docs calendar`, and its source:
    `npx shadcn@4.23.0 view @shadcn/calendar`.
-3. Install it: `npx shadcn@4.23.0 add calendar`, then `node tools/patch_ui.mjs` and `make format`.
+3. Install it: `npx shadcn@4.23.0 add calendar`, then `make ui-patch format`.
 
 Results marked `(block)` are ready-made sections: read them with `view` for ideas, never `add`
 them. They bring their own layout and words past the guards.

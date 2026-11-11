@@ -650,11 +650,11 @@ done
 grep -q 'src/components/ui' "$TMP/design-team/vitest.config.ts" || miss "design: team coverage counts vendor code"
 # The table patch: runs after `shadcn add` and before `make format`, is safe to run twice,
 # and stops loudly when the component no longer looks like the pinned version.
-python3 - "$S/../capabilities/design/preset.toml" <<'PY' || miss "design: patch_ui.mjs not run between shadcn add and make format"
+python3 - "$S/../capabilities/design/preset.toml" <<'PY' || miss "design: make ui-patch not run between shadcn add and make format"
 import sys, tomllib
 cmds = tomllib.load(open(sys.argv[1], "rb"))["starter"]["install"]
 at = lambda word: next(i for i, c in enumerate(cmds) if word in c)
-assert at("shadcn@4.23.0 add") < at("node tools/patch_ui.mjs") < at("make format"), cmds
+assert at("shadcn@4.23.0 add") < at("make ui-patch") < at("make format"), cmds
 PY
 d="$TMP/design-team"; mkdir -p "$d/src/components/ui"
 cat > "$d/src/components/ui/table.tsx" <<'TSX'
@@ -665,7 +665,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       className="relative w-full overflow-x-auto"
     >
 TSX
-( cd "$d" && node tools/patch_ui.mjs && cp src/components/ui/table.tsx "$TMP/table.once" && node tools/patch_ui.mjs ) \
+( cd "$d" && make -s ui-patch && cp src/components/ui/table.tsx "$TMP/table.once" && make -s ui-patch ) \
   || miss "design: patch_ui.mjs failed on the shadcn table"
 grep -q 'role="region" aria-label={label} tabIndex={0}' "$d/src/components/ui/table.tsx" && grep -q '"aria-label": string' "$d/src/components/ui/table.tsx" \
   || miss "design: table scroll region not focusable and named after the patch"

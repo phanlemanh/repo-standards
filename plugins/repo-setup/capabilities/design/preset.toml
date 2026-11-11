@@ -16,7 +16,7 @@ install = [
   "npm install @base-ui/react class-variance-authority cn lucide-react tw-animate-css @fontsource-variable/geist shadcn@4.23.0",
   "npm install --save-dev tailwindcss @tailwindcss/vite @shadcn/lint@0.2.5 @playwright/test @axe-core/playwright",
   "npx shadcn@4.23.0 add button input label table card badge dialog select skeleton empty alert -y --overwrite",
-  "node tools/patch_ui.mjs",
+  "make ui-patch",
   "npx playwright install chromium",
   "make format",
 ]
