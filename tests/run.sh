@@ -648,6 +648,32 @@ for level in starter team; do
   [ "$again" -eq 0 ] || miss "design/$level: second run changed $again files"
 done
 grep -q 'src/components/ui' "$TMP/design-team/vitest.config.ts" || miss "design: team coverage counts vendor code"
+# The table patch: runs after `shadcn add` and before `make format`, is safe to run twice,
+# and stops loudly when the component no longer looks like the pinned version.
+python3 - "$S/../capabilities/design/preset.toml" <<'PY' || miss "design: patch_ui.mjs not run between shadcn add and make format"
+import sys, tomllib
+cmds = tomllib.load(open(sys.argv[1], "rb"))["starter"]["install"]
+at = lambda word: next(i for i, c in enumerate(cmds) if word in c)
+assert at("shadcn@4.23.0 add") < at("node tools/patch_ui.mjs") < at("make format"), cmds
+PY
+d="$TMP/design-team"; mkdir -p "$d/src/components/ui"
+cat > "$d/src/components/ui/table.tsx" <<'TSX'
+function Table({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto"
+    >
+TSX
+( cd "$d" && node tools/patch_ui.mjs && cp src/components/ui/table.tsx "$TMP/table.once" && node tools/patch_ui.mjs ) \
+  || miss "design: patch_ui.mjs failed on the shadcn table"
+grep -q 'role="region" aria-label={label} tabIndex={0}' "$d/src/components/ui/table.tsx" && grep -q '"aria-label": string' "$d/src/components/ui/table.tsx" \
+  || miss "design: table scroll region not focusable and named after the patch"
+cmp -s "$TMP/table.once" "$d/src/components/ui/table.tsx" || miss "design: patch_ui.mjs is not idempotent"
+echo 'export {};' > "$d/src/components/ui/table.tsx"
+out=$(cd "$d" && node tools/patch_ui.mjs 2>&1) && miss "design: patch_ui.mjs accepted an unknown table"
+case "$out" in *"no longer matches"*) ;; *) miss "design: patch_ui.mjs failed without saying why: $out" ;; esac
+rm -r "$d/src/components"
 d="$TMP/design-plain"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design \
   --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: no brand must work"
 grep -q 'brand' "$d/src/index.css" && miss "design: brand block without a brand"

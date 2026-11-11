@@ -10,6 +10,7 @@ export const LABELS = {
   noResultsTitle: "No results",
   noResultsDetail: "Try a different search or clear the filters.",
   noResultsAction: "Clear filters",
+  tableName: "Items",
   columnName: "Name",
   columnDate: "Date",
   columnTotal: "Total",

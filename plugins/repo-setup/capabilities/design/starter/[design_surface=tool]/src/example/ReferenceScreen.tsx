@@ -145,7 +145,7 @@ export function ReferenceScreen({ state }: { state: ScreenState }) {
     );
   } else {
     body = (
-      <Table>
+      <Table aria-label={LABELS.tableName}>
         <TableHeader>
           <TableRow>
             <TableHead>{LABELS.columnName}</TableHead>
