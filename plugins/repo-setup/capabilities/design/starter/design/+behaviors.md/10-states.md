@@ -5,8 +5,8 @@ One answer for each case. Use it instead of inventing another.
 ## States
 
 A state appears because of a real condition: a pending or failed request, an empty result, a
-filter with no match, a user action. Never because of a prop or a URL value in the view. Tests
-choose the condition through the data source.
+filter with no match, a user action. Never because of a switch: a prop or URL value that exists
+only to pick the state. Tests choose the condition through the data source.
 
 - **Loading:** show the shape of the coming content, not a spinner, with `Skeleton`.
 - **Empty:** say nothing exists yet and offer the first action, with `Empty` and a `Button`.

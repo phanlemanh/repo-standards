@@ -8,8 +8,8 @@ paths: ["src/**/*.tsx"]
   source module next to it (`data.ts`), and every state the screen can reach.
   `design/behaviors.md` says what each state shows and the text density.
 - A state appears because of a real condition: a pending or failed request, an empty result, a
-  filter with no match, a user action. Never because of a prop or a URL value in the view. Tests
-  choose the condition through the data source.
+  filter with no match, a user action. Never because of a switch: a prop or URL value that exists
+  only to pick the state. Tests choose the condition through the data source.
 - Register every new screen in `src/screens.ts`, with its path and how to reach each state: the
   data source's scenario, the user's steps, and the text the state shows. The app, the unit tests
   and the browser checks read that list; there is nothing else to wire.
