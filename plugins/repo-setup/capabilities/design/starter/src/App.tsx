@@ -1,5 +1,6 @@
 import { ReferenceScreen, type ScreenState } from "@/example/ReferenceScreen";
 
+// eslint-disable-next-line react-refresh/only-export-components -- the unit test reads this list
 export const STATES: ScreenState[] = [
   "ready",
   "loading",
