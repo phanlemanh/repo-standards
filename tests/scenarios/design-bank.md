@@ -151,3 +151,4 @@ Việc gỡ tham chiếu treo trên nền đối chứng, nếu có: (ghi lại)
 |---|---|---|
 | 2026-11-10 | Viết lần đầu | Khoá phép đo trước khi dựng |
 | 2026-11-10 | Siết giao thức: bỏ gợi ý trạng thái khỏi mô tả màn, khoá bảng trạng thái cần có, cách gộp, dấu mốc cắt nền đối chứng, lệnh chạy rào và điều kiện chạy | Sau rà soát, giao thức chưa tái lập được; sửa trước khi chạy lần nào |
+| 2026-11-11 | Lệnh dựng thêm --permission-mode acceptEdits --allowedTools "Bash(npm:*)" "Bash(npx:*)", như nhau trên hai nền | Repo sinh ra chỉ cho chạy make và đọc git; ở chế độ -p tác tử dựng không ghi được tệp nào, phép đo sẽ vô nghĩa |
