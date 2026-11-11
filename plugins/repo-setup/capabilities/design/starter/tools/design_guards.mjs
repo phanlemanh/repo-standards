@@ -130,11 +130,15 @@ function gate() {
   if (!/^\tnode tools\/design_guards\.mjs$/m.test(mk))
     problems.push("the design guards can no longer fail the gate");
   // A make setting that ignores errors would turn every step above into decoration.
+  if (existsSync("GNUmakefile"))
+    problems.push(
+      "GNUmakefile exists: make reads it before Makefile, so the floor cannot be verified",
+    );
   const mkFiles = existsSync("mk") ? readdirSync("mk").filter((n) => n.endsWith(".mk")) : [];
   for (const f of ["Makefile", ...mkFiles.map((n) => join("mk", n))]) {
     const text = read(f);
     if (/^\s*\.IGNORE\s*:/m.test(text)) problems.push(`${f} ignores errors with .IGNORE`);
-    const flags = text.split("\n").filter((line) => /^\s*(override\s+)?MAKEFLAGS\b/.test(line));
+    const flags = text.split("\n").filter((line) => /^\s*((export|override)\s+)*MAKEFLAGS\b/.test(line));
     if (flags.some((line) => /(^|[\s=])(-[a-zA-Z]*i[a-zA-Z]*|--ignore-errors)\b/.test(line)))
       problems.push(`${f} ignores errors through MAKEFLAGS`);
   }

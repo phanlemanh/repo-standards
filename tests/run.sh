@@ -735,6 +735,11 @@ gate_red mk/design.mk "" "make check does not run the design guards"
 gate_red mk/design.mk ".IGNORE:" "mk/design.mk ignores errors with .IGNORE"
 gate_red Makefile "MAKEFLAGS += -i" "Makefile ignores errors through MAKEFLAGS"
 gate_red Makefile "MAKEFLAGS += --keep-going --ignore-errors" "Makefile ignores errors through MAKEFLAGS"
+gate_red Makefile "export MAKEFLAGS += -i" "Makefile ignores errors through MAKEFLAGS"
+printf '.PHONY: check\ncheck:\n\t@true\n' > "$d/GNUmakefile"
+out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with a GNUmakefile"
+case "$out" in *"GNUmakefile exists: make reads it before Makefile"*) ;; *) miss "design gate: GNUmakefile went red for another reason: $out" ;; esac
+rm -f "$d/GNUmakefile"
 ( cd "$d" && printf 'MAKEFLAGS += --no-print-directory\n' >> Makefile && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) \
   || miss "design gate: an unrelated MAKEFLAGS setting went red"
 python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "design checks wired wrongly"
