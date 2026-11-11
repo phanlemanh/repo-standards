@@ -1,6 +1,6 @@
 {
   "name": "repo-setup",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Repository setup for Claude Code: guided decision layers, top-tier standards, an ontology that generates types, API contract and MCP tools, and procedures generated into each repo. Stops at setup.",
   "author": {
     "name": "phanlemanh84"
