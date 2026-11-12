@@ -36,6 +36,12 @@ depends_on = ["architecture", "ai", "stack"]
 claude-plugin = "A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated. Its glossary and decision records stay in its own docs."
 
 [[layer]]
+id = "design"
+depends_on = ["context", "stack"]
+[layer.not_applicable]
+claude-plugin = "A plugin marketplace has no screens: the design floor is for a web front end (react-vite)."
+
+[[layer]]
 id = "quality"
 depends_on = ["repo"]
 

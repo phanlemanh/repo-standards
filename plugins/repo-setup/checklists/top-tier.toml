@@ -529,6 +529,65 @@ why = "New machines know which variables to set, without sharing the key."
 fix = "Add ANTHROPIC_API_KEY= and CLAUDE_MODEL= to .env.example."
 any = [{ paths = [".env.example"], pattern = 'ANTHROPIC_API_KEY' }]
 
+# ---------------------------------------------------------------- design (repos with the design capability)
+[[check]]
+id = "design_guards_bite"
+level = "starter"
+weight = 3
+capabilities = ["design"]
+type = "command"
+command = ["node", "tools/design_guards.mjs", "--only", "guards"]
+requires = "tools/design_guards.mjs"
+title = "The design guards still fail on real violations"
+why = "A guard that cannot fail is decoration: someone loosened the rules and nothing noticed."
+fix = "Run: node tools/design_guards.mjs --only guards, then restore the rules it names in eslint.config.js."
+# These files hold the floor itself: they must stay as apply.py wrote them (hash in .repo-setup.json).
+unchanged = [
+  "tools/design_guards.mjs",
+  "tests/e2e/floor.spec.ts",
+  "tests/e2e/routes.ts",
+  "tests/App.test.tsx",
+  "mk/design.mk",
+]
+unchanged_from = "capabilities/design/starter"
+unchanged_fix = "Re-apply the design capability: delete the files named, then run python3 <plugin>/scripts/apply.py --target . --with design to write the plugin's copy back."
+
+[[check]]
+id = "design_floor_in_gate"
+level = "starter"
+weight = 3
+capabilities = ["design"]
+type = "command"
+command = ["node", "tools/design_guards.mjs", "--only", "gate"]
+requires = "tools/design_guards.mjs"
+title = "The browser checks run inside make check and can fail it"
+why = "A browser check outside the gate is never run by the people who need it."
+fix = "Run: node tools/design_guards.mjs --only gate, then restore the step in mk/design.mk."
+
+[[check]]
+id = "design_reference"
+level = "starter"
+weight = 1
+capabilities = ["design"]
+type = "command"
+command = ["node", "tools/design_guards.mjs", "--only", "reference"]
+requires = "tools/design_guards.mjs"
+title = "design/behaviors.md exists and the browser checks have routes to visit"
+why = "Without the answers page and a route list, agents invent states and nothing checks them."
+fix = "Run: node tools/design_guards.mjs --only reference and restore what it names."
+
+[[check]]
+id = "design_present"
+level = "starter"
+weight = 3
+presets = ["react-vite"]
+any = [{ paths = ["tools/design_guards.mjs"] }]
+title = "A web front end has the design floor (guards, browser checks, reference screen)"
+why = "Without a floor, every screen an agent builds drifts a little further from the last."
+fix = "Run: python3 <plugin>/scripts/apply.py --target . --with design"
+skip_if_adopt = "not applicable: adopt does not support the design capability yet"
+needs_capability = "design"
+
 # ---------------------------------------------------------------- Claude Code plugin marketplaces
 # These exist only for repositories that ship plugins (preset claude-plugin, or detected from
 # .claude-plugin/ manifests). Type "plugin" runs a probe of tools/plugin_lint.py.

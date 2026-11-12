@@ -12,6 +12,7 @@ Standard library only (the YAML reader is the plugin's own).
 
 from __future__ import annotations
 
+import re
 import sys
 
 if sys.version_info < (3, 11):
@@ -30,6 +31,43 @@ LAYER_STATUSES = {"pending", "decided", "needs_review", "not_applicable"}
 AUTOMATION = {"automated", "partial", "manual"}
 AI_TIERS = {"none", "call", "workflow", "agent"}
 AGENT_RUNTIMES = {"tool-runner", "manual-loop", "agent-sdk", "managed-agents"}
+DESIGN_BASES = {"shadcn", "company", "other"}
+DESIGN_SURFACES = {"tool", "content"}
+DESIGN_STACKS = {"react-vite"}
+LOCALE = re.compile(r"[a-z]{2}-[A-Z]{2}")
+CURRENCY = re.compile(r"[A-Z]{3}")
+BRAND_MIN_CONTRAST = 4.5
+
+
+def _luminance(colour: str) -> float:
+    def channel(i: int) -> float:
+        v = int(colour[1 + 2 * i : 3 + 2 * i], 16) / 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
+
+
+def contrast_ratio(a: str, b: str) -> float:
+    """WCAG contrast ratio of two #rrggbb colours."""
+    hi, lo = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def readable_on(colour: str) -> str:
+    """Text colour, white or near-black, that reads better on `colour`."""
+    return max(("#ffffff", "#0a0a0a"), key=lambda text: contrast_ratio(colour, text))
+
+
+def brand_errors(colour: object) -> list[str]:
+    if not isinstance(colour, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
+        return ['brand_primary must be a #rrggbb colour inside double quotes, e.g. "#0246ff"']
+    ratio = contrast_ratio(colour, "#ffffff")
+    if ratio < BRAND_MIN_CONTRAST:
+        return [
+            f"brand_primary {colour} has contrast {ratio:.2f} against white text, "
+            f"below {BRAND_MIN_CONTRAST}; pick a darker shade"
+        ]
+    return []
 
 
 def _layers() -> list[dict[str, Any]]:
@@ -91,6 +129,8 @@ def errors(bp: dict[str, Any]) -> list[str]:
                 problems.append(f"{name}: a decided layer needs automation")
         if name == "ai":
             problems += _ai_errors(layer)
+        if name == "design":
+            problems += _design_errors(layer, bp)
         # Nothing may be built for a layer that does not apply to the chosen stack. A `manual`
         # note is fine: it is only recorded.
         if name in skip and layer.get("status") == "decided" and layer.get("automation") != "manual":
@@ -111,6 +151,33 @@ def _ai_errors(layer: dict[str, Any]) -> list[str]:
         problems.append(f"ai: agent_runtime must be one of {sorted(AGENT_RUNTIMES)}")
     if runtime not in (None, "tool-runner") and layer.get("automation") != "manual":
         problems.append(f"ai: agent_runtime {runtime} is not generated, so automation must be manual")
+    return problems
+
+
+def _design_errors(layer: dict[str, Any], bp: dict[str, Any]) -> list[str]:
+    preset = (((bp.get("layers") or {}).get("stack") or {}).get("choice") or {}).get("preset")
+    if layer.get("status") == "not_applicable" and preset in DESIGN_STACKS:
+        return [
+            f"design: stack {preset} has a screen, so the layer applies; to go without the "
+            "floor, mark it decided with automation manual and a why"
+        ]
+    if layer.get("status") != "decided" or layer.get("automation") == "manual":
+        return []
+    choice = layer.get("choice") or {}
+    problems = []
+    if choice.get("base") != "shadcn":
+        problems.append("design: only base shadcn is built, so any other base needs automation manual")
+    if choice.get("surface") not in DESIGN_SURFACES:
+        problems.append(f"design: surface must be one of {sorted(DESIGN_SURFACES)}")
+    if preset not in DESIGN_STACKS:
+        problems.append(f"design: needs a stack with a screen, one of {sorted(DESIGN_STACKS)}")
+    if "brand_primary" in choice:
+        problems += brand_errors(choice["brand_primary"])
+    locale, currency = choice.get("locale"), choice.get("currency")
+    if locale is not None and not LOCALE.fullmatch(str(locale)):
+        problems.append("design: locale must look like vi-VN")
+    if currency is not None and not CURRENCY.fullmatch(str(currency)):
+        problems.append("design: currency must look like VND")
     return problems
 
 
@@ -144,6 +211,8 @@ def expected_setup(bp: dict[str, Any]) -> dict[str, Any]:
     tier = (c.get("ai") or {}).get("ai_tier")
     if tier and tier != "none":
         caps.append("ai")
+    if (c.get("design") or {}).get("base"):
+        caps.append("design")
     return {
         "preset": (c.get("stack") or {}).get("preset"),
         "level": (c.get("quality") or {}).get("level"),
@@ -176,6 +245,12 @@ def to_apply_args(bp: dict[str, Any]) -> list[str]:
     tier = (c.get("ai") or {}).get("ai_tier")
     if tier and tier != "none":
         variables["ai_tier"] = tier
+    design = c.get("design") or {}
+    if design.get("surface"):
+        variables["design_surface"] = design["surface"]
+    for key in ("brand_primary", "locale", "currency"):
+        if design.get(key):
+            variables[key] = design[key]
     # Stack claude-plugin: the sample plugin's name, and whether plugins share one version.
     for key in ("plugin_name", "plugin_versioning"):
         if (c.get("stack") or {}).get(key):

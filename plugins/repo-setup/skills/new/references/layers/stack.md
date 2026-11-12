@@ -15,8 +15,8 @@ recommend it. Say when each option would be wrong.
 |---|---|---|---|---|
 | `python` or `ts-node` | Library, CLI, worker | No web layer | It serves HTTP | `automated` |
 | `fastapi` or `ts-api` | HTTP API | A server to run | No API is needed | `automated` |
-| `react-vite` | Web front end | No backend, and it cannot use the `ai` capability | A server must hold secrets | `automated` |
-| `claude-plugin` | The repo ships Claude Code plugins through a marketplace | No app scaffold: no archetype, `ai`, `mcp`, deploy, ontology or wiki | The product is an app that also has a plugin | `automated` |
+| `react-vite` | Web front end | No backend, and it cannot use the `ai` capability; the `design` capability (layer 7) fits only here | A server must hold secrets | `automated` |
+| `claude-plugin` | The repo ships Claude Code plugins through a marketplace | No app scaffold: no archetype, `ai`, `design`, `mcp`, deploy, ontology or wiki | The product is an app that also has a plugin | `automated` |
 | Go, Rust, Java and others | Team skills or requirements | No preset: no scaffold | A supported stack would do | `manual` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and

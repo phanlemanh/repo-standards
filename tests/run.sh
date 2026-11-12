@@ -57,6 +57,7 @@ PY
     git -C "$d" add -A
     expected=lockfile; [ "$preset" = claude-plugin ] && expected=""
     failed=$(python3 "$S/doctor.py" --target "$d" --level "$level" --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+    [ "$preset" = react-vite ] && expected=design_present,lockfile
     [ "$failed" = "$expected" ] || fail "$preset/$level: unexpected doctor failures: $failed"
 
     # 6b. bytecode from the vendored Python tools never reaches a commit
@@ -68,6 +69,9 @@ PY
     echo "ok  $preset/$level"
   done
 done
+
+# 6d. Prettier must not rewrite the manifest: re-apply would then rewrite it unformatted
+grep -qxF '.repo-setup.json' "$TMP/ts-node-starter/.prettierignore" || miss "ts-node: .prettierignore does not list .repo-setup.json"
 
 # 7. starter -> team upgrade adds team files only
 d="$TMP/upgrade"; mkdir -p "$d"
@@ -435,10 +439,72 @@ echo "ok  blueprint (or misses reported above)"
 
 # 26. new: layers, references, language rule, Vietnamese names, old Python
 SK="$ROOT/plugins/repo-setup/skills/new"
-for l in context repo architecture ai stack domain quality delivery governance; do
+for l in context repo architecture ai stack domain design quality delivery governance; do
   [ -f "$SK/references/layers/$l.md" ] || miss "layer file missing: $l"
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
+# 26a. the build step and docs describe the design layer
+sed -n 's/^description: //p' "$SK/SKILL.md" | grep -q 'context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents' \
+  || miss "new: description does not list the layers in layers.toml order"
+grep -q 'design/terms.json' "$SK/SKILL.md" && grep -q 'docs_language' "$SK/SKILL.md" || miss "SKILL.md build step lacks design/terms.json and docs_language"
+awk '/^## 6\./{f=1;next} /^## 7\./{f=0} f' "$SK/SKILL.md" | grep -q 'design/terms.json' || miss "SKILL.md step 6 lacks design/terms.json"
+grep -q 'src/example' "$SK/references/tour.md" || miss "tour.md lacks src/example"
+grep -q 'ten layers' "$ROOT/plugins/repo-setup/README.md" || miss "plugin README lacks: ten layers"
+grep '`react-vite`' "$SK/references/layers/stack.md" | grep -q 'design' || miss "stack.md react-vite row lacks design"
+# 26b. design layer: choices, colours, mapping to apply.py
+python3 "$bp" check "$B/design.yaml" >/dev/null || miss "design.yaml should be valid"
+args=$(python3 -c "
+import sys; sys.path.insert(0, '$S'); import blueprint
+from pathlib import Path
+print(' '.join(blueprint.to_apply_args(blueprint.load(Path('$B/design.yaml')))))")
+for w in "--with design" "design_surface=tool" "brand_primary=#0246ff" "locale=vi-VN" "currency=VND"; do
+  case "$args" in *"$w"*) ;; *) miss "blueprint args lack: $w" ;; esac
+done
+python3 - "$S" <<'PY' || miss "colour rules"
+import sys; sys.path.insert(0, sys.argv[1]); import blueprint as b
+assert round(b.contrast_ratio("#0246ff", "#ffffff"), 2) == 6.32
+assert b.readable_on("#0246ff") == "#ffffff" and b.readable_on("#ffba00") == "#0a0a0a"
+assert b.brand_errors("#0246FF") == []
+for bad in ("#ffba00", "#FFF", "blue", None, ""):
+    assert b.brand_errors(bad), bad
+PY
+bad_design() { python3 - "$B/design.yaml" "$TMP/dv.yaml" "$1" "$2" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+assert old in t, old
+open(dst, "w", encoding="utf-8").write(t.replace(old, new, 1))
+PY
+  if python3 "$bp" check "$TMP/dv.yaml" >/dev/null 2>&1; then miss "design: accepted $3"; fi
+}
+bad_design 'surface: tool' 'surface: magazine' "an unknown surface"
+bad_design 'base: shadcn' 'base: bootstrap' "an unbuilt base marked automated"
+bad_design 'preset: react-vite' 'preset: python' "a stack without a screen"
+bad_design 'brand_primary: "#0246ff"' 'brand_primary: #0246ff' "an unquoted colour"
+bad_design 'locale: vi-VN' 'locale: vietnamese' "an invalid locale"
+bad_design 'currency: VND' 'currency: dong' "an invalid currency"
+python3 - "$B/design.yaml" "$TMP/dna.yaml" <<'PY'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+start = t.index("  design:\n"); end = t.index("  quality:\n")
+open(sys.argv[2], "w", encoding="utf-8").write(t[:start] + "  design:\n    status: not_applicable\n" + t[end:])
+PY
+out=$(python3 "$bp" check "$TMP/dna.yaml" 2>&1) && miss "design: not_applicable accepted for a stack with a screen"
+case "$out" in *"automation manual"*) ;; *) miss "design not_applicable: unclear message: $out" ;; esac
+python3 - "$B/design.yaml" "$TMP/dman.yaml" <<'PY'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+old = "    automation: automated\n    choice:\n      base: shadcn"
+assert old in t
+open(sys.argv[2], "w", encoding="utf-8").write(t.replace(old, "    automation: manual\n    choice:\n      base: company"))
+PY
+python3 "$bp" check "$TMP/dman.yaml" >/dev/null || miss "design: a manual base with a why should be valid"
+args=$(python3 -c "
+import sys; sys.path.insert(0, '$S'); import blueprint
+from pathlib import Path
+print(' '.join(blueprint.to_apply_args(blueprint.load(Path('$TMP/dman.yaml')))))")
+case "$args" in *design*) miss "design: a manual base still gives --with design: $args" ;; esac
+grep -E 'needs_review' "$SK/SKILL.md" | grep -q 'not_applicable' || miss "needs_review ignores not_applicable layers"
 for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
 grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "new does not use its references"
 grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"
@@ -606,7 +672,258 @@ grep -q '^tier=high$' "$TMP/gate2.out" 2>/dev/null || miss "gate without base ru
 [ ! -e "$TMP/trap" ] || miss "gate ran code from the pull request when the base has no rules"
 echo "ok  pr pipeline (or misses reported above)"
 
-# 31. claude-plugin: a working skeleton for a plugin marketplace, without app tooling
+# 31. design capability
+for level in starter team; do
+  d="$TMP/design-$level"; mkdir -p "$d"; git -C "$d" init -q -b main
+  python3 "$S/apply.py" --target "$d" --preset react-vite --level "$level" --with design \
+    --var 'project_name=Quán "Cà" \ Phê' --var description=x --var owner=acme \
+    --var 'brand_primary=#0246ff' --var locale=vi-VN --var currency=VND --json >/dev/null \
+    || miss "design: apply failed at $level"
+  grep -q -- '--primary: #0246ff' "$d/src/index.css" || miss "design: brand block missing"
+  [ "$(tail -6 "$d/src/index.css" | grep -c primary)" -ge 2 ] || miss "design: brand block must come last"
+  grep -q 'lang="vi"' "$d/index.html" || miss "design: page language"
+  # shadcn's destructive red fails 4.5:1 on its own 10% tint (badge, button); e2e pins it in the browser.
+  grep -q -- '--destructive: oklch(0.48 0.2 27.325);' "$d/src/index.css" || miss "design: destructive token not darkened"
+  grep -q '"vi-VN"' "$d/src/lib/format.ts" && grep -q '"VND"' "$d/src/lib/format.ts" || miss "design: locale"
+  grep -q 'CHECK_TARGETS += design-guards ui-floor' "$d/mk/design.mk" || miss "design: not in the gate"
+  [ -f "$d/.mcp.json" ] && miss "design: must not add .mcp.json"
+  # The measurement protocol cuts the capability at these exact lines.
+  grep -qx ' *// design-floor:start' "$d/eslint.config.js" && grep -qx ' *// design-floor:end' "$d/eslint.config.js" \
+    || miss "design: eslint markers missing"
+  grep -qx '## Design floor' "$d/AGENTS.md" || miss "design: AGENTS section heading"
+  again=$(python3 "$S/apply.py" --target "$d" --json | json 'len(d["created"])+len(d["updated"])+len(d["conflict"])') || again=-1
+  [ "$again" -eq 0 ] || miss "design/$level: second run changed $again files"
+done
+grep -q 'src/components/ui' "$TMP/design-team/vitest.config.ts" || miss "design: team coverage counts vendor code"
+# The table patch: runs after `shadcn add` and before `make format`, is safe to run twice,
+# and stops loudly when the component no longer looks like the pinned version.
+python3 - "$S/../capabilities/design/preset.toml" <<'PY' || miss "design: make ui-patch not run between shadcn add and make format"
+import sys, tomllib
+cmds = tomllib.load(open(sys.argv[1], "rb"))["starter"]["install"]
+at = lambda word: next(i for i, c in enumerate(cmds) if word in c)
+assert at("shadcn@4.23.0 add") < at("make ui-patch") < at("make format"), cmds
+PY
+d="$TMP/design-team"; mkdir -p "$d/src/components/ui"
+cat > "$d/src/components/ui/table.tsx" <<'TSX'
+function Table({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto"
+    >
+TSX
+( cd "$d" && make -s ui-patch && cp src/components/ui/table.tsx "$TMP/table.once" && make -s ui-patch ) \
+  || miss "design: patch_ui.mjs failed on the shadcn table"
+grep -q 'role="region" aria-label={label} tabIndex={0}' "$d/src/components/ui/table.tsx" && grep -q '"aria-label": string' "$d/src/components/ui/table.tsx" \
+  || miss "design: table scroll region not focusable and named after the patch"
+cmp -s "$TMP/table.once" "$d/src/components/ui/table.tsx" || miss "design: patch_ui.mjs is not idempotent"
+echo 'export {};' > "$d/src/components/ui/table.tsx"
+out=$(cd "$d" && node tools/patch_ui.mjs 2>&1) && miss "design: patch_ui.mjs accepted an unknown table"
+case "$out" in *"no longer matches"*) ;; *) miss "design: patch_ui.mjs failed without saying why: $out" ;; esac
+rm -r "$d/src/components"
+d="$TMP/design-plain"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design \
+  --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: no brand must work"
+grep -q 'brand' "$d/src/index.css" && miss "design: brand block without a brand"
+d="$TMP/design-content"; python3 "$S/apply.py" --target "$d" --preset react-vite --with design --var design_surface=content \
+  --var project_name=P --var description=x --var owner=a >/dev/null || miss "design: content surface apply failed"
+grep -q 'TableRow' "$d/src/example/ReferenceScreen.tsx" && miss "design: content surface got the table screen"
+grep -q 'variant: "destructive"' "$d/src/example/ReferenceScreen.tsx" || miss "design: content screen shows no destructive badge"
+for v in default outline destructive; do
+  grep -q "variant: \"$v\"" "$TMP/design-plain/src/example/ReferenceScreen.tsx" || miss "design: tool screen has no $v badge"
+done
+grep -q 'text-base' "$d/design/behaviors.md" || miss "design: content surface lacks its density"
+grep -q 'text-sm' "$TMP/design-plain/design/behaviors.md" || miss "design: tool surface lacks its density"
+if python3 "$S/apply.py" --target "$TMP/design-py" --preset fastapi --with design \
+  --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: stack without a screen accepted"; fi
+if python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var 'brand_primary=red' \
+  --var project_name=P --var description=x --var owner=a >/dev/null 2>&1; then miss "design: bad colour accepted"; fi
+for bad in design_surface=magazine locale=vietnamese locale=vi_VN currency=dong currency=VN; do
+  out=$(python3 "$S/apply.py" --target "$TMP/design-bad" --preset react-vite --with design --var "$bad" \
+    --var project_name=P --var description=x --var owner=a 2>&1) && miss "design: --var $bad accepted"
+  case "$out" in *"${bad%%=*} must"*) ;; *) miss "design: --var $bad refused without saying why: $out" ;; esac
+done
+[ ! -e "$TMP/design-bad/package.json" ] || miss "design: a bad --var still wrote files"
+d="$TMP/design-starter"; git -C "$d" add -A
+failed=$(python3 "$S/doctor.py" --target "$d" --level starter --json | json '",".join(sorted(r["id"] for r in d["failed"]))')
+[ "$failed" = "design_guards_bite,lockfile" ] || miss "design doctor without install: $failed"
+# 31a. dropping design from the manifest does not switch the checks off unseen
+d="$TMP/design-plain"; git -C "$d" init -q -b main 2>/dev/null; git -C "$d" add -A
+python3 - "$d/.repo-setup.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p)); m["capabilities"].remove("design"); json.dump(m, open(p, "w"))
+PY
+detail=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["failed"] if r["id"]=="design_present"]')
+case "$detail" in *"does not list design"*) ;; *) miss "doctor: design dropped from the manifest went unseen: $detail" ;; esac
+# 31b. turning design on in an existing react-vite repo: the user's own stylesheet is kept, with a note
+d="$TMP/design-later"; mkdir -p "$d/src"; git -C "$d" init -q -b main
+python3 "$S/apply.py" --target "$d" --preset react-vite --var project_name=P --var description=x --var owner=a >/dev/null
+echo 'body { margin: 0; }' > "$d/src/index.css"
+notes=$(python3 "$S/apply.py" --target "$d" --with design --json | json '" ".join(d["notes"])+" kept="+",".join(d["kept"])')
+case "$notes" in *"kept your own src/index.css"*"design tokens"*"by hand"*"kept=src/index.css"*) ;; *) miss "design later: no note about src/index.css: $notes" ;; esac
+grep -q 'margin: 0' "$d/src/index.css" || miss "design later: own stylesheet overwritten"
+d="$TMP/design-team"; echo "/* mine */" >> "$d/src/index.css"
+notes=$(python3 "$S/apply.py" --target "$d" --json | json '" ".join(d["notes"])')
+case "$notes" in *"src/index.css"*) miss "design: note for a stylesheet apply wrote itself: $notes" ;; esac
+# 31c. adopt does not support design yet: apply refuses it, doctor does not score it
+d="$TMP/design-adopt"; mkdir -p "$d"; git -C "$d" init -q -b main
+out=$(python3 "$S/apply.py" --target "$d" --preset react-vite --adopt --with design \
+  --var project_name=P --var description=x --var owner=a 2>&1) && miss "design: accepted under adopt"
+case "$out" in *"adopt does not support the design capability yet"*) ;; *) miss "design under adopt: unclear refusal: $out" ;; esac
+[ -z "$(ls -A "$d" | grep -v '^.git$' || true)" ] || miss "design under adopt: files written"
+python3 "$S/apply.py" --target "$d" --preset react-vite --adopt --var project_name=P --var description=x --var owner=a >/dev/null \
+  || miss "adopt react-vite without design failed"
+if python3 "$S/apply.py" --target "$d" --with design >/dev/null 2>&1; then miss "design: added later to an adopted repo"; fi
+git -C "$d" add -A
+skip=$(python3 "$S/doctor.py" --target "$d" --json | json '[r.get("detail","") for r in d["skipped"] if r["id"]=="design_present"]')
+case "$skip" in *"not applicable"*) ;; *) miss "doctor: design_present not skipped for an adopted repo: $skip" ;; esac
+# 31d. doctor: the floor files must stay as apply wrote them
+d="$TMP/design-starter"
+floor() { python3 "$S/doctor.py" --target "$d" --level starter --json | json '[r.get("detail","")+" | "+r["fix"] for r in d["failed"] if r["id"]=="design_guards_bite"][0]'; }
+case "$(floor)" in *"changed since apply"*) miss "design floor: fresh repo reported as changed" ;; esac
+cp "$d/tests/e2e/floor.spec.ts" "$TMP/floor.bak"; echo "// weaker" >> "$d/tests/e2e/floor.spec.ts"
+case "$(floor)" in *"changed since apply wrote them: tests/e2e/floor.spec.ts"*"Re-apply the design capability"*) ;;
+  *) miss "design floor: edited floor.spec.ts not reported: $(floor)" ;; esac
+cp "$TMP/floor.bak" "$d/tests/e2e/floor.spec.ts"
+cp "$d/.repo-setup.json" "$TMP/manifest.bak"
+python3 - "$d/.repo-setup.json" <<'PY'
+import json, sys
+p = sys.argv[1]; m = json.load(open(p)); del m["files"]["mk/design.mk"]; json.dump(m, open(p, "w"))
+PY
+case "$(floor)" in *"changed since apply"*) miss "design floor: no hash and the plugin copy reported as changed" ;; esac
+cp "$d/mk/design.mk" "$TMP/mk.bak"; printf '\t-true\n' >> "$d/mk/design.mk"
+case "$(floor)" in *"changed since apply wrote them: mk/design.mk"*) ;; *) miss "design floor: no hash, edit not caught against the plugin copy" ;; esac
+python3 - "$d/.repo-setup.json" "$d/mk/design.mk" <<'PY'
+import hashlib, json, sys
+p, f = sys.argv[1:]; m = json.load(open(p))
+m["files"]["mk/design.mk"] = hashlib.sha256(open(f, "rb").read()).hexdigest(); json.dump(m, open(p, "w"))
+PY
+case "$(floor)" in *"changed since apply"*) miss "design floor: compared with the plugin copy although a hash is recorded" ;; esac
+cp "$TMP/mk.bak" "$d/mk/design.mk"; cp "$TMP/manifest.bak" "$d/.repo-setup.json"
+# 31f. one registry of screens: the browser routes come from src/screens.ts
+d="$TMP/design-team"
+( cd "$d" && node tools/design_guards.mjs --only reference >/dev/null 2>&1 ) || miss "design reference: red on a fresh repo"
+grep -q 'from "@/screens"' "$d/src/App.tsx" || miss "design: App.tsx does not read src/screens.ts"
+ref_red() { # <file> <replacement content> <expected text>
+  cp "$d/$1" "$TMP/ref.bak"; printf '%s\n' "$2" > "$d/$1"
+  out=$(cd "$d" && node tools/design_guards.mjs --only reference 2>&1) && miss "design reference: stayed green with $1 = $2"
+  case "$out" in *"$3"*) ;; *) miss "design reference: $1 went red for another reason: $out" ;; esac
+  cp "$TMP/ref.bak" "$d/$1"
+}
+ref_red src/screens.ts 'export const SCREENS = [];' "src/screens.ts lists no screen path starting with /"
+ref_red src/screens.ts $'// A path may name parts (`/orders/:id`), visit `/orders/1`.\nexport const SCREENS = [];' \
+  "src/screens.ts lists no screen path starting with /"
+ref_red tests/e2e/routes.ts 'export const ROUTES = ["/"];' "tests/e2e/routes.ts does not take its routes from src/screens.ts"
+# 31g. one page for the builder: the rule holds the component steps and the traps, the skill is gone
+[ ! -e "$d/.claude/skills/ui" ] || miss "design: the ui skill is still generated"
+grep -q '^## Traps' "$d/.claude/rules/ui.md" && grep -q 'npx shadcn@4.23.0 add' "$d/.claude/rules/ui.md" \
+  && grep -q 'design/behaviors.md' "$d/.claude/rules/ui.md" || miss "design: ui.md lacks its traps, the component steps or the behaviors pointer"
+grep -q 'skills/ui' "$d/AGENTS.md" && miss "design: AGENTS.md still points to the ui skill"
+ref_red .claude/rules/ui.md "$(seq 1 61)" ".claude/rules/ui.md has 61 lines, the limit is 60"
+# 31h. states come from data: the reference screen loads from a source that can be slow, fail or
+# find nothing; it takes no state prop and reads no address. Tests choose through the source.
+for d in "$TMP/design-plain" "$TMP/design-content"; do
+  f="$d/src/example/ReferenceScreen.tsx"
+  grep -q 'from "@/example/data"' "$f" && grep -q 'useEffect' "$f" || miss "design: $f does not load from src/example/data.ts"
+  grep -qE 'ScreenState|\{ state \}|location|URLSearchParams|scenario' "$f" && miss "design: $f picks its state from a prop or the address"
+  for s in 'slow: "never"' 'fail: "fail"' 'empty: []' '"slow-delete": "never"' '"fail-delete": "fail"' \
+    'get("scenario")' '!navigator.onLine' 'export function createItem' 'let items'; do
+    grep -qF "$s" "$d/src/example/data.ts" || miss "design: $d/src/example/data.ts lacks $s"
+  done
+  # The test hook sits at the top of each request, apart from the request itself.
+  [ "$(grep -c '^  if (test) return test;$' "$d/src/example/data.ts")" -eq 3 ] || miss "design: $d data.ts test hook not at the top of list, delete and create"
+  # In the checks the hook also answers the normal path, so a real request never runs there.
+  grep -q 'ready: items' "$d/src/example/data.ts" && grep -q '?? "ready"' "$d/src/example/data.ts" \
+    || miss "design: $d data.ts hook does not answer the normal path in the checks"
+  grep -q 'replace each function body' "$d/src/example/data.ts" && miss "design: $d data.ts tells the builder to delete the test hook"
+  # The hook answers only in the checks' builds; nothing else in the source depends on the mode.
+  grep -qF 'if (import.meta.env.MODE !== "test" && import.meta.env.MODE !== "floor") return null;' "$d/src/example/data.ts" \
+    || miss "design: $d data.ts test hook is live outside the checks"
+  [ "$(grep -c 'MODE' "$d/src/example/data.ts")" -eq 1 ] || miss "design: $d data.ts has a test-only branch besides the hook"
+  grep -q 'onAction={addFirst}' "$f" && grep -q 'open={asking}' "$f" || miss "design: $f empty action does not add, or the dialog loses its item while closing"
+done
+grep -q 'findAllByText(shows)' "$TMP/design-team/tests/App.test.tsx" && grep -q 'findByRole("button"' "$TMP/design-team/tests/App.test.tsx" \
+  || miss "design: the unit walk does not wait for each step and state"
+d="$TMP/design-team"
+grep -q 'scenario: "fail"' "$d/src/screens.ts" && grep -q 'steps: ' "$d/src/screens.ts" \
+  && ! grep -qE '\?state|location' "$d/src/screens.ts" || miss "design: src/screens.ts does not reach states through the data source and the user"
+grep -q 'getByRole("button", { name: step.press' "$d/tests/e2e/floor.spec.ts" && grep -q 'route.shows' "$d/tests/e2e/floor.spec.ts" \
+  || miss "design: the browser floor does not drive the steps or wait for the state"
+# The rule in full on both pages: what a real condition is and what a switch is.
+for f in design/behaviors.md .claude/rules/ui.md; do
+  text=$(tr -s ' \n' '  ' < "$d/$f")
+  for s in 'A state appears because of a real condition: a pending or failed request, an empty result, a filter with no match, a user action.' \
+    'Never because of a switch' 'a prop or URL value that exists only to pick the state'; do
+    grep -qF "$s" <<<"$text" || miss "design: $f lacks the real-condition rule ($s)"
+  done
+done
+grep -qi 'A state reachable only from a switch is not a state' "$d/.claude/rules/ui.md" || miss "design: ui.md traps lack the switch trap"
+# 31i. the registry is enough on its own: paths with parts, the sample off the home page, the test
+# files owned by the plugin, a guard message that agrees with the rule, no screenshots.
+grep -q 'path: "/example"' "$d/src/screens.ts" && grep -q 'visit?: string' "$d/src/screens.ts" \
+  && grep -q 'params: Params' "$d/src/screens.ts" || miss "design: src/screens.ts lacks the sample at /example or the visit and params shape"
+grep -q 'LABELS.notFound' "$d/src/App.tsx" && grep -q 'SCREENS.map' "$d/src/App.tsx" \
+  || miss "design: an unknown address does not get its own page with links to the screens"
+grep -q 'url: "/no/such/page"' "$d/tests/e2e/routes.ts" || miss "design: the browser floor does not visit the not-found page"
+grep -q 'ROUTES' "$d/tests/App.test.tsx" && ! grep -qE 'ReferenceScreen|example' "$d/tests/App.test.tsx" \
+  || miss "design: tests/App.test.tsx is not a generic walk over the registry"
+for f in tests/App.test.tsx tests/e2e/routes.ts tests/e2e/floor.spec.ts; do
+  grep -qF "\`$f\`" "$d/.claude/rules/ui.md" || miss "design: ui.md does not say the plugin owns $f"
+  grep -qF "\"$f\"" "$PL/checklists/top-tier.toml" || miss "design: doctor does not guard $f"
+done
+grep -q 'TableCell' "$d/.claude/rules/ui.md" && grep -q 'no screenshots' "$d/.claude/rules/ui.md" \
+  || miss "design: ui.md lacks the TableCell trap or the no-screenshot line"
+grep -q 'never edit src/components/ui' "$d/eslint.config.js" || miss "design: the restyle message still sends the builder into src/components/ui"
+grep -q 'vite build --mode floor --outDir coverage/floor' "$d/playwright.config.ts" \
+  || miss "design: the browser checks do not build in their own mode, apart from dist/"
+grep -q '"src/example/\*\*"' "$d/vitest.config.ts" || miss "design: team coverage counts the sample"
+# 31e. the gate check goes red when make could skip the guards or ignore their failure
+d="$TMP/design-team"
+( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
+gate_red() { # <file> <line to add, or "" to drop design-guards from the gate> <expected text>
+  cp "$d/$1" "$TMP/gate.bak"
+  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards /CHECK_TARGETS += /' "$d/$1"; fi
+  cmp -s "$TMP/gate.bak" "$d/$1" && miss "design gate: mutation '$2' did not change $1"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with '$2' in $1"
+  case "$out" in *"$3"*) ;; *) miss "design gate: '$2' in $1 went red for another reason: $out" ;; esac
+  cp "$TMP/gate.bak" "$d/$1"
+}
+gate_red mk/design.mk "" "make check does not run the design guards"
+gate_red mk/design.mk ".IGNORE:" "mk/design.mk ignores errors with .IGNORE"
+gate_red Makefile "MAKEFLAGS += -i" "Makefile ignores errors through MAKEFLAGS"
+gate_red Makefile "MAKEFLAGS += --keep-going --ignore-errors" "Makefile ignores errors through MAKEFLAGS"
+gate_red Makefile "export MAKEFLAGS += -i" "Makefile ignores errors through MAKEFLAGS"
+printf '.PHONY: check\ncheck:\n\t@true\n' > "$d/GNUmakefile"
+out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with a GNUmakefile"
+case "$out" in *"GNUmakefile exists: make reads it before Makefile"*) ;; *) miss "design gate: GNUmakefile went red for another reason: $out" ;; esac
+rm -f "$d/GNUmakefile"
+( cd "$d" && printf 'MAKEFLAGS += --no-print-directory\n' >> Makefile && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) \
+  || miss "design gate: an unrelated MAKEFLAGS setting went red"
+# Quiet steps: a silent recipe (@) still counts, an error-ignoring one (- in any order) does not.
+for prefix in '@-' '-@'; do
+  cp "$d/mk/design.mk" "$TMP/gate.bak"
+  subst "s/^	@npx playwright test\$/	${prefix}npx playwright test/" "$d/mk/design.mk"
+  cmp -s "$TMP/gate.bak" "$d/mk/design.mk" && miss "design gate: the $prefix mutation did not change mk/design.mk"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}npx playwright test"
+  case "$out" in *"the browser step can no longer fail the gate"*) ;; *) miss "design gate: $prefix went red for another reason: $out" ;; esac
+  cp "$TMP/gate.bak" "$d/mk/design.mk"
+done
+# make check is quiet: no echoed commands, no npm banners, one dot per test, coverage table in a file.
+grep -q '^	@npm run --silent lint$' "$d/Makefile" && grep -q '^	@npm run --silent test$' "$d/Makefile" \
+  && grep -q '^	@echo "make check passed' "$d/Makefile" || miss "quiet check: Makefile steps echo their commands"
+grep -q 'prettier --check --log-level warn' "$d/package.json" || miss "quiet check: prettier prints on success"
+grep -q 'reporter: "dot"' "$d/playwright.config.ts" && grep -q 'reporters: \["dot"\]' "$d/vite.config.ts" \
+  && grep -q 'reporter: \["html", "json-summary"\]' "$d/vitest.config.ts" || miss "quiet check: a test step prints every test"
+grep -q 'tsc --noEmit >&2' "$d/playwright.config.ts" || miss "quiet check: build errors hidden from the browser step"
+python3 - "$ROOT/plugins/repo-setup" <<'PY' || miss "design checks wired wrongly"
+import sys, tomllib, pathlib
+checks = {c["id"]: c for c in tomllib.loads((pathlib.Path(sys.argv[1]) / "checklists/top-tier.toml").read_text())["check"]}
+for k, mode in (("design_guards_bite", "guards"), ("design_floor_in_gate", "gate"), ("design_reference", "reference")):
+    assert checks[k]["type"] == "command" and checks[k]["capabilities"] == ["design"] and mode in checks[k]["command"], k
+assert checks["design_present"]["presets"] == ["react-vite"] and checks["design_present"]["weight"] == 3
+PY
+echo "ok  design capability (or misses reported above)"
+
+# 32. claude-plugin: a working skeleton for a plugin marketplace, without app tooling
 k="$TMP/plug"; mkdir -p "$k" && git -C "$k" init -q -b main
 out=$(python3 "$S/apply.py" --target "$k" --preset claude-plugin --var 'project_name=Sample Kit' --var description=x --var owner=acme --json)
 for f in .claude-plugin/marketplace.json plugins/sample-kit/.claude-plugin/plugin.json plugins/sample-kit/skills/hello/SKILL.md \
@@ -661,7 +978,7 @@ python3 "$S/apply.py" --target "$kg" --preset claude-plugin --level team --with 
 [ -f "$kg/.github/actions/setup-project/action.yml" ] || miss "claude-plugin: agent workflows have no setup-project action"
 echo "ok  claude-plugin skeleton (or misses reported above)"
 
-# 32. detection: plugin manifests decide the kind; other repos are unaffected
+# 33. detection: plugin manifests decide the kind; other repos are unaffected
 kind() { python3 "$S/detect.py" --target "$1" | json 'str(d["suggested_preset"])+" "+str(d["signals"]["claude_plugin"])'; }
 [ "$(kind "$k")" = "claude-plugin True" ] || miss "detect: skeleton gives $(kind "$k")"
 [ "$(kind "$ROOT")" = "claude-plugin True" ] || miss "detect: this repo gives $(kind "$ROOT")"
@@ -674,7 +991,7 @@ lone="$TMP/lone-plugin"; mkdir -p "$lone/plugins/solo/.claude-plugin"; echo '{"n
 [ "$(kind "$lone")" = "claude-plugin True" ] || miss "detect: plugin manifests without a marketplace give $(kind "$lone")"
 echo "ok  detection of plugin repos (or misses reported above)"
 
-# 33. adopt on an existing plugin repo: only what fits, nothing overwritten
+# 34. adopt on an existing plugin repo: only what fits, nothing overwritten
 PF="$ROOT/tests/fixtures/plugin-repos/intact"
 fresh() { rm -rf "$1"; cp -R "$PF" "$1"; git -C "$1" init -q -b main; git -C "$1" add -A; }
 ad="$TMP/plug-adopt"; fresh "$ad"
@@ -703,7 +1020,7 @@ after=$(python3 "$S/doctor.py" --target "$ad" --json | json 'str(d["score"])+" "
 [ "$after" = "100 " ] || miss "adopt plugin repo: doctor after adopting: $after"
 echo "ok  adopt on a plugin repo (or misses reported above)"
 
-# 34. doctor profile for plugin repos: each check fails on a broken repo and passes on an intact one
+# 35. doctor profile for plugin repos: each check fails on a broken repo and passes on an intact one
 verdict() { # dir, check id, extra doctor flags -> "pass" | "fail: ..." | "na: reason" | "skipped: ..." | "absent"
   python3 "$S/doctor.py" --target "$1" --json ${3:-} | python3 -c '
 import json, sys
@@ -809,7 +1126,7 @@ grep -q "\[versions\] plugin 'beta': the marketplace says 1.2.0 but plugin.json 
 { python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep -q '^False False$' || miss "plugin_lint --json"
 echo "ok  doctor profile for plugin repos (or misses reported above)"
 
-# 35. version tags without GitHub Releases (--remote, with a stand-in gh)
+# 36. version tags without GitHub Releases (--remote, with a stand-in gh)
 rl="$TMP/pd-releases"; fresh "$rl"
 git -C "$rl" -c user.name=t -c user.email=t@example.com -c core.hooksPath=/dev/null commit -qm base
 mkdir -p "$TMP/fakebin"
@@ -833,7 +1150,7 @@ verdict "$rl" plugin_releases '--level team' | grep -q '^absent$' || miss "relea
 python3 "$S/doctor.py" --target "$rl" --level team | grep -q 'Version tags are published as GitHub Releases' || miss "releases: no reminder without --remote"
 echo "ok  releases for tags (or misses reported above)"
 
-# 36. bump tool: every manifest together, or one plugin when versions are independent
+# 37. bump tool: every manifest together, or one plugin when versions are independent
 BT="$S/../presets/claude-plugin/starter/tools/bump_version.py"
 ver() { python3 -c "import json; m=json.load(open('$1/.claude-plugin/marketplace.json')); print(' '.join(str(p.get('version'))+'/'+json.load(open('$1/'+p['source']+'/.claude-plugin/plugin.json')).get('version','-') for p in m['plugins']))"; }
 b="$TMP/bump-all"; fresh "$b"
@@ -856,12 +1173,12 @@ b="$TMP/bump-kitlike"; fresh "$b"; edit_json "$b/.claude-plugin/marketplace.json
 python3 "$BT" --root "$b" patch >/dev/null; [ "$(ver "$b")" = "None/1.2.1 None/1.2.1" ] || miss "bump: added a version to marketplace entries that had none: $(ver "$b")"
 echo "ok  bump tool (or misses reported above)"
 
-# 37. decision layers: what does not apply to a plugin marketplace is recorded with its reason, never built
+# 38. decision layers: what does not apply to a plugin marketplace is recorded with its reason, never built
 python3 "$bp" not-applicable claude-plugin > "$TMP/layers-na.txt"
-for l in architecture ai domain delivery; do grep -q "^$l: ." "$TMP/layers-na.txt" || miss "layers: $l is not marked not applicable for claude-plugin"; done
+for l in architecture ai domain design delivery; do grep -q "^$l: ." "$TMP/layers-na.txt" || miss "layers: $l is not marked not applicable for claude-plugin"; done
 grep -q '^domain: A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated' "$TMP/layers-na.txt" || miss "layers: no reason for ontology and wiki"
 [ -z "$(python3 "$bp" not-applicable python)" ] || miss "layers: an app stack has layers marked not applicable"
-for l in architecture ai domain delivery; do grep -q 'Stack `claude-plugin`:\*\* not applicable' "$SK/references/layers/$l.md" || miss "layer $l does not tell the agent it is not applicable for claude-plugin"; done
+for l in architecture ai domain design delivery; do grep -q 'Stack `claude-plugin`:\*\* not applicable' "$SK/references/layers/$l.md" || miss "layer $l does not tell the agent it is not applicable for claude-plugin"; done
 grep -q '`claude-plugin`' "$SK/references/layers/stack.md" && grep -q 'claude-plugin' "$SK/references/layers/context.md" || miss "stack/context layers do not offer claude-plugin"
 grep -q 'not-applicable' "$SK/SKILL.md" && grep -q 'never dropped silently' "$SK/SKILL.md" || miss "new does not show layers that do not apply"
 grep -q 'claude-plugin' "$ROOT/plugins/repo-setup/skills/adopt/SKILL.md" && grep -q 'not_applicable' "$ROOT/plugins/repo-setup/skills/doctor/SKILL.md" || miss "adopt/doctor skills do not cover plugin repos"

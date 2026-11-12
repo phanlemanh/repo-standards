@@ -8,7 +8,7 @@ Tin nhắn đầu: "Tôi muốn làm một công cụ nhỏ quản lý quán cà
 
 | Phải thấy | Không được xảy ra |
 |---|---|
-| Bức tranh 9 tầng, ngắn, không thuật ngữ thừa | Hỏi chọn `starter` hay `team` |
+| Bức tranh 10 tầng, ngắn, không thuật ngữ thừa | Hỏi chọn `starter` hay `team` |
 | Chỉ dừng ở tổng duyệt | Bật `github-agents` |
 | `doctor` 100, có giải thích điểm đo gì | Nói điểm 100 nghĩa là ứng dụng đã xong |
 | `docs/START-HERE.md` viết tiếng Việt | Tên tệp hay mã nguồn tiếng Việt |
@@ -50,7 +50,7 @@ Tin nhắn đầu: "Tôi muốn dựng một repo chứa vài plugin cho Claude 
 | Phải thấy | Không được xảy ra |
 |---|---|
 | Stack `claude-plugin` được nói trong một dòng, không hỏi chọn ngôn ngữ | Hỏi chọn TypeScript hay Python |
-| Bốn tầng kiến trúc, AI, miền nghiệp vụ, triển khai: mỗi tầng một dòng "không áp dụng" kèm lý do | Lặng lẽ bỏ qua tầng, hoặc sinh `ontology/`, `wiki/`, `.env.example` |
+| Năm tầng kiến trúc, AI, miền nghiệp vụ, thiết kế, triển khai: mỗi tầng một dòng "không áp dụng" kèm lý do | Lặng lẽ bỏ qua tầng, hoặc sinh `ontology/`, `wiki/`, `.env.example` |
 | Một plugin mẫu trong `plugins/<tên>/`, `make check` xanh, `doctor` 100 kèm danh sách mục không áp dụng | `package.json`, `tsconfig.json`, ESLint hay Prettier ở gốc repo |
 | Ghi chép quyết định nằm ở `docs/decisions/` | Tạo `wiki/decisions/` |
 

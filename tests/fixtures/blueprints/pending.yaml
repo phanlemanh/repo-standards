@@ -40,6 +40,8 @@ layers:
     why: "Later"
     manual_steps:
       - "Add a database"
+  design:
+    status: not_applicable
   quality:
     status: decided
     source: proposed

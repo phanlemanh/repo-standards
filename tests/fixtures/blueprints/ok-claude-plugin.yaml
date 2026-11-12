@@ -31,6 +31,9 @@ layers:
   domain:
     status: not_applicable
     why: "A plugin marketplace has no business domain to model: ontology/ and wiki/ are not generated."
+  design:
+    status: not_applicable
+    why: "A plugin marketplace has no screens: the design floor is for a web front end (react-vite)."
   quality:
     status: decided
     source: proposed

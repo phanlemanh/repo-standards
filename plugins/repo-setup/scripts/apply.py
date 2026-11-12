@@ -193,6 +193,7 @@ def load_meta(
         "team_only": [],
         "install": [],
         "verify": [],
+        "hand_merge": {},
     }
     upto = LEVELS[: LEVELS.index(level) + 1]
     for unit in units(preset, archetype, deploy, caps):
@@ -200,6 +201,7 @@ def load_meta(
         if unit.name == preset and unit.parent == PRESETS_DIR:
             merged["description"] = data.get("description", "")
         merged["vars"].update(data.get("vars", {}))
+        merged["hand_merge"].update(data.get("hand_merge", {}))
         for key in ("user_owned", "sample", "merge_lines", "equivalents", "exclude",
                     "not_applicable", "team_only"):
             merged[key] += data.get(key, [])
@@ -250,6 +252,24 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
     v.setdefault("plugin_versioning", "lockstep")
     if v["plugin_versioning"] not in PLUGIN_VERSIONING:
         raise ValueError(f"plugin_versioning must be one of: {', '.join(PLUGIN_VERSIONING)}")
+    # The "design" capability: the same rules as the blueprint, for values given with --var.
+    surface = v.get("design_surface")
+    if surface is not None and surface not in blueprint.DESIGN_SURFACES:
+        surfaces = ", ".join(sorted(blueprint.DESIGN_SURFACES))
+        raise ValueError(f"design_surface must be one of: {surfaces}")
+    if "locale" in v and not blueprint.LOCALE.fullmatch(v["locale"]):
+        raise ValueError("locale must look like vi-VN (language-COUNTRY)")
+    if "currency" in v and not blueprint.CURRENCY.fullmatch(v["currency"]):
+        raise ValueError("currency must be a three-letter code like VND")
+    # A brand colour is optional, and a bad one stops the run.
+    brand = v.get("brand_primary", "")
+    if brand:
+        problems = blueprint.brand_errors(brand)
+        if problems:
+            raise ValueError("; ".join(problems))
+    v.setdefault("design_brand", "yes" if brand else "no")
+    v.setdefault("brand_primary_foreground", blueprint.readable_on(brand) if brand else "")
+    v.setdefault("html_lang", v.get("locale", "").split("-")[0] or "en")
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
     market = v.get("marketplace", "").strip()
     if market:
@@ -398,6 +418,20 @@ def merge_lines(current: bytes, template: bytes) -> bytes | None:
     return (text + "\n# Added by repo-setup\n" + "\n".join(missing) + "\n").encode("utf-8")
 
 
+def unified_diff(key: str, current: bytes, content: bytes) -> str:
+    try:
+        return "".join(
+            difflib.unified_diff(
+                current.decode("utf-8").splitlines(keepends=True),
+                content.decode("utf-8").splitlines(keepends=True),
+                fromfile=f"{key} (current)",
+                tofile=f"{key} (preset)",
+            )
+        )
+    except UnicodeDecodeError:
+        return "(binary file differs)"
+
+
 def _keep(args: argparse.Namespace) -> list[str]:
     """The flags that still apply next to a blueprint."""
     kept = ["--target", args.target]
@@ -522,6 +556,10 @@ def main(argv: list[str] | None = None) -> int:
         if "mcp" in caps:
             caps.remove("mcp")
         caps.insert(caps.index("ai"), "mcp")
+    if adopt and "design" in capabilities_for(archetype, caps):
+        ap.error("adopt does not support the design capability yet: it would overwrite or skip "
+                 "the screens, styles and lint setup of an existing front end. Leave out "
+                 "--with design when adopting.")
     try:
         check_combination(preset, archetype, deploy, caps, level)
     except ValueError as exc:
@@ -589,6 +627,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             if matches(key, meta["user_owned"]):
                 results["kept"].append(key)
+                if key not in prev_hashes:
+                    what = meta["hand_merge"].get(key, "what the preset puts in it")
+                    notes.append(f"kept your own {key}: merge {what} into it by hand "
+                                 "(--diff shows the preset's version)")
+                if args.diff:
+                    diffs[key] = unified_diff(key, current, content)
                 continue
             if prev_hashes.get(key) == sha(current):
                 results["updated"].append(key)
@@ -606,17 +650,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 results["conflict"].append(key)
                 if args.diff:
-                    try:
-                        diffs[key] = "".join(
-                            difflib.unified_diff(
-                                current.decode("utf-8").splitlines(keepends=True),
-                                content.decode("utf-8").splitlines(keepends=True),
-                                fromfile=f"{key} (current)",
-                                tofile=f"{key} (preset)",
-                            )
-                        )
-                    except UnicodeDecodeError:
-                        diffs[key] = "(binary file differs)"
+                    diffs[key] = unified_diff(key, current, content)
                 continue
         else:
             if adopt and key not in prev_hashes:

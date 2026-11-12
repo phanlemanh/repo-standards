@@ -9,7 +9,9 @@ Keep the file name in English. Sections:
    (`claude-plugin`): `make check`, `make validate`, `make bump V=minor`, and how to try a plugin
    with `claude --plugin-dir plugins/<name>`.
 3. **What is in the repo**: a table of path, what it is, what you need to do. Group paths and list
-   only what exists.
+   only what exists. With the `design` capability, introduce `src/example` as the sample screen the
+   AI will copy when it builds new screens (open `/example` under `make dev`; `/` is left for the
+   first real screen), and `design/terms.json` as the words it must not swap.
 4. **What happens automatically**: CI on push, and `make check` in that CI. Nothing runs by itself inside Claude Code.
 5. **What to know about safety**:
    - What the `doctor` score measures (files and checks are in place) and what it does not (whether

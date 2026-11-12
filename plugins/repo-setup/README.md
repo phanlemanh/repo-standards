@@ -20,8 +20,8 @@ One flow, three depths, changeable at any layer:
 - **Review each layer**: stop at every layer with a real choice.
 - **Bring a design**: paste what you decided; Claude asks only about gaps and conflicts.
 
-The nine layers are context, repo strategy, architecture, AI in the product, stack, domain, quality,
-delivery, and agents and governance. Every option carries a label: `automated`, `partial`, or
+The ten layers are context, repo strategy, architecture, AI in the product, stack, domain, design,
+quality, delivery, and agents and governance. Every option carries a label: `automated`, `partial`, or
 `manual` (recorded with guidance, not built).
 
 Decisions go to `setup-blueprint.yaml` with reasons and rejected options. `apply.py --from-blueprint`
@@ -34,11 +34,22 @@ architecture later is manual work. A tour file, `docs/START-HERE.md`, explains t
 | --- | --- |
 | **Stack** | `ts-node`, `ts-api` (Fastify), `react-vite`, `python`, `fastapi`, `claude-plugin` (a Claude Code plugin marketplace) |
 | **Archetype** | `service-api`, `modular-monolith`, or none |
-| **Capability** | `ai` (tiers `call`, `workflow`, `agent`), `mcp`, `github-agents` |
+| **Capability** | `ai` (tiers `call`, `workflow`, `agent`), `design` (React/Vite only), `mcp`, `github-agents` |
 | **Deploy** | `container` |
 | **Level** | `starter`, `team` |
 
 `apply.py --list-options` lists them with when to use each.
+
+### Design (React/Vite)
+
+`--with design` adds the design floor. `tools/design_guards.mjs`, `mk/design.mk`,
+`tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and `tests/e2e/routes.ts` are owned by the plugin:
+change them in the plugin and re-apply. A local edit costs the `design_guards_bite` points in
+`doctor`. Screens and their states are listed once, in `src/screens.ts` (a path may have parts, such
+as `/orders/:id`, with a real address to visit); the sample screen sits at `/example`. The builder
+reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the fast loop. The data source's test
+hook (`?scenario=`) answers only in the unit tests and the browser checks' own build, never in
+`npm run build`; there it answers every request, so the checks never reach a real server.
 
 ### Plugin marketplaces
 
@@ -55,12 +66,12 @@ marketplace manifest, one sample plugin with a skill under `plugins/<name>/`, a 
   or tests, and never touches existing manifests.
 - What does not fit this kind of repo is said, not hidden: `apply.py` lists it under
   "not applicable", the decision layers record it with a reason (architecture, AI, domain,
-  delivery), and `doctor` lists those checks without scoring them.
+  design, delivery), and `doctor` lists those checks without scoring them.
 - `doctor` adds checks only plugin repos need: manifests parse and agree on names; versions agree
   across manifests (or `--var plugin_versioning=independent`); no plugin uses the repository root
   as its source; descriptions stay within 1024 characters; a bump tool, a changelog and a CI step
   that validates manifests exist; with `--remote`, version tags have GitHub Releases.
-- No archetype, `ai`, `mcp` or deploy layer applies; `github-agents` does.
+- No archetype, `ai`, `design`, `mcp` or deploy layer applies; `github-agents` does.
 
 ### AI in the product
 

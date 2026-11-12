@@ -1,6 +1,6 @@
 ---
 name: new
-description: Set up a new or empty repository through decision layers — repo strategy, architecture, AI in the product, stack, domain, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
+description: Set up a new or empty repository through decision layers — context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents — with two or three reasoned options at each layer, independent critique and an automated build. Works for newcomers who hand everything to Claude and for professionals who bring their own choices. Use when the user wants to create, scaffold, bootstrap or standardise a repo or project.
 ---
 
 # Set up a repository through decision layers
@@ -53,7 +53,7 @@ For each layer, read `references/layers/<id>.md` and run this loop:
    label, and never imply that a `manual` option will be built.
 3. **Refine**: the user picks, edits or asks. Name what the choice leaves undecided.
 4. **Decide**: write it to `setup-blueprint.yaml`, then run `blueprint.py dependents <layer>` and mark
-   any decided layer in that list as `needs_review`. Revisit those layers.
+   any layer in that list that is `decided` or `not_applicable` as `needs_review`. Revisit those layers.
 
 A layer that does not apply to the chosen stack (`blueprint.py not-applicable <preset>`, for example
 ontology and wiki for a plugin marketplace) is never dropped silently: say its reason in one line,
@@ -78,6 +78,9 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
    `.claude/skills/ontology-add/SKILL.md`, replacing the sample ontology
    if there is one, then write the handlers, and update the sample tests and `evals/` that name the
    sample actions. `make gen`. Skip this step when the `domain` layer is not applicable.
+   If the `design` capability is on, translate the text in `src/lib/labels.ts`, `src/example/` and
+   `design/behaviors.md` into `docs_language`. When you write the domain, record the synonyms to
+   avoid in `design/terms.json`.
 4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
    most 2 fixes, then report exactly what fails.
 5. Run `doctor.py`. Explain what the score does and does not measure.

@@ -6,6 +6,7 @@ description: Health-check the repo's ontology and wiki — structural lint plus 
 # Wiki and ontology health check
 
 ## 1. Structural check (mechanical)
+
 Run `python3 tools/wiki_lint.py --strict --json`. Group the results: errors first
 (broken links, unknown entities, missing sections), then warnings (orphans, glossary gaps,
 missing entity pages). If `tools/wiki_lint.py` is missing, the repo predates it: offer
@@ -14,7 +15,9 @@ missing entity pages). If `tools/wiki_lint.py` is missing, the repo predates it:
 Also run the generated-code check (`make ontology`) to see if code generation is stale.
 
 ## 2. Content review (judgement)
+
 Read `wiki/index.md`, every entity page, and the decision list. Look for:
+
 - **Stale rules**: for each entity rule with `implemented_in`, open the code and compare
   the threshold/condition with the ontology and the wiki page.
 - **Contradictions** between pages (two decisions in force for the same topic, an entity
@@ -26,6 +29,7 @@ Read `wiki/index.md`, every entity page, and the decision list. Look for:
 - **Bloat**: index longer than ~60 lines, pages that paste code.
 
 ## 3. Report and fix
+
 Report in the user's language: score-like summary (errors / warnings / content issues),
 then a short prioritised list. Fix with the user's approval, smallest changes first.
 Ontology meaning changes go through ontology-add and need domain review.

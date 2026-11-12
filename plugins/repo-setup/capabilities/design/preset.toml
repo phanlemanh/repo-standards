@@ -1,0 +1,22 @@
+description = "Design floor for a web front end: component base, machine guards, browser checks, reference screen"
+stacks = ["react-vite"]
+user_owned = ["src/index.css"]
+# What a user's own copy of a user_owned file is missing; apply.py names it in a note.
+hand_merge = { "src/index.css" = "its design tokens (the Tailwind imports and the theme variables)" }
+sample = ["src/example/**"]
+
+[vars]
+brand_primary = ""
+design_surface = "tool"
+locale = "en-US"
+currency = "USD"
+
+[starter]
+install = [
+  "npm install @base-ui/react class-variance-authority cn lucide-react tw-animate-css @fontsource-variable/geist shadcn@4.23.0",
+  "npm install --save-dev tailwindcss @tailwindcss/vite @shadcn/lint@0.2.5 @playwright/test @axe-core/playwright",
+  "npx shadcn@4.23.0 add button input label table card badge dialog select skeleton empty alert -y --overwrite",
+  "make ui-patch",
+  "npx playwright install chromium",
+  "make format",
+]
