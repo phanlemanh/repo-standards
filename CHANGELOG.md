@@ -19,6 +19,8 @@
   action that is declared but has no code still counts as an answer).
 - `docs/ranh-gioi-ba-kho.md` records what belongs to this repository, to design-assembly and to
   delivery-loop.
+- The same page now says which repository answers which UX question, where the three overlap
+  today, and what each should carry next. Proposals only: nothing in the plugin changed.
 
 ### Design layer
 - `new` has a tenth decision layer, `design` (after `domain`), and a `design` capability for
