@@ -7,7 +7,7 @@ for people, code and AI agents.
 | File              | Contains                                            |
 | ----------------- | --------------------------------------------------- |
 | `glossary.md`     | Plain-language definitions of every business term   |
-| `entities/*.yaml` | One file per concept: properties, rules, subtypes, and its `lifecycle` |
+| `entities/*.yaml` | One file per concept: properties, rules, subtypes   |
 | `relations.yaml`  | How concepts connect (`Customer -places-> Order`)   |
 | `page-types.yaml` | Allowed wiki page types and their required sections |
 
