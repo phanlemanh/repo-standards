@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Entity lifecycle
+- Once a repo has `ontology/actions.yaml`, `make ontology` (wiki-lint) fails when an entity has no
+  `create`, `query`, `update` or `delete` action and no recorded choice. The choice goes under
+  `lifecycle:` in the entity file: `{ later: <where it is planned> }`, listed as a warning on every
+  run; `{ never: <reason>, decided_by: <person> }`; or `lifecycle: { via: <Entity> }` for a part
+  handled through its parent. The error names the entity, the operation and both ways to fix it.
+- A repo with actions that takes the new `tools/ontology_actions.py` will fail `make ontology`
+  until each entity has its four answers. That list is the work: add the action, or ask the owner
+  and record the answer. A repo without `ontology/actions.yaml` is not affected.
+- `/ontology-add` asks for the whole life of a concept per role, and `/review-change` blocks a
+  `never` that the author decided alone. The entity template shows the block.
+- New `.claude/rules/ontology.md`, loaded when Claude works under `ontology/`: run
+  `make ontology` after each edit, four answers per entity, never fill `decided_by` yourself.
+- Not built: a hook that runs the lint after each edit, and a `planned` status for actions (an
+  action that is declared but has no code still counts as an answer).
+- `docs/ranh-gioi-ba-kho.md` records what belongs to this repository, to design-assembly and to
+  delivery-loop.
+
 ### Design layer
 - `new` has a tenth decision layer, `design` (after `domain`), and a `design` capability for
   `react-vite`: shadcn components, brand colour, a labels file, `design/terms.json`,
