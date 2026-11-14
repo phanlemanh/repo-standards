@@ -5,3 +5,11 @@ properties:
   customerId: { type: ref, target: Customer, required: true }
   total: { type: number, required: true }
   placedOn: { type: date }
+lifecycle:
+  query: { later: Order history screen }
+  update:
+    never: An order is not changed after it is placed. A mistake is fixed by a refund
+    decided_by: shop owner 2026-01-05
+  delete:
+    never: Orders are kept for the accounts
+    decided_by: shop owner 2026-01-05

@@ -27,6 +27,8 @@ do not report tests as passing.
    A test deleted, skipped or loosened without a stated reason is blocking.
 3. **Domain**: names follow `ontology/glossary.md`; new concepts, rules and actions are in `ontology/`;
    generated code is current (`make ontology`); each business rule lives in one place.
+   A new `never` under `lifecycle` in `ontology/entities/` names the person who decided, and the PR shows
+   their decision; an operation dropped by the author alone is blocking.
 4. **Secrets**: no keys, tokens, passwords or connection strings in code, tests, docs, fixtures or
    logs. Run `gitleaks detect --no-banner` if available.
 5. **Personal data**: properties marked `pii: true` in `ontology/entities/*.yaml` do not reach logs,

@@ -22,6 +22,13 @@ ontology/actions.yaml — what can be DONE in the domain (one definition -> type
 
 Entity properties may carry `pii: true` (personal data): generated helpers redact them in
 anything returned to agents or written to logs.
+
+ontology/entities/<Name>.yaml — `lifecycle:` records what the actions do not cover. Once a repo
+declares actions, each entity needs a create, query, update and delete action, or a choice:
+    lifecycle:
+      update: { later: "Roadmap row 12" }                        # planned: listed on every run
+      delete: { never: "Kept for the accounts", decided_by: "Lan, 2026-01-05" }   # a person decided
+    lifecycle: { via: Order }                                    # handled through another entity
 """
 
 from __future__ import annotations
@@ -33,6 +40,7 @@ from typing import Any
 from repo_ontology import load_yaml_file
 
 KINDS = {"create", "update", "delete", "query", "command"}
+LIFECYCLE = ("create", "query", "update", "delete")
 AGENT_MODES = {"allowed", "confirm", "forbidden"}
 JSON_TYPES = {
     "string": {"type": "string"},
@@ -139,6 +147,63 @@ def lint(root: Path, entities: dict[str, dict[str, Any]], error: Any, warn: Any)
                 )
             elif spec["type"] == "enum" and not spec.get("values"):
                 error(apath, f"{label}: input '{field}' enum needs values")
+    lint_lifecycle(root, entities, error, warn)
+
+
+def lint_lifecycle(root: Path, entities: dict[str, dict[str, Any]], error: Any, warn: Any) -> None:
+    """Once a repo declares actions, every entity answers create / query / update / delete:
+    an action of that kind, or a choice recorded under `lifecycle:` in the entity file."""
+    actions = load_actions(root)
+    if not actions:
+        return
+    covered: dict[tuple[str, str], str] = {}
+    for a in actions:
+        key = (str(a.get("entity") or ""), str(a.get("kind") or "command"))
+        covered.setdefault(key, str(a.get("name") or ""))
+    for name, data in entities.items():
+        path = f"ontology/entities/{name}.yaml"
+        life = data.get("lifecycle")
+        if life is None:
+            life = {}
+        if not isinstance(life, dict):
+            error(path, "lifecycle must be a mapping: {via: <Entity>} or one entry per operation")
+            continue
+        for key in life:
+            if key != "via" and key not in LIFECYCLE:
+                allowed = ", ".join(("via", *LIFECYCLE))
+                error(path, f"lifecycle.{key}: unknown key (use one of: {allowed})")
+        if "via" in life:
+            via = life["via"]
+            if via == name:
+                error(path, "lifecycle.via: an entity cannot be handled through itself")
+            elif via not in entities:
+                error(path, f"lifecycle.via: '{via}' is not an entity")
+            continue
+        for kind in LIFECYCLE:
+            action, entry = covered.get((name, kind)), life.get(kind)
+            if entry is None:
+                if not action:
+                    error(
+                        path,
+                        f"no '{kind}' action for {name}: add one to ontology/actions.yaml "
+                        f"(entity: {name}, kind: {kind}), or record the choice here as "
+                        f"lifecycle.{kind}: {{later: <where it is planned>}} or "
+                        "{never: <reason>, decided_by: <the person who decided>}",
+                    )
+                continue
+            if action:
+                stale = f"lifecycle.{kind} is out of date: {action} now does it, remove the entry"
+                warn(path, stale)
+            if not isinstance(entry, dict) or bool(entry.get("later")) == bool(entry.get("never")):
+                error(path, f"lifecycle.{kind}: give either later: <where> or never: <reason>")
+            elif entry.get("never") and not entry.get("decided_by"):
+                error(
+                    path,
+                    f"lifecycle.{kind}: 'never' needs decided_by: the person who decided, "
+                    "never the agent that wrote the file",
+                )
+            elif entry.get("later") and not action:
+                warn(path, f"{name}: '{kind}' is planned, not built ({entry['later']})")
 
 
 def _role_allows(role: str, allowed: list[str], roles: list[dict[str, Any]]) -> bool:
