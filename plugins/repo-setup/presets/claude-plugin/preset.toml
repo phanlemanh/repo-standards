@@ -23,6 +23,7 @@ paths = [
   "tools/ontology_codegen.py",
   "tools/wiki_lint.py",
   ".claude/skills/ontology-add/**",
+  ".claude/rules/ontology.md",
   ".claude/skills/wiki-ingest/**",
   ".claude/skills/wiki-query/**",
   ".claude/skills/wiki-health/**",

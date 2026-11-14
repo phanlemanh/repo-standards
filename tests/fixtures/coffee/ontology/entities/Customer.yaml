@@ -15,3 +15,6 @@ subtypes:
     description: Customer who left a phone number.
     rule: "phone != ''"
 wiki: wiki/entities/customer.md
+lifecycle:
+  create: { later: Sign-up at the counter }
+  delete: { later: Erasing a customer on request }

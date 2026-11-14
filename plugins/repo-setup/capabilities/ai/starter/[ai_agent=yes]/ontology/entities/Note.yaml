@@ -4,3 +4,7 @@ properties:
   id: { type: string, required: true }
   text: { type: string, required: true }
   author: { type: string, pii: true }
+# What the sample actions do not cover. Replace with your own answers (/ontology-add).
+lifecycle:
+  create: { later: Sample domain. Add createNote when you model your own }
+  update: { later: Sample domain. Add updateNote when you model your own }

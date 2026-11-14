@@ -17,6 +17,9 @@ changes what the whole system means, so do it completely and make it easy to rev
 - Subtypes with a rule (e.g. `VIPCustomer: points >= 100`).
 - Relations to existing entities and cardinality.
 - Business rules and where they are (or will be) implemented.
+- Its whole life, per role: who creates it, who sees it, who changes it, who removes it, and any
+  step of its own (archive, lock, publish, hand over). An operation nobody mentioned is a question
+  for the human, not a gap to skip: "X can be added; can it be renamed or removed, and by whom?"
 
 ## 2. Write the files
 
@@ -46,7 +49,15 @@ The code name is English. The display name and definition follow the repo's `doc
    `description`); include an `agent` role if AI agents act on the system.
    Default to `agent: forbidden` for anything destructive or irreversible, `confirm` for
    money, points or personal data changes; ask the human when unsure.
-7. Append one line to `wiki/log.md`.
+7. **Lifecycle**: once `ontology/actions.yaml` exists, each entity needs a `create`, `query`,
+   `update` and `delete` action. What the actions do not cover goes under `lifecycle:` in the
+   entity file, one entry per operation:
+   - `{ later: <where it is planned> }` when it will be built: say where (issue, roadmap row).
+   - `{ never: <reason>, decided_by: <person, date> }` when it must never exist. Only a person
+     decides this. Ask, then write their name: never fill `decided_by` yourself or with "agent".
+   - `lifecycle: { via: <Entity> }` for a part that is created, changed and removed only through
+     its parent (an order line through its order).
+8. Append one line to `wiki/log.md`.
 
 ## 3. Regenerate and verify
 
@@ -65,5 +76,6 @@ generated file by hand.
 ## 5. Hand-off
 
 In the summary / PR description, list the ontology changes explicitly under
-"Domain changes — needs domain review". Renaming or removing an entity or property is a
+"Domain changes — needs domain review". List every `lifecycle` entry you added there too:
+each `later` with where it is planned, each `never` with who decided. Renaming or removing an entity or property is a
 breaking change: search the code for usages first and say how many places change.

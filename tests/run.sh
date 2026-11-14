@@ -1221,5 +1221,50 @@ cp "$TMP/pvariant.yaml" "$z/setup-blueprint.yaml"; git -C "$z" add -A
 [ "$(python3 "$S/doctor.py" --target "$z" --json | json 'str(d["score"])+str(d["blueprint_drift"])')" = "100[]" ] || miss "blueprint: plugin marketplace drift or score"
 echo "ok  layers for plugin repos (or misses reported above)"
 
+# 39. entity lifecycle: once a repo declares actions, every entity answers create / query / update / delete
+l="$TMP/lifecycle"; mkdir -p "$l" && git -C "$l" init -q -b main
+python3 "$S/apply.py" --target "$l" --preset ts-node --var project_name=L --var description=x --var owner=acme >/dev/null
+python3 "$ROOT/tests/apply_fixture.py" coffee "$l" >/dev/null
+order="$l/ontology/entities/Order.yaml"
+grep -q '^lifecycle:' "$order" || miss "lifecycle: the sample domain does not declare one"
+order_base=$(sed '/^lifecycle:/,$d' "$order")
+put() { printf '%s\n%b' "$order_base" "$1" > "$order"; }
+lerrs() { ( cd "$l" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(e["message"] for e in d["errors"])'; }
+lwarns() { ( cd "$l" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(w["message"] for w in d["warnings"])'; }
+[ -z "$(lerrs)" ] || miss "lifecycle: the sample domain fails: $(lerrs)"
+put ''
+out=$(lerrs)
+[ "$(printf '%s\n' "$out" | grep -c "action for Order")" -eq 3 ] || miss "lifecycle: an entity with only a create action gave: $out"
+printf '%s\n' "$out" | grep -q "no 'delete' action for Order" || miss "lifecycle: the missing delete is not named: $out"
+printf '%s\n' "$out" | grep -q "lifecycle.delete" || miss "lifecycle: the message does not say how to record the choice: $out"
+printf '%s\n' "$out" | grep -q "no 'create' action" && miss "lifecycle: a covered operation was reported: $out"
+put 'lifecycle:\n  query: { later: Order history screen }\n  update: { never: Not changed after it is placed }\n  delete: { later: Yearly clean-up }\n'
+lerrs | grep -q "lifecycle.update: 'never' needs decided_by" || miss "lifecycle: a refusal with nobody behind it passed: $(lerrs)"
+put 'lifecycle:\n  query:\n    later: Order history screen\n  update:\n    never: Not changed after it is placed\n    decided_by: shop owner 2026-01-05\n  delete: { later: Yearly clean-up }\n'
+[ -z "$(lerrs)" ] || miss "lifecycle: recorded choices still fail: $(lerrs)"
+lwarns | grep -q "Order: 'query' is planned, not built (Order history screen)" || miss "lifecycle: a postponed operation is not listed: $(lwarns)"
+lwarns | grep -q "Order: 'update'" && miss "lifecycle: a decided refusal is listed as a debt: $(lwarns)"
+put 'lifecycle:\n  create: { later: x }\n  query: { later: x }\n  update: { later: x }\n  delete: { later: x }\n'
+lwarns | grep -q "lifecycle.create is out of date: placeOrder" || miss "lifecycle: a stale entry is not reported: $(lwarns)"
+put 'lifecycle:\n  via: Customer\n'
+[ -z "$(lerrs)" ] || miss "lifecycle: an entity handled through another one fails: $(lerrs)"
+put 'lifecycle:\n  via: Nobody\n'
+lerrs | grep -q "lifecycle.via: 'Nobody' is not an entity" || miss "lifecycle: via an unknown entity passed: $(lerrs)"
+put 'lifecycle:\n  via: Order\n'
+lerrs | grep -q "lifecycle.via: an entity cannot be handled through itself" || miss "lifecycle: via itself passed: $(lerrs)"
+put 'lifecycle:\n  remove: { later: x }\n'
+lerrs | grep -q "lifecycle.remove: unknown key" || miss "lifecycle: an unknown key passed: $(lerrs)"
+put 'lifecycle: later\n'
+lerrs | grep -q "lifecycle must be a mapping" || miss "lifecycle: a bare word passed: $(lerrs)"
+put ''
+rm "$l/ontology/actions.yaml"
+[ -z "$(lerrs)" ] || miss "lifecycle: a repo that declares no actions was asked for them: $(lerrs)"
+grep -q '^paths: \["ontology/\*\*"\]' "$l/.claude/rules/ontology.md" 2>/dev/null || miss "lifecycle: no rule file scoped to ontology/"
+grep -q 'decided_by' "$l/.claude/rules/ontology.md" 2>/dev/null || miss "lifecycle: the rule file does not say who fills decided_by"
+grep -q 'lifecycle' "$l/.claude/skills/ontology-add/SKILL.md" || miss "lifecycle: ontology-add does not ask for it"
+grep -q 'lifecycle' "$l/ontology/entities/_template.yaml" || miss "lifecycle: the entity template does not show it"
+[ ! -e "$z/.claude/rules/ontology.md" ] || miss "lifecycle: a plugin marketplace got the ontology rule file"
+echo "ok  entity lifecycle (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

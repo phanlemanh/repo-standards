@@ -17,4 +17,12 @@ for people, code and AI agents.
 2. Ontology changes need a human reviewer (they change the meaning of the system).
 3. Start small: 3–5 core entities. Add more only when they cause confusion.
 
+## Lifecycle
+
+Once `actions.yaml` exists, every entity answers four questions: who creates it, who sees it, who
+changes it, who removes it. An action of that kind is an answer. So is a line under `lifecycle:` in
+the entity file: `later` (planned, with where), `never` (with the person who decided), or `via`
+(handled through its parent). `make ontology` fails on an operation with no answer, and lists
+every `later` on each run.
+
 Files starting with `_` (like `entities/_template.yaml`) are templates and are ignored.
