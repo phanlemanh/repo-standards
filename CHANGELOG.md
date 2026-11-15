@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Merge method
+- `tools/github_setup.py --merge-method merge` allows merge commits and turns squash and rebase
+  merging off, for a repository whose process needs the branch's commits to stay on the default
+  branch. Without the option nothing changes: squash only, the same `gh` commands as before.
+  Nothing else differs between the two: the same steps and the same settings, with
+  `allow_squash_merge` and `allow_merge_commit` swapped and `allow_rebase_merge` off in both.
+- The choice is not stored: pass the option on every run. A run without it sets the repository
+  back to squash only. `/repo-setup:github` now finds out how the repository merges before it
+  runs, and says what merge commits mean for release notes.
+- With agent workflows, the PR pipeline merges low-tier pull requests with the method the
+  repository allows: squash, or a merge commit when squash merging is off. It used to squash
+  always, which fails in a repository that has squash merging off.
+- Not built: rebase merging as a choice, a stored choice, and wording that follows the choice in
+  the generated `CONTRIBUTING.md` and `pr-title.yml` (both still describe squashing).
+
 ### Relations and attributes
 - Once a repo has `ontology/actions.yaml`, `make ontology` (wiki-lint) also fails on three things
   the model used to stay silent about. Each error names the action, relation or entity and every

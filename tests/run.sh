@@ -1434,5 +1434,85 @@ grep -q 'not_set' "$a/ontology/entities/_template.yaml" || miss "attributes: the
 grep -q 'not_set' "$a/ontology/README.md" || miss "attributes: the ontology README does not explain it"
 echo "ok  attributes (or misses reported above)"
 
+# 42. merge method: squash unless asked; --merge-method merge keeps merge commits and changes nothing else
+FX="$ROOT/tests/fixtures/github-setup"
+gs="$TMP/gs-team"; gsa="$TMP/gs-agents"
+for d in "$gs" "$gsa"; do mkdir -p "$d" && git -C "$d" init -q -b main; done
+python3 "$S/apply.py" --target "$gs" --preset python --level team --var project_name=M --var description=x --var owner=acme >/dev/null
+python3 "$S/apply.py" --target "$gsa" --preset python --level team --with github-agents --var project_name=M --var description=x --var owner=acme >/dev/null
+mkdir -p "$TMP/gsbin"
+# Stand-in gh: answers the two reads of a dry run and records every other call.
+cat > "$TMP/gsbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
+  "secret list") ;;
+  *) echo "$*" >> "$GH_CALLS"; exit 1 ;;
+esac
+SH
+chmod +x "$TMP/gsbin/gh"
+dry() { ( cd "$1" && shift && PATH="$TMP/gsbin:$PATH" GH_CALLS="$TMP/gs-calls" python3 -B tools/github_setup.py "$@" ) 2>&1; }
+# the fixtures are the dry run as it was before the option existed
+[ "$(dry "$gs")" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: the dry run without the option changed: $(dry "$gs" | diff "$FX/dry-run-team.txt" - | head -5)"
+[ "$(dry "$gsa")" = "$(cat "$FX/dry-run-team-agents.txt")" ] || miss "merge method: the dry run with agents and without the option changed: $(dry "$gsa" | diff "$FX/dry-run-team-agents.txt" - | head -5)"
+[ "$(dry "$gs" --merge-method squash)" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: squash is not the default: $(dry "$gs" --merge-method squash | head -3)"
+# asking for merge commits: the diff against the fixture is the title of one step and two values on its line
+gsdiff() { { dry "$1" --merge-method merge || true; } | diff "$FX/$2" - | grep '^[<>]' | head -8 || true; }
+want_diff() { printf '%s\n' \
+  "<   - squash-only merges, delete merged branches$1" \
+  "<       gh api -X PATCH repos/acme/sample$2 -F delete_branch_on_merge=true -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false" \
+  ">   - merge commits only, delete merged branches$1" \
+  ">       gh api -X PATCH repos/acme/sample$2 -F delete_branch_on_merge=true -F allow_squash_merge=false -F allow_merge_commit=true -F allow_rebase_merge=false"; }
+[ "$(gsdiff "$gs" dry-run-team.txt)" = "$(want_diff '' '')" ] || miss "merge method: merge changed more or less than the three merge settings: $(gsdiff "$gs" dry-run-team.txt)"
+[ "$(gsdiff "$gsa" dry-run-team-agents.txt)" = "$(want_diff ', auto-merge' ' -F allow_auto_merge=true')" ] || miss "merge method: merge with agents changed more or less than the three merge settings: $(gsdiff "$gsa" dry-run-team-agents.txt)"
+# the same from the plan: one step differs, same fields in the same order, two values flipped
+( cd "$gsa" && python3 -B -c "
+import sys; sys.path.insert(0,'tools')
+import github_setup as g
+for agents in (False, True):
+    a = g.plan('o/r','main','@a',agents)
+    b = g.plan('o/r','main','@a',agents,merge_method='merge')
+    assert a == g.plan('o/r','main','@a',agents,merge_method='squash')
+    assert len(a) == len(b)
+    changed = [(x, y) for x, y in zip(a, b) if x != y]
+    assert len(changed) == 1, changed
+    x, y = changed[0]
+    assert set(x) == set(y) == {'what', 'args'}, (x, y)
+    fields = lambda s: [v.split('=', 1) for v in s['args'] if '=' in v]
+    assert [k for k, _ in fields(x)] == [k for k, _ in fields(y)]
+    assert [v for v in x['args'] if '=' not in v] == [v for v in y['args'] if '=' not in v]
+    assert {k: (dict(fields(x))[k], v) for k, v in fields(y) if dict(fields(x))[k] != v} == {
+        'allow_squash_merge': ('true', 'false'), 'allow_merge_commit': ('false', 'true')}
+    assert dict(fields(y))['allow_rebase_merge'] == 'false'
+" ) || miss "merge method: the plan for merge commits differs from squash in more than the merge settings"
+out=$(dry "$gs" --merge-method rebase || true)
+printf '%s\n' "$out" | grep -q "invalid choice: 'rebase'" || miss "merge method: an unknown method was not refused by name: $out"
+dry "$gs" --merge-method merge --reviewer @b | grep -q 'human approval by @b' || miss "merge method: --reviewer is lost next to --merge-method"
+[ ! -s "$TMP/gs-calls" ] || miss "merge method: a dry run called gh to change something: $(cat "$TMP/gs-calls")"
+python3 "$gs/tools/github_setup.py" --help | grep -q -- '--merge-method' || miss "merge method: --help does not show the option"
+# agents merge low-tier PRs with the method the repository allows, and squash when it cannot tell
+pipeline="$gsa/.github/workflows/pr-pipeline.yml"
+if grep -q -- '--auto --squash' "$pipeline"; then miss "merge method: the PR pipeline always squashes"; fi
+mkdir -p "$TMP/pmbin"
+cat > "$TMP/pmbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") # answers only the question the pipeline must ask, for this repository
+    [ "$*" = "repo view acme/sample --json squashMergeAllowed --jq .squashMergeAllowed" ] || exit 1
+    [ "$SQUASH_ALLOWED" = unknown ] && exit 1; echo "$SQUASH_ALLOWED" ;;
+  *) echo "$*" >> "$GH_CALLS" ;;
+esac
+SH
+chmod +x "$TMP/pmbin/gh"
+merged_with() { rm -f "$TMP/pm-calls"
+  ( PATH="$TMP/pmbin:$PATH" GH_CALLS="$TMP/pm-calls" SQUASH_ALLOWED="$1" PR=7 GITHUB_REPOSITORY=acme/sample \
+    bash -e -c "$(steps_of 'Approve and enable auto-merge')" ) >/dev/null 2>&1 || true
+  grep '^pr merge' "$TMP/pm-calls" 2>/dev/null || true; }
+[ "$(merged_with true)" = "pr merge 7 --auto --squash" ] || miss "merge method: the pipeline does not squash where squash is allowed: $(merged_with true)"
+[ "$(merged_with false)" = "pr merge 7 --auto --merge" ] || miss "merge method: the pipeline does not use a merge commit where squash is off: $(merged_with false)"
+[ "$(merged_with unknown)" = "pr merge 7 --auto --squash" ] || miss "merge method: the pipeline does not fall back to squash: $(merged_with unknown)"
+grep -q -- '--merge-method merge' "$ROOT/plugins/repo-setup/skills/github/SKILL.md" || miss "merge method: the github skill does not name the option"
+echo "ok  merge method (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
