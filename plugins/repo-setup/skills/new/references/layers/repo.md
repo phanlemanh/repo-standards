@@ -21,7 +21,9 @@ Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core
 the manual steps are listed), `manual` (only recorded, with guidance; `doctor` does not score it).
 
 For several repos, run setup once per repo; connecting them is manual. Other branching or
-release rules are `manual`: the generated `CONTRIBUTING.md` describes the default.
+release rules are `manual`: the generated `CONTRIBUTING.md` describes the default. One exception
+at team level: `/repo-setup:github` can keep merge commits instead of squashing
+(`tools/github_setup.py --merge-method merge`); the wording in `CONTRIBUTING.md` stays manual.
 
 **Recommendation when the user hands this to Claude:** one repo, one app; MIT for open code, Proprietary for company code. Branching and releases use the existing convention: short branches, squash merge, Conventional Commits.
 

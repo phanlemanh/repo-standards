@@ -3,10 +3,11 @@
 
   python3 tools/github_setup.py              # show what would be done (dry run)
   python3 tools/github_setup.py --apply      # do it (needs admin rights on the repository)
+  python3 tools/github_setup.py --merge-method merge   # keep merge commits instead of squashing
 
-Always: squash-only merges; environments "staging" and "production" (production requires a
-human reviewer); a ruleset on the default branch (pull request + code-owner review + required
-checks).
+Always: one merge method (squash unless --merge-method says otherwise); environments "staging"
+and "production" (production requires a human reviewer); a ruleset on the default branch (pull
+request + code-owner review + required checks).
 With agent workflows (--with github-agents at apply time): labels used by agents and the
 autonomy gate, auto-merge, GitHub Actions allowed to approve low-tier pull requests, the "gate"
 required check, and repository variables.
@@ -39,6 +40,12 @@ LABELS = [
     ("agent-review:changes", "d93f0b", "Independent agent review requested changes"),
 ]
 AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
+# The one way pull requests are merged: (title of the step, the setting that allows it).
+MERGE_METHODS = {
+    "squash": ("squash-only merges", "allow_squash_merge"),
+    "merge": ("merge commits only", "allow_merge_commit"),
+}
+MERGE_SETTINGS = ("allow_squash_merge", "allow_merge_commit", "allow_rebase_merge")
 
 
 def has_agents(root: Path) -> bool:
@@ -71,7 +78,15 @@ def reviewer_entity(handle: str) -> dict[str, Any] | None:
     return {"type": "User", "id": int(out)} if ok and out.isdigit() else None
 
 
-def plan(repo: str, branch: str, reviewer: str, agents: bool) -> list[dict[str, Any]]:
+def plan(
+    repo: str, branch: str, reviewer: str, agents: bool, merge_method: str = "squash"
+) -> list[dict[str, Any]]:
+    merge_title, merge_allowed = MERGE_METHODS[merge_method]
+    merge_fields = [
+        arg
+        for setting in MERGE_SETTINGS
+        for arg in ("-F", f"{setting}={'true' if setting == merge_allowed else 'false'}")
+    ]
     steps: list[dict[str, Any]] = []
     required_checks = ["check", "gate"] if agents else ["check"]
     for name, color, desc in LABELS if agents else []:
@@ -92,8 +107,7 @@ def plan(repo: str, branch: str, reviewer: str, agents: bool) -> list[dict[str, 
         )
     steps.append(
         {
-            "what": "squash-only merges, delete merged branches"
-            + (", auto-merge" if agents else ""),
+            "what": f"{merge_title}, delete merged branches" + (", auto-merge" if agents else ""),
             "args": [
                 "api",
                 "-X",
@@ -102,12 +116,7 @@ def plan(repo: str, branch: str, reviewer: str, agents: bool) -> list[dict[str, 
                 *(["-F", "allow_auto_merge=true"] if agents else []),
                 "-F",
                 "delete_branch_on_merge=true",
-                "-F",
-                "allow_squash_merge=true",
-                "-F",
-                "allow_merge_commit=false",
-                "-F",
-                "allow_rebase_merge=false",
+                *merge_fields,
             ],
         }
     )
@@ -188,6 +197,13 @@ def main(argv: list[str] | None = None) -> int:
         help="production approver, e.g. @alice or @org/team "
         "(default: first high-tier owner in governance/autonomy.yaml)",
     )
+    ap.add_argument(
+        "--merge-method",
+        choices=list(MERGE_METHODS),
+        default="squash",
+        help="the one way pull requests are merged: squash (default) puts one commit per pull "
+        "request on the default branch; merge keeps the branch's commits and adds a merge commit",
+    )
     args = ap.parse_args(argv)
 
     if not shutil.which("gh"):
@@ -206,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     reviewer = args.reviewer or (owners[0] if owners else "")
 
     agents = has_agents(root)
-    steps = plan(repo, branch, reviewer, agents)
+    steps = plan(repo, branch, reviewer, agents, args.merge_method)
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     failures = 0
     for step in steps:

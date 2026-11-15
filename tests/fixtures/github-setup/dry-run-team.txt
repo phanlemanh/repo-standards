@@ -1,0 +1,16 @@
+Dry run for acme/sample (default branch main)
+
+  - squash-only merges, delete merged branches
+      gh api -X PATCH repos/acme/sample -F delete_branch_on_merge=true -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false
+  - environment staging
+      gh api -X PUT repos/acme/sample/environments/staging
+  - environment production (human approval by @acme)
+      gh api -X PUT repos/acme/sample/environments/production --input -
+  - ruleset on main: PR + code-owner review + checks check
+      gh api -X POST repos/acme/sample/rulesets --input -
+
+Secrets (values are never read):
+  - agent workflows are off (apply.py --with github-agents): no agent secret needed
+  - optional RELEASE_PLEASE_TOKEN (PAT/App token) so CI runs on release PRs
+
+Run again with --apply to make these changes.

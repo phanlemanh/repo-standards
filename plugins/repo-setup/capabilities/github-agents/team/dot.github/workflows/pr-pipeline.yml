@@ -144,4 +144,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr review "$PR" --approve --body "Autonomy gate: tier low, agent review approved. Merging when CI passes."
-          gh pr merge "$PR" --auto --squash
+          # Squash, unless the repository has squash merging turned off
+          # (tools/github_setup.py --merge-method merge): then a merge commit.
+          method=squash
+          if [ "$(gh repo view "$GITHUB_REPOSITORY" --json squashMergeAllowed --jq .squashMergeAllowed)" = "false" ]; then
+            method=merge
+          fi
+          gh pr merge "$PR" --auto "--$method"
