@@ -113,13 +113,27 @@ this plugin. A plugin marketplace gets `/review-change` only, written for plugin
 
 ## What actually protects the repo
 
+The rule behind every part: **people decide, machines check**. Nothing the plugin generates puts a
+person in to check a change. A person appears where something is decided: a change to the rules
+of the game, production, a secret. The full rule, where each part of it lives in the code and
+what is still open: [docs/nguyen-tac-setup.md](../../docs/nguyen-tac-setup.md) (Vietnamese).
+
 Two groups, with different strength:
 
 - **Enforced by GitHub**, regardless of what an agent does, once `tools/github_setup.py --apply` has
-  run: the ruleset, CODEOWNERS and required checks.
-- **Enforced per tool call, inside a Claude session**: `.claude/settings.json` deny rules. They
-  prevent mistakes but are not a security boundary. A deny rule on `.env` does not stop a script from
-  reading it. Use Claude Code's sandbox if you need operating-system level isolation.
+  run: the ruleset (pull request, required checks, no force push), and CODEOWNERS for the files
+  that are the rules. No approval is required for its own sake.
+- **Enforced per tool call, inside a Claude session**: `.claude/settings.json` deny rules on
+  secrets, workflows and `governance/`. They block silently and prevent mistakes, but are not a
+  security boundary. A deny rule on `.env` does not stop a script from reading it. Which commands
+  may run is left to Claude Code's own permission mode: the settings ask nothing and block no
+  Bash command by pattern.
+
+`governance/autonomy.yaml` sorts changes by who decides the merge: `low` merges itself when the
+required checks pass, `medium` is merged by a person because nothing proves it yet, `high`
+changes the rules and needs a code owner. Product code starts at `medium`. Name the status check
+that proves a change (`proof.check`, for example the evidence re-check of a feature loop) and it
+can be `low`: the check becomes required and the person leaves.
 
 The risk gate in `pr-pipeline.yml` reads its rules from the base branch. The `doctor` score covers
 local files unless you pass `--remote`, and it measures whether checks are in place, not whether the

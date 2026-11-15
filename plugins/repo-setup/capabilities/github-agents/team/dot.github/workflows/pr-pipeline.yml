@@ -1,11 +1,17 @@
 name: PR pipeline
 
-# Human-at-the-edge pipeline for every pull request:
-#   gate      -> autonomy tier (low / medium / high) from governance/autonomy.yaml, as a label
+# People decide, machines check, for every pull request:
+#   tier      -> autonomy tier (low / medium / high) from governance/autonomy.yaml, as a label,
+#                and the proof the policy names (proof.check), if any
+#   gate      -> the required check: green only when the tier is known and a pull request
+#                above low has no auto-merge left on from an earlier push
 #   review    -> an independent Claude reviewer (no edit rights) checks spec, tests, ontology;
-#                it reads the PR as data and runs none of its code, CI runs the checks
-#   automerge -> only tier "low" from an agent or dependency bot, after the review approved;
-#                medium/high wait for a human (CODEOWNERS + branch protection)
+#                it reads the PR as data and runs none of its code, CI runs the checks.
+#                Skipped when the policy names a proof: that check is the verdict, paid for once
+#   automerge -> tier "low", whoever wrote it, once the proof or the reviewer has checked it;
+#                it merges when the required checks pass. The pipeline never merges medium or
+#                high and approves nothing: a person merges medium, a code owner decides high
+#                (CODEOWNERS + ruleset)
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -18,17 +24,21 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # gh needs to be told the repository in the jobs that check nothing out.
+  GH_REPO: ${{ github.repository }}
   PR: ${{ github.event.pull_request.number }}
   AUTHOR: ${{ github.event.pull_request.user.login }}
 
 jobs:
-  gate:
+  # Reads the pull request as data. It may not write to the repository.
+  tier:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     outputs:
       tier: ${{ steps.tier.outputs.tier }}
+      proof: ${{ steps.tier.outputs.proof }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -71,9 +81,45 @@ jobs:
           done
           gh pr edit "$PR" --add-label "risk:$TIER"
 
+  # The required check: nothing merges before it ends. It checks nothing out and runs no code
+  # from the pull request, so it may hold the permission that turning auto-merge off needs.
+  gate:
+    needs: tier
+    # Without always(), a failed tier job would skip this one, and GitHub counts a skipped
+    # required check as passed.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      tier: ${{ needs.tier.outputs.tier }}
+      proof: ${{ needs.tier.outputs.proof }}
+    steps:
+      - name: Fail when the tier is unknown
+        if: needs.tier.result != 'success'
+        run: |
+          echo "::error::The tier of this pull request is unknown: the tier job did not succeed."
+          exit 1
+      - name: Hold a change that is no longer low (an earlier push may have turned auto-merge on)
+        if: needs.tier.outputs.tier != 'low'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Ends green only when auto-merge is known to be off.
+        run: |
+          state() { gh pr view "$PR" --json autoMergeRequest --jq 'if .autoMergeRequest then "on" else "off" end'; }
+          [ "$(state)" = off ] && exit 0
+          gh pr merge "$PR" --disable-auto || true
+          if [ "$(state)" != off ]; then
+            echo "::error::Auto-merge is on and this pull request is no longer low tier. Turn it off (gh pr merge $PR --disable-auto), then re-run this job."
+            exit 1
+          fi
+
   review:
     needs: gate
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
+    if: >-
+      needs.gate.outputs.proof == '' &&
+      github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -116,34 +162,46 @@ jobs:
 
   automerge:
     needs: [gate, review]
+    # Something must have checked the change: the proof (a required check, so auto-merge waits
+    # for it), the reviewer agent, or for a dependency bot the tier of its update.
     if: >-
-      always() && needs.gate.outputs.tier == 'low' &&
+      always() && needs.gate.result == 'success' && needs.gate.outputs.tier == 'low' &&
+      github.event.pull_request.draft == false &&
       (needs.review.result == 'success' ||
-       (needs.review.result == 'skipped' && github.event.pull_request.user.login == 'dependabot[bot]'))
+       (needs.review.result == 'skipped' &&
+        (needs.gate.outputs.proof != '' || github.event.pull_request.user.login == 'dependabot[bot]')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - name: Only agents and dependency bots merge on their own
-        env:
-          AGENT_AUTHORS: ${{ vars.AGENT_AUTHORS || 'claude[bot] dependabot[bot]' }}
-        run: |
-          case " $AGENT_AUTHORS " in *" $AUTHOR "*) ;; *) echo "Author $AUTHOR merges manually."; exit 0;; esac
-          echo "AUTO=1" >> "$GITHUB_ENV"
-      - name: Require the agent reviewer's approval
-        if: env.AUTO == '1' && github.event.pull_request.user.login != 'dependabot[bot]'
+      - name: Require the reviewer agent's verdict when it ran
+        if: needs.review.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx 'agent-review:approved' \
             || { echo "Agent review has not approved."; echo "AUTO=0" >> "$GITHUB_ENV"; }
-      - name: Approve and enable auto-merge (merges when required checks pass)
-        if: env.AUTO == '1'
+      - name: Require that GitHub requires the proof (tools/github_setup.py --apply)
+        if: needs.gate.outputs.proof != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOF: ${{ needs.gate.outputs.proof }}
+          BASE: ${{ github.base_ref }}
+        # The reviewer agent was skipped on the strength of the proof. Auto-merge waits for the
+        # proof only if the branch requires it.
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/rules/branches/$BASE" \
+            --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context' \
+            | grep -qxF "$PROOF" || {
+              echo "::error::The policy names the proof '$PROOF', but branch $BASE does not require it. Run: python3 tools/github_setup.py --apply"
+              exit 1
+            }
+      - name: Enable auto-merge (merges when the required checks pass)
+        if: env.AUTO != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr review "$PR" --approve --body "Autonomy gate: tier low, agent review approved. Merging when CI passes."
           # Squash, unless the repository has squash merging turned off
           # (tools/github_setup.py --merge-method merge): then a merge commit.
           method=squash

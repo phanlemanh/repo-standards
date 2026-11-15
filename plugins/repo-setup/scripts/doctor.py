@@ -202,23 +202,30 @@ class Remote:
         ok, out = self._gh(["api", f"repos/{repo}/branches/{branch}/protection"])
         if ok:
             data = json.loads(out)
-            reviews = (data.get("required_pull_request_reviews") or {}).get(
-                "required_approving_review_count", 0)
+            # An approval count proves nothing: the required checks do. A pull request must be
+            # required, so that the checks and CODEOWNERS apply to every change.
+            reviews = data.get("required_pull_request_reviews")
+            pull_request = reviews is not None
+            owners = bool((reviews or {}).get("require_code_owner_reviews"))
             checks = bool(data.get("required_status_checks"))
-            if reviews >= 1 and checks:
-                return "pass", f"{branch}: {reviews} approval(s) + required checks"
-            return "fail", f"{branch} protected but approvals={reviews}, required checks={checks}"
+            if pull_request and owners and checks:
+                return "pass", f"{branch}: pull request + code owners + required checks"
+            return "fail", (f"{branch} protected but pull request required={pull_request}, "
+                            f"code owner review={owners}, required checks={checks}")
         if "403" in out:
             return "skipped", "needs admin permission on the repository to read protection"
         ok, out = self._gh(["api", f"repos/{repo}/rules/branches/{branch}"])
         rules = json.loads(out) if ok else []
         if rules:
-            reviews = max((r.get("parameters", {}).get("required_approving_review_count", 0)
-                           for r in rules if r.get("type") == "pull_request"), default=0)
+            pull_request = any(r.get("type") == "pull_request" for r in rules)
+            # Without it, a change to the rules of the game has no decider.
+            owners = any((r.get("parameters") or {}).get("require_code_owner_review")
+                         for r in rules if r.get("type") == "pull_request")
             checks = any(r.get("type") == "required_status_checks" for r in rules)
-            if reviews >= 1 and checks:
-                return "pass", f"{branch}: ruleset with {reviews} approval(s) + required checks"
-            return "fail", f"{branch}: rules found but approvals={reviews}, required checks={checks}"
+            if pull_request and owners and checks:
+                return "pass", f"{branch}: ruleset with pull request + code owners + required checks"
+            return "fail", (f"{branch}: rules found but pull request required={pull_request}, "
+                            f"code owner review={owners}, required checks={checks}")
         return "fail", f"{branch} has no branch protection or ruleset"
 
     def ci_green(self) -> tuple[str, str]:

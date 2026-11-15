@@ -14,7 +14,8 @@ make check
 2. Keep the change small and focused. One concern per PR.
 3. Add or update tests for every behaviour change.
 4. Run `make check` locally — it is exactly what CI runs.
-5. Open a PR using the template. CI must be green and one approval is required.
+5. Open a PR using the template. CI must be green. A code owner decides where
+   `.github/CODEOWNERS` names one; no other approval is needed.
 6. Squash-merge. The squash commit message follows Conventional Commits.
 
 ## Commit messages — Conventional Commits

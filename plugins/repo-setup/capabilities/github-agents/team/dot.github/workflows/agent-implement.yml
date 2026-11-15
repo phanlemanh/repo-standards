@@ -3,7 +3,7 @@ name: Agent — work an issue
 # The human edge is the issue: a person writes the intent (issue form "Intent") and adds a label.
 #   agent:spec       -> the agent writes the spec and posts it on the issue, then stops
 #   agent:implement  -> spec (if missing) + implementation + pull request;
-#                       stops after the spec when the change is high-risk (ontology, auth, data...)
+#                       the part that needs a change to the rules of the game is left to a person
 #   spec:approved    -> a human approved the posted spec: the agent implements it
 on:
   issues:
@@ -44,9 +44,9 @@ jobs:
             the `spec` format of ontology/page-types.yaml. For domain changes follow
             .claude/skills/ontology-add/SKILL.md.
             - agent:spec: write the spec only, post it on the issue, add label spec:needs-approval.
-            - agent:implement: spec, then implement and open a pull request — but if the spec
-              touches high-tier paths (governance/autonomy.yaml), post the spec, add
-              spec:needs-approval and stop for a human.
+            - agent:implement: spec, then implement and open a pull request. If the spec needs a
+              change to high-tier paths (the rules of the game, listed in governance/autonomy.yaml),
+              post the spec, add spec:needs-approval, and implement the part that does not.
             - spec:approved: implement the approved spec from the issue comments.
             Open the pull request with `gh pr create`, linking "Closes #${{ github.event.issue.number }}".
             Never push to the default branch.

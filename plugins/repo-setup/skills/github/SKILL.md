@@ -26,8 +26,9 @@ it sets the repository back to squash only.
 Run `python3 tools/github_setup.py` (with `--merge-method merge` when that is the repository's
 way) and explain in plain words what it will do: the merge method, environments `staging` and
 `production` (production needs a human reviewer), and a ruleset on the default branch (PR
-required, code-owner review, required check `check`). Ask for the go-ahead, then run with
-`--apply` and the same options. Then run `doctor.py --remote`: branch protection and CI checks
+required, required check `check`, a code owner only where `.github/CODEOWNERS` names one, and no
+other approval). A ruleset from an earlier run is updated in place. Ask for the go-ahead, then
+run with `--apply` and the same options. Then run `doctor.py --remote`: branch protection and CI checks
 should pass.
 
 With merge commits, two generated files still describe squashing and are the user's to edit:
@@ -44,8 +45,8 @@ real Claude session. If the user wants it and the repo lacks it, re-run
 `apply.py --with github-agents`.
 
 The dry run then also shows labels (`agent:spec`, `agent:implement`, `spec:needs-approval`,
-`spec:approved`, `risk:low|medium|high`, `agent-review:*`), auto-merge, Actions allowed to approve
-low-tier PRs, the extra required check `gate`, and repository variables. The PR pipeline merges
+`spec:approved`, `risk:low|medium|high`, `agent-review:*`), auto-merge, the extra required check
+`gate`, and GitHub Actions kept from approving pull requests. The PR pipeline merges
 low-tier PRs with the method the repository allows: squash, or a merge commit when squash
 merging is off.
 
@@ -59,5 +60,15 @@ Smoke test: create a small intent issue with the "Intent" form (e.g. "add a log 
 wiki/log.md"), add `agent:implement`, and follow the run (`gh run watch`). Expected: a low-tier PR
 that the PR pipeline reviews and auto-merges. Report what actually happened.
 
-## 4. Optional, either way
+## 4. A proof instead of a person (optional)
+By default product code is tier medium: a person merges it, because nothing proves it yet. When a
+tool the team uses already proves each change in CI, for example the evidence re-check of a
+feature loop, a person edits `governance/autonomy.yaml` (agents may not): `proof.check` names
+that status check, and `default` may then be `low`. Before suggesting it, confirm the check
+runs and reports on **every** pull request, including dependency updates: a required check that
+never reports blocks the pull request, and a job that is skipped counts as passed. Then `make codeowners` and run the script again with `--apply`:
+the check becomes required, product code merges itself when it is green, and the PR pipeline
+stops running its own reviewer agent. The check may not be `check` or `gate`.
+
+## 5. Optional, either way
 `RELEASE_PLEASE_TOKEN` (so CI runs on release PRs); `DEPLOY_ENABLED=true` once `make deploy` works.

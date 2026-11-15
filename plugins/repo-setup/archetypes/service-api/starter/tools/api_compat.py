@@ -8,7 +8,7 @@ Breaking (exit 1): an operation removed; a response property removed or its type
 a request property added as required, removed, or its type changed; enum values removed
 from a request field. Additive changes (new operations, new optional inputs, new response
 fields) are fine. To ship a breaking change on purpose, add a new versioned path (/v2/...)
-and keep the old one until clients have moved; a human must approve it (high tier).
+and keep the old one until clients have moved. Breaking the contract is a person's decision.
 """
 
 from __future__ import annotations

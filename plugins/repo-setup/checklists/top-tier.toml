@@ -397,8 +397,8 @@ any = [{ paths = [".claude/settings.json"], pattern = '(?s)"deny".*\.env' }]
 id = "autonomy_policy"
 level = "team"
 weight = 3
-title = "Autonomy policy: which changes agents may merge, which need a human (low/medium/high)"
-why = "Humans stay at the edges by rule, not by habit; the PR pipeline enforces it."
+title = "Autonomy policy: who decides that a change may merge (low/medium/high)"
+why = "People decide and machines check, by rule and not by habit; the PR pipeline enforces it."
 fix = "Add governance/autonomy.yaml and tools/autonomy.py (team level), then `make codeowners`."
 any = [{ paths = ["governance/autonomy.yaml"], pattern = '(?ms)^high:(?=.*governance/\*\*)(?=.*\.github/\*\*)' }]
 
@@ -692,7 +692,7 @@ level = "team"
 weight = 3
 type = "remote"
 probe = "branch_protection"
-title = "Branch protection on the default branch: PR required, CI must pass, 1+ approval"
+title = "Branch protection on the default branch: PR required, CI must pass, code owners decide their paths"
 why = "Makes all the checks above mandatory instead of optional."
 fix = "GitHub > Settings > Rules (or Branches); /repo-setup:github can do it with gh. Verify: doctor.py --remote"
 

@@ -26,6 +26,10 @@ Mở Claude Code trong thư mục dự án:
 
 Mã nguồn, tên tệp và commit của repo được dựng luôn bằng tiếng Anh. Claude trò chuyện theo ngôn ngữ của bạn, và tài liệu cho người đọc theo `docs_language`.
 
+## Nguyên tắc
+
+Người quyết, máy kiểm: setup nào kéo người vào để tăng độ tin cậy thì không phải setup tốt. Xem [docs/nguyen-tac-setup.md](docs/nguyen-tac-setup.md) trước khi sửa thứ plugin sinh ra.
+
 ## Chia sẻ cho cả đội
 
 Hướng dẫn và đoạn cấu hình nằm trong [README.md](README.md#share-with-a-team). Đồng đội chỉ được gợi ý cài sau khi tin cậy thư mục; trước đó, cấu hình bị bỏ qua mà không có thông báo.

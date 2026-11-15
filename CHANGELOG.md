@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+### People decide, machines check
+- The rule the plugin now holds itself to is written in `docs/nguyen-tac-setup.md`: a setup that
+  brings a person in to make a change more reliable is not a good setup. A person appears where
+  something is decided (a change to the rules, production, a secret); checking is a machine's
+  job. Section 43 of `tests/run.sh` fails when a change to the plugin breaks the rule, and a root
+  `CLAUDE.md` puts the rule in front of every session that works on this repository.
+- Ruleset: no approval is required for its own sake (`required_approving_review_count` is 0).
+  A code owner still decides wherever `.github/CODEOWNERS` names one. GitHub Actions is no
+  longer allowed to approve pull requests: nothing needs it.
+- `governance/autonomy.yaml` gets `proof.check`: the name of the status check that proves a
+  change, for example the evidence re-check of a feature loop. With it, `default` may be `low`:
+  `tools/github_setup.py` requires that check on the default branch, product code merges itself
+  when it is green, CODEOWNERS loses its `*` line, and the PR pipeline no longer runs its own
+  reviewer agent on the same change. `default: low` without a proof is refused (`make
+  governance` fails, and the gate counts the default as `medium`). The proof may not be `check`
+  or `gate`. The sample policy stays at `default: medium` with no proof.
+- `high` is only the rules of the game: policy, CI, agent config, quality gates. `ontology/`,
+  migrations, SQL, auth, security, permissions, infra, deploy and container files are no longer
+  high because of their name (`**/*auth*.*` also matched `author.ts`).
+- A looser agent guard is found by the machine instead: an action in `ontology/*.yaml` that is
+  less guarded than before (`agent: forbidden` or `agent: confirm` loosened or removed), or a
+  guarded action that is gone, raises the pull request to `high`
+  (`rules.agent_guard_removals_raise_to`). Each action is compared with itself, so a guard added
+  elsewhere does not pay for one removed. A tighter setting or a new action does not raise it.
+- PR pipeline: a low-tier pull request merges itself whoever wrote it, once the proof or the
+  reviewer agent has checked it. It used to do so only for `claude[bot]` and `dependabot[bot]`,
+  so a pull request opened from a local session never did. The pipeline approves nothing.
+- PR pipeline: the job that reads the pull request is now `tier`. `gate`, the required check,
+  checks nothing out; it fails when the tier is unknown (a skipped required check counts as
+  passed on GitHub), and it turns auto-merge off for a pull request that stopped being low on a
+  later push, failing if it cannot. Auto-merge on the strength of a proof first confirms that the
+  branch requires that check, and fails with the command to run when it does not. The jobs that
+  check nothing out now tell `gh` which repository they mean.
+- Generated instructions add no stop of their own: a tier says who decides the merge and is
+  never a reason to stop and ask before working. `.claude/settings.json` has no `ask` rules and
+  no deny rules on Bash commands; it keeps the silent ones on secrets, workflows and
+  `governance/`. Which commands may run is left to Claude Code's permission mode.
+- `tools/github_setup.py --apply` updates a ruleset it made earlier, replacing its rules; rules
+  added to that ruleset by hand are lost. It used to leave it as it was. `doctor --remote`
+  passes a default branch that requires a pull request, code owner review and checks; it no
+  longer asks for an approval count, and it now fails when code owner review is off.
+- `/repo-setup:explain` no longer names a gate hook: the plugin has shipped none since it became
+  setup only.
+- Breaking on upgrade, for a repo that takes the new files: run `make codeowners`, then
+  `python3 tools/github_setup.py --apply` (with the same `--merge-method` as before) so the
+  ruleset follows. Until then a low-tier pull request waits for an approval nobody gives.
+  Pull requests that touch `ontology/`, auth, migrations or infra no longer ask a code owner. A
+  docs-only pull request from a person now merges itself when the checks pass. Local Claude
+  sessions are no longer stopped by the settings before `git push --force`, `git reset --hard`,
+  `rm -rf` or a push to the default branch: on GitHub the ruleset refuses the last one and a
+  force push to the default branch; the rest is up to the permission mode.
+- Not built, and listed in the principle under what is still open: a way for a repo with one
+  owner to merge its own change to the rules; a wall on GitHub for a pull request raised to
+  `medium` on a path with no owner (anyone who can write, an agent included, can merge it once
+  the checks pass); telling a new fixture in `conftest.py` from a switched-off test. None of
+  this has run against a real GitHub repository yet, including whether the `gate` job is
+  allowed to turn auto-merge off.
+
 ### Merge method
 - `tools/github_setup.py --merge-method merge` allows merge commits and turns squash and rebase
   merging off, for a repository whose process needs the branch's commits to stay on the default

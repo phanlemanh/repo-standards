@@ -14,7 +14,7 @@ for people, code and AI agents.
 ## How to change it
 
 1. Edit the YAML / glossary in the same PR as the code that depends on it.
-2. Ontology changes need a human reviewer (they change the meaning of the system).
+2. Ontology changes change the meaning of the system: say so in the PR description.
 3. Start small: 3–5 core entities. Add more only when they cause confusion.
 
 ## Lifecycle

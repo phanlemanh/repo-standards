@@ -1,18 +1,31 @@
-# Autonomy policy: what AI agents may change, and who must approve.
+# Autonomy policy: who decides that a change may merge. People decide; machines check.
 # Source of truth for tools/autonomy.py (CI gate + CODEOWNERS) and for agents.
 #
-#   low     agent may merge on its own once CI is green and the agent reviewer approved
-#   medium  a human approves the pull request
-#   high    a code owner approves (domain / platform); agents propose, never merge
+#   low     merges itself once the required checks are green
+#   medium  nothing proves this change yet, or a guard was loosened: a person merges it
+#   high    changes the rules of the game: a code owner decides
 #
+# A tier says who decides the merge. It is never a reason to stop and ask before working.
 # The highest tier of any changed file decides the tier of the pull request.
 # Patterns are repo-relative globs ("**/" matches any folder depth).
 # Changing this file is itself "high" and must be done by a human.
 version: 1
 default: medium
 
-# Reviewers requested by tier (rendered into .github/CODEOWNERS by `make codeowners`).
-# Low-tier paths get no owner, so agents can merge them without a human.
+# The machine proof that takes the person's place. Name the required status check that proves a
+# change does what it should, for example the evidence re-check of the feature loop you use. It
+# must run and report on every pull request: one that never reports blocks the pull request, and
+# on GitHub a skipped job counts as passed. Then:
+#   - `python3 tools/github_setup.py --apply` requires that check on the default branch;
+#   - `default` above may become `low`, and only the rules of the game keep an owner
+#     (`make codeowners`);
+#   - the PR pipeline stops running its own reviewer agent: one verdict, paid for once.
+# `default: low` without a proof is refused: a person leaves only when a machine takes the place.
+proof:
+  check: ""
+
+# Deciders by tier (rendered into .github/CODEOWNERS by `make codeowners`).
+# A path with no owner needs no person.
 owners:
   medium: ["@{{owner_handle}}"]
   high: ["@{{owner_handle}}"]
@@ -28,10 +41,11 @@ low:
   - "README.md"
   - "CHANGELOG.md"
 
+# Only the rules of the game: policy, CI, agent config, quality gates. Do not add product paths
+# here because their name sounds risky (auth, migrations, infra): that puts a person in as a
+# checker. What is hard to undo is decided where the work is planned, and at the `production`
+# environment.
 high:
-  # meaning of the business
-  - "ontology/**"
-  # the rules of the game: policy, CI, agent config, quality gates
   - "governance/**"
   - ".github/**"
   - "**/.claude/**"
@@ -48,23 +62,14 @@ high:
   - ".coveragerc"
   - ".pre-commit-config.yaml"
   - ".gitleaks*"
-  # data, security and infrastructure
-  - "**/migrations/**"
-  - "**/*.sql"
-  - "**/auth/**"
-  - "**/*auth*.*"
-  - "**/security/**"
-  - "**/permissions*"
-  - "infra/**"
-  - "deploy/**"
-  - "Dockerfile"
-  - "**/Dockerfile"
-  - "compose.yaml"
-  - "docker-compose.yml"
 
+# A loosened guard is found by the machine, on any path; then a person decides.
 rules:
   # Deleting or rewriting test code is not "low": it can hide a regression.
   test_deletions_raise_to: medium
+  # An action in ontology/ that is less guarded than before (`agent: forbidden` or `confirm`
+  # loosened or removed) widens what agents may do. Each action is compared with itself.
+  agent_guard_removals_raise_to: high
   # Dependabot updates by semver level.
   dependency_updates:
     patch: low
