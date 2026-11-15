@@ -8,3 +8,16 @@ relations: []
 #    to: Order
 #    cardinality: one-to-many
 #    description: A customer places zero or more orders.
+#    lifecycle: { via: Order } # set when the order is created, gone with it, never moved
+#
+# Once ontology/actions.yaml exists, each relation answers attach, detach and reassign: an action
+# that names it (relations: { keeps: [attach] }), or a choice recorded here. `own: true` marks the
+# relation that says what "own" means for actions a role runs only on its own records.
+#  - from: Staff
+#    name: keeps
+#    to: Customer
+#    cardinality: one-to-many
+#    own: true
+#    lifecycle:
+#      detach: { later: "Roadmap row 14" } # planned, not built yet
+#      reassign: { never: "A customer stays with one person", decided_by: "Lan, 2026-01-05" }

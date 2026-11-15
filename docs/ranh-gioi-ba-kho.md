@@ -66,7 +66,9 @@ UX sai theo ba kiểu, mỗi kiểu thuộc một kho:
    - «Sửa thông tin căn ngoài giá»: căn khai pháp lý, tài chính, nội thất, tình trạng sử dụng,
      nhưng chỉ có một thao tác sửa tả chung «giá, phí hoặc chi tiết».
 
-   Phần của design-assembly cho hai việc này chờ phần nghĩa ở kho này.
+   Phần của design-assembly cho hai việc này chờ phần nghĩa ở kho này. Phần nghĩa đã dựng ngày
+   2026-11-15 (xem cuối trang): cả ba giờ làm mô hình đỏ; hai thao tác về người giữ căn đỏ qua hai
+   bước, xem mục 4 của bản thiết kế.
 
 3. **Ba luật của vòng chưa vào delivery-loop.** Báo cáo RS2 quy khoảng 14 trên 19 ô thiếu cho bước
    thiết kế, không cho sổ nào:
@@ -95,9 +97,14 @@ Khung khác xếp bằng phép thử ở trên.
 
 - Đã làm (gộp vào nhánh chính ngày 2026-11-15): phép kiểm «mỗi thực thể đủ bốn câu trả lời», xem
   [thiết kế](superpowers/specs/2026-11-14-entity-lifecycle-design.md).
-- Chưa làm: trạng thái của bản ghi và bước chuyển; quan hệ có «gỡ» và luật khi xoá; phạm vi «của
-  tôi» đòi một quan hệ đã khai; thao tác sửa nêu thuộc tính; dấu «dự kiến» cho thao tác; móc chạy
-  phép kiểm sau mỗi lần sửa.
+- Đã dựng (nhánh `claude/relations-and-attributes-1dd820`, ngày 2026-11-15, chờ chủ kho xem): phạm
+  vi «của tôi» đòi một quan hệ đã khai; mỗi quan hệ trả lời gắn, gỡ, chuyển; mỗi thuộc tính có thao
+  tác đặt giá trị hoặc có lý do. Xem
+  [thiết kế](superpowers/specs/2026-11-15-relations-and-attributes-design.md), mục 4 có số đo trên
+  onehub-inventory.
+- Chưa làm: trạng thái của bản ghi và bước chuyển; luật khi xoá một đầu của quan hệ; dấu «dự kiến»
+  cho thao tác; một thao tác xem nêu nhiều thực thể; đưa «của tôi» vào mã sinh ra; móc chạy phép
+  kiểm sau mỗi lần sửa.
 - Sẽ chuyển đi khi design-assembly sẵn sàng nhận: sàn thiết kế (`capabilities/design`), câu hỏi màu
   thương hiệu và loại bề mặt. Repo Standards khi đó chỉ còn một lời gọi. Không xây thêm lên phần
   này.

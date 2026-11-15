@@ -1266,5 +1266,173 @@ grep -q 'lifecycle' "$l/ontology/entities/_template.yaml" || miss "lifecycle: th
 [ ! -e "$z/.claude/rules/ontology.md" ] || miss "lifecycle: a plugin marketplace got the ontology rule file"
 echo "ok  entity lifecycle (or misses reported above)"
 
+# 40. relations: an "own" scope needs a relation behind it; every relation answers attach / detach / reassign
+r="$TMP/relations"; mkdir -p "$r" && git -C "$r" init -q -b main
+python3 "$S/apply.py" --target "$r" --preset ts-node --var project_name=R --var description=x --var owner=acme >/dev/null
+python3 "$ROOT/tests/apply_fixture.py" coffee "$r" >/dev/null
+rel="$r/ontology/relations.yaml"; act="$r/ontology/actions.yaml"; cust="$r/ontology/entities/Customer.yaml"
+cp "$act" "$TMP/actions.base"; cp "$rel" "$TMP/relations.base"; cp "$cust" "$TMP/customer.base"
+rerrs() { ( cd "$r" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(e["message"] for e in d["errors"])'; }
+rwarns() { ( cd "$r" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(w["message"] for w in d["warnings"])'; }
+# The same lint without PyYAML: generated repos fall back to the built-in reader.
+rerrs_builtin() { ( cd "$r" && { python3 -c 'import runpy, sys; sys.modules["yaml"] = None; sys.path.insert(0, "tools"); sys.argv = ["wiki_lint.py", "--json"]; runpy.run_path("tools/wiki_lint.py", run_name="__main__")' || true; } ) | json '"\n".join(e["message"] for e in d["errors"])'; }
+# relation <extra lines> [cardinality]: the sample relation, with other lines in place of its lifecycle
+relation() { printf 'relations:\n  - from: Customer\n    name: places\n    to: Order\n    cardinality: %s\n%b' "${2:-one-to-many}" "$1" > "$rel"; }
+# action <extra lines>: the sample actions plus more
+action() { { cat "$TMP/actions.base"; printf '%b' "$1"; } > "$act"; }
+grep -q 'lifecycle: { via: Order }' "$rel" || miss "relations: the sample relation does not say how it changes"
+[ -z "$(rerrs)" ] || miss "relations: the sample domain fails: $(rerrs)"
+[ -z "$(rerrs_builtin)" ] || miss "relations: the sample domain fails with the built-in YAML reader: $(rerrs_builtin)"
+relation ''
+out=$(rerrs)
+printf '%s\n' "$out" | grep -q "Customer -places-> Order: no answer for attach, detach, reassign" || miss "relations: a relation nobody can change gave: $out"
+[ "$(printf '%s\n' "$out" | grep -c "no answer for")" -eq 1 ] || miss "relations: one relation gave more than one error: $out"
+printf '%s\n' "$out" | grep -q "relations: {places: \[<operation>\]}" || miss "relations: the message does not say how an action answers: $out"
+printf '%s\n' "$out" | grep -q "lifecycle.<operation>: {later: <where it is planned>}" || miss "relations: the message does not say how to record the choice: $out"
+printf '%s\n' "$out" | grep -q "lifecycle: {via: <that entity>}" || miss "relations: the message does not show the one-line form: $out"
+relation '' many-to-many
+rerrs | grep -q "Customer -places-> Order: no answer for attach, detach:" || miss "relations: a many-to-many relation was asked to reassign: $(rerrs)"
+relation '    lifecycle:\n      attach: { later: Counter sign-up }\n      detach: { never: Orders stay with their customer }\n      reassign: { later: Merge two customers }\n'
+rerrs | grep -q "Customer -places-> Order: lifecycle.detach: 'never' needs decided_by" || miss "relations: a refusal with nobody behind it passed: $(rerrs)"
+relation '    lifecycle:\n      attach: { later: Counter sign-up }\n      detach:\n        never: Orders stay with their customer\n        decided_by: shop owner 2026-01-05\n      reassign: { later: Merge two customers }\n'
+[ -z "$(rerrs)" ] || miss "relations: recorded choices still fail: $(rerrs)"
+[ -z "$(rerrs_builtin)" ] || miss "relations: recorded choices fail with the built-in YAML reader: $(rerrs_builtin)"
+rwarns | grep -q "Customer -places-> Order: 'reassign' is planned, not built (Merge two customers)" || miss "relations: a postponed operation is not listed: $(rwarns)"
+rwarns | grep -q "Customer -places-> Order: 'detach'" && miss "relations: a decided refusal is listed as a debt: $(rwarns)"
+action '  - name: moveOrder\n    description: Move an order to another customer.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: [reassign] }\n'
+rwarns | grep -q "Customer -places-> Order: lifecycle.reassign is out of date: moveOrder" || miss "relations: a stale entry is not reported: $(rwarns)"
+relation ''
+out=$(rerrs)
+printf '%s\n' "$out" | grep -q "Customer -places-> Order: no answer for attach, detach:" || miss "relations: an action that reassigns did not answer reassign: $out"
+relation '    lifecycle: { via: Order }\n'
+rerrs | grep -q "Customer -places-> Order: lifecycle.via says the link never changes, but moveOrder" || miss "relations: via next to an action that changes the link passed: $(rerrs)"
+action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: reasign, serves: attach }\n'
+out=$(rerrs)
+printf '%s\n' "$out" | grep -q "action 'moveOrder': relation 'places': unknown operation 'reasign'" || miss "relations: a misspelt operation passed: $out"
+printf '%s\n' "$out" | grep -q "action 'moveOrder': relation 'serves' is not in ontology/relations.yaml" || miss "relations: an unknown relation passed: $out"
+action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: places\n'
+rerrs | grep -q "action 'moveOrder': relations must be a mapping" || miss "relations: a bare word under relations passed: $(rerrs)"
+action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: reassign }\n'
+{ cat "$TMP/relations.base"; printf '  - from: Order\n    name: places\n    to: Customer\n    cardinality: many-to-many\n    lifecycle: { via: Order }\n'; } > "$rel"
+rerrs | grep -q "action 'moveOrder': relation 'places' is the name of 2 relations" || miss "relations: an ambiguous relation name passed: $(rerrs)"
+action ''
+relation '    lifecycle: { via: Nobody }\n'
+rerrs | grep -q "Customer -places-> Order: lifecycle.via: 'Nobody' is not one of its ends" || miss "relations: via an entity outside the relation passed: $(rerrs)"
+relation '    lifecycle: { remove: { later: x } }\n'
+rerrs | grep -q "Customer -places-> Order: lifecycle.remove: unknown key" || miss "relations: an unknown key passed: $(rerrs)"
+relation '    lifecycle: fixed\n'
+rerrs | grep -q "Customer -places-> Order: lifecycle must be a mapping" || miss "relations: a bare word passed: $(rerrs)"
+# own: the starter form (own: [role]) and the scope form are read alike
+cp "$TMP/relations.base" "$rel"
+action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    roles: [staff, manager]\n    own: [staff]\n'
+out=$(rerrs)
+printf '%s\n' "$out" | grep -q "action 'viewOrder': staff may run it only on their own Order, but no relation says what 'own' means" || miss "relations: an own scope with no relation behind it gave: $out"
+printf '%s\n' "$out" | grep -q "mark it own: true" || miss "relations: the own message does not say how to fix it: $out"
+action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    scope: { staff: own, manager: company }\n'
+rerrs | grep -q "action 'viewOrder': staff may run it only on their own Order" || miss "relations: the scope form of own is not read: $(rerrs)"
+relation '    own: true\n    lifecycle: { via: Order }\n'
+[ -z "$(rerrs)" ] || miss "relations: an own scope with its relation still fails: $(rerrs)"
+[ -z "$(rerrs_builtin)" ] || miss "relations: an own scope with its relation fails with the built-in YAML reader: $(rerrs_builtin)"
+relation '    own: maybe\n    lifecycle: { via: Order }\n'
+rerrs | grep -q "Customer -places-> Order: own must be true or false" || miss "relations: own: maybe passed: $(rerrs)"
+# PyYAML reads yes / no as true / false; the built-in reader keeps them as words. Neither may read "no" as a yes.
+for word in no yes maybe; do
+  relation "    own: $word\n    lifecycle: { via: Order }\n"
+  rerrs_builtin | grep -q "Customer -places-> Order: own must be true or false" || miss "relations: own: $word passed with the built-in YAML reader: $(rerrs_builtin)"
+done
+relation '    own: no\n    lifecycle: { via: Order }\n'
+rerrs | grep -q "action 'viewOrder': staff may run it only on their own Order" || miss "relations: own: no was read as a yes: $(rerrs)"
+# through the entity it lives under: Customer handled through Order, the own relation ends at Order
+relation '    own: true\n    lifecycle: { via: Order }\n'
+action '  - name: viewCustomerPhone\n    description: See the phone of a customer.\n    entity: Customer\n    kind: command\n    roles: [staff]\n    own: [staff]\n'
+{ sed '/^lifecycle:/,$d' "$TMP/customer.base"; printf 'lifecycle: { via: Order }\n'; } > "$cust"
+printf 'relations:\n  - from: Order\n    name: served_at\n    to: Order\n    cardinality: one-to-one\n    own: true\n    lifecycle: { via: Order }\n' > "$rel"
+[ -z "$(rerrs)" ] || miss "relations: own through the entity it lives under fails: $(rerrs)"
+cp "$TMP/customer.base" "$cust"
+rerrs | grep -q "action 'viewCustomerPhone': staff may run it only on their own Customer" || miss "relations: own passed without via or a relation: $(rerrs)"
+cp "$TMP/relations.base" "$rel"
+action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    roles: [manager]\n    own: [staff]\n'
+rerrs | grep -q "action 'viewOrder': own lists role 'staff', which is not in its roles" || miss "relations: own for a role that may not run the action passed: $(rerrs)"
+action '  - name: viewOrders\n    description: See orders.\n    kind: query\n    roles: [staff]\n    own: [staff]\n'
+rerrs | grep -q "action 'viewOrders': own needs entity" || miss "relations: own without an entity passed: $(rerrs)"
+relation ''; rm "$act"
+[ -z "$(rerrs)" ] || miss "relations: a repo that declares no actions was asked about relations: $(rerrs)"
+grep -q 'attach' "$r/.claude/rules/ontology.md" || miss "relations: the rule file does not name attach, detach, reassign"
+grep -q 'own: true' "$r/.claude/skills/ontology-add/SKILL.md" || miss "relations: ontology-add does not say how to mark the own relation"
+grep -q 'via' "$ROOT/plugins/repo-setup/presets/_core/starter/ontology/relations.yaml" || miss "relations: the starter relations file does not show the block"
+grep -q 'via' "$r/.claude/skills/review-change/SKILL.md" || miss "relations: review-change does not look at via on a relation"
+echo "ok  relations and own scope (or misses reported above)"
+
+# 41. attributes: every property is set by a create or update action, or the entity says why not
+a="$TMP/attributes"; mkdir -p "$a" && git -C "$a" init -q -b main
+python3 "$S/apply.py" --target "$a" --preset ts-node --var project_name=A --var description=x --var owner=acme >/dev/null
+python3 "$ROOT/tests/apply_fixture.py" coffee "$a" >/dev/null
+cust="$a/ontology/entities/Customer.yaml"; ord="$a/ontology/entities/Order.yaml"; act="$a/ontology/actions.yaml"
+grep -q '^not_set:' "$cust" || miss "attributes: the sample domain does not declare one"
+cust_base=$(sed '/^not_set:/,$d' "$cust"); ord_base=$(sed '/^not_set:/,$d' "$ord"); cp "$act" "$TMP/actions.base"; cp "$ord" "$TMP/order.base"
+aerrs() { ( cd "$a" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(e["message"] for e in d["errors"])'; }
+awarns() { ( cd "$a" && { python3 tools/wiki_lint.py --json || true; } ) | json '"\n".join(w["message"] for w in d["warnings"])'; }
+aerrs_builtin() { ( cd "$a" && { python3 -c 'import runpy, sys; sys.modules["yaml"] = None; sys.path.insert(0, "tools"); sys.argv = ["wiki_lint.py", "--json"]; runpy.run_path("tools/wiki_lint.py", run_name="__main__")' || true; } ) | json '"\n".join(e["message"] for e in d["errors"])'; }
+setc() { printf '%s\n%b' "$cust_base" "$1" > "$cust"; }
+action() { { cat "$TMP/actions.base"; printf '%b' "$1"; } > "$act"; }
+[ -z "$(aerrs)" ] || miss "attributes: the sample domain fails: $(aerrs)"
+[ -z "$(aerrs_builtin)" ] || miss "attributes: the sample domain fails with the built-in YAML reader: $(aerrs_builtin)"
+awarns | grep -q "Customer: setting name, phone is planned, not built (Sign-up at the counter)" || miss "attributes: postponed properties are not listed together: $(awarns)"
+setc ''
+out=$(aerrs)
+printf '%s\n' "$out" | grep -q "Customer: no create or update action sets id, name, phone, status, joinedAt:" || miss "attributes: properties nobody can set gave: $out"
+[ "$(printf '%s\n' "$out" | grep -c "no create or update action sets")" -eq 1 ] || miss "attributes: one entity gave more than one error: $out"
+printf '%s\n' "$out" | grep -q "sets: \[...\]" || miss "attributes: the message does not say how an action answers: $out"
+printf '%s\n' "$out" | grep -q "not_set: system: \[...\]" || miss "attributes: the message does not say how to record the reason: $out"
+# an explicit sets wins over the input fields, and counts on any kind of action
+action '  - name: blockCustomer\n    description: Stop a customer from ordering.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: [status]\n'
+aerrs | grep -q "Customer: no create or update action sets id, name, phone, joinedAt:" || miss "attributes: sets on a command did not count: $(aerrs)"
+awk '{ print } /^    kind: update$/ { print "    sets: [name]" }' "$TMP/actions.base" > "$act"
+grep -q 'sets: \[name\]' "$act" || miss "attributes: the test did not add sets to the update action"
+aerrs | grep -q "Customer: no create or update action sets id, phone, points, status, joinedAt:" || miss "attributes: an explicit sets did not win over the input fields: $(aerrs)"
+action '  - name: blockCustomer\n    description: Stop a customer.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: [state]\n'
+aerrs | grep -q "action 'blockCustomer': sets 'state', which is not a property of Customer" || miss "attributes: an unknown property under sets passed: $(aerrs)"
+action '  - name: blockCustomer\n    description: Stop a customer.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: status\n'
+aerrs | grep -q "action 'blockCustomer': sets must be a list of property names" || miss "attributes: a bare word under sets passed: $(aerrs)"
+action '  - name: blockAll\n    description: Stop everyone.\n    kind: command\n    roles: [manager]\n    sets: [status]\n'
+aerrs | grep -q "action 'blockAll': sets needs entity" || miss "attributes: sets without an entity passed: $(aerrs)"
+action ''
+setc 'not_set:\n  system: [id, joinedAt]\n  import: [phone]\n  later: { name: Sign-up at the counter }\n  never:\n    status: { reason: Customers are never blocked }\n'
+aerrs | grep -q "not_set.never.status: 'never' needs decided_by" || miss "attributes: a refusal with nobody behind it passed: $(aerrs)"
+setc 'not_set:\n  system: [id, joinedAt]\n  import: [phone]\n  later: { name: Sign-up at the counter }\n  never:\n    status: { reason: Customers are never blocked, decided_by: shop owner 2026-01-05 }\n'
+[ -z "$(aerrs)" ] || miss "attributes: recorded reasons still fail: $(aerrs)"
+[ -z "$(aerrs_builtin)" ] || miss "attributes: recorded reasons fail with the built-in YAML reader: $(aerrs_builtin)"
+awarns | grep -q "Customer: setting name is planned, not built (Sign-up at the counter)" || miss "attributes: a postponed property is not listed: $(awarns)"
+awarns | grep -q "Customer: setting.*status" && miss "attributes: a decided refusal is listed as a debt: $(awarns)"
+setc 'not_set:\n  system: [id, joinedAt, points]\n  later: { name: x, phone: x, status: x }\n'
+awarns | grep -q "not_set.system: 'points' is out of date: awardPoints now sets it" || miss "attributes: a stale entry is not reported: $(awarns)"
+setc 'not_set:\n  system: [id, joinedAt, nickname]\n  later: { name: x, phone: x, status: x }\n'
+aerrs | grep -q "not_set.system: 'nickname' is not a property of Customer" || miss "attributes: an unknown property under not_set passed: $(aerrs)"
+setc 'not_set:\n  derived: [id]\n'
+aerrs | grep -q "not_set.derived: unknown key" || miss "attributes: an unknown key passed: $(aerrs)"
+setc 'not_set: system\n'
+aerrs | grep -q "not_set must be a mapping" || miss "attributes: a bare word passed: $(aerrs)"
+setc 'not_set:\n  system: id\n  later: [name]\n  never: [status]\n'
+out=$(aerrs)
+printf '%s\n' "$out" | grep -q "not_set.system must be a list of property names" || miss "attributes: system as a bare word passed: $out"
+printf '%s\n' "$out" | grep -q "not_set.later must be a mapping" || miss "attributes: later as a list passed: $out"
+printf '%s\n' "$out" | grep -q "not_set.never must be a mapping" || miss "attributes: never as a list passed: $out"
+setc 'not_set:\n  system: [id, joinedAt]\n  later: { name: x, phone: x }\n  never:\n    status: { decided_by: shop owner 2026-01-05 }\n'
+aerrs | grep -q "not_set.never.status: give reason" || miss "attributes: a refusal without a reason passed: $(aerrs)"
+# an entity with no create or update action, or handled through its parent, is not asked per property
+cp "$a/ontology/entities/Customer.yaml" "$TMP/customer.any"; printf '%s\n' "$cust_base" | sed '/^lifecycle:/,$d' > "$cust"; printf 'lifecycle: { via: Order }\n' >> "$cust"
+aerrs | grep -q "no create or update action sets" && miss "attributes: an entity handled through its parent was asked: $(aerrs)"
+printf '%s\n' "$ord_base" > "$ord"
+aerrs | grep -q "Order: no create or update action sets id, placedOn:" || miss "attributes: the control case did not fail: $(aerrs)"
+sed 's/^    kind: create$/    kind: command/' "$TMP/actions.base" > "$act"
+aerrs | grep -q "Order: no create or update action sets" && miss "attributes: an entity with no create or update action was asked: $(aerrs)"
+cp "$TMP/actions.base" "$act"; rm "$act"
+[ -z "$(aerrs)" ] || miss "attributes: a repo that declares no actions was asked about properties: $(aerrs)"
+grep -q 'not_set' "$a/.claude/rules/ontology.md" || miss "attributes: the rule file does not name not_set"
+grep -q 'sets' "$a/.claude/skills/ontology-add/SKILL.md" || miss "attributes: ontology-add does not say how an action names properties"
+grep -q 'not_set' "$a/ontology/entities/_template.yaml" || miss "attributes: the entity template does not show the block"
+grep -q 'not_set' "$a/ontology/README.md" || miss "attributes: the ontology README does not explain it"
+echo "ok  attributes (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

@@ -15,7 +15,10 @@ changes what the whole system means, so do it completely and make it easy to rev
 - One-sentence definition, and what it must NOT be confused with.
 - Properties: name, type, required or default, constraints.
 - Subtypes with a rule (e.g. `VIPCustomer: points >= 100`).
-- Relations to existing entities and cardinality.
+- Relations to existing entities and cardinality. For each: can it be attached later, detached,
+  or moved to another owner, and by whom? Or is it set once when one end is created?
+- For each property: who sets it, and who may change it afterwards? "The system" and "an import"
+  are answers too.
 - Business rules and where they are (or will be) implemented.
 - Its whole life, per role: who creates it, who sees it, who changes it, who removes it, and any
   step of its own (archive, lock, publish, hand over). An operation nobody mentioned is a question
@@ -57,7 +60,24 @@ The code name is English. The display name and definition follow the repo's `doc
      decides this. Ask, then write their name: never fill `decided_by` yourself or with "agent".
    - `lifecycle: { via: <Entity> }` for a part that is created, changed and removed only through
      its parent (an order line through its order).
-8. Append one line to `wiki/log.md`.
+8. **Relations**: once actions exist, each relation answers `attach`, `detach` and `reassign`
+   (a many-to-many relation: `attach` and `detach`).
+   - An action answers by naming the relation: `relations: { keeps: [attach, reassign] }`.
+   - What no action does is recorded on the relation, under `lifecycle:`, with the same
+     `{ later: ... }` and `{ never: ..., decided_by: ... }` entries as above.
+   - `lifecycle: { via: <Entity> }` when the link is set as that entity is created and never
+     changes (an order and its customer). It replaces all three answers, so use it only when true.
+   - A role that may act only on its own records gets `own: [role]` on the action, next to
+     `roles`. One relation must then say what "own" means: mark it `own: true`.
+9. **Properties**: once an entity has a create or update action, each of its properties is set by
+   an action or listed with a reason.
+   - An action sets its input fields that carry a property's name. Write `sets: [price, fees]`
+     when the names differ or to be exact; `sets` then replaces the input fields.
+   - Under `not_set:` in the entity file: `system: [id, createdAt]` (the system writes them, or
+     they are derived), `import: [...]` (only an import writes them),
+     `later: { <property>: <where it is planned> }`, and
+     `never: { <property>: { reason: ..., decided_by: ... } }`. `never` follows the rule of step 7.
+10. Append one line to `wiki/log.md`.
 
 ## 3. Regenerate and verify
 
@@ -76,6 +96,7 @@ generated file by hand.
 ## 5. Hand-off
 
 In the summary / PR description, list the ontology changes explicitly under
-"Domain changes — needs domain review". List every `lifecycle` entry you added there too:
-each `later` with where it is planned, each `never` with who decided. Renaming or removing an entity or property is a
-breaking change: search the code for usages first and say how many places change.
+"Domain changes — needs domain review". List every `lifecycle` and `not_set` entry you added there
+too: each `later` with where it is planned, each `never` with who decided, each `via` on a relation.
+Renaming or removing an entity or property is a breaking change: search the code for usages first
+and say how many places change.

@@ -18,3 +18,9 @@ wiki: wiki/entities/customer.md
 lifecycle:
   create: { later: Sign-up at the counter }
   delete: { later: Erasing a customer on request }
+not_set:
+  system: [id, joinedAt]
+  later:
+    name: Sign-up at the counter
+    phone: Sign-up at the counter
+    status: Blocking a customer
