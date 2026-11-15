@@ -82,6 +82,53 @@ Phép kiểm áp dụng cho thực thể có ít nhất một thao tác thêm ho
 - Tên quan hệ, tên thuộc tính, tên việc viết sai đều đỏ ngay, kể cả trong dòng ghi lý do: đổi tên
   một thuộc tính mà quên một chỗ sẽ không lọt.
 
+### 2.5. Tên khoá và hình dạng
+
+Bên đọc (design-assembly, delivery-loop) đọc đúng các khoá này. Mọi khoá đều tuỳ chọn.
+
+Trên một thao tác, trong `ontology/actions.yaml`:
+
+```yaml
+- name: claimListing
+  entity: Listing
+  kind: update
+  roles: [ListAgent, TeamLead]
+  own: [ListAgent] # danh sách tên vai, mỗi vai phải có trong `roles`
+  relations: { keeps: [attach, reassign] } # tên quan hệ -> một việc, hoặc danh sách việc
+  sets: [listPrice, fees] # danh sách tên thuộc tính của `entity`
+```
+
+Dạng của onehub-inventory, `scope: { ListAgent: own, TeamLead: company }`, được đọc thay cho `own`:
+vai nào có giá trị `own` là vai «của tôi».
+
+Trên một quan hệ, trong `ontology/relations.yaml`:
+
+```yaml
+- from: Member
+  name: keeps # thao tác gọi quan hệ bằng tên này; hai quan hệ trùng tên thì thao tác nêu tên bị đỏ
+  to: Listing
+  cardinality: one-to-many
+  own: true # chỉ `true` hoặc `false`
+  lifecycle: # mỗi khoá `attach`, `detach`, `reassign` một dòng
+    attach: { later: "Lộ trình hàng 14" }
+    reassign: { never: "Căn ở lại với người giữ đầu", decided_by: "Lan, 2026-01-05" }
+# hoặc, thay cho cả ba dòng: lifecycle: { via: Listing }
+```
+
+Trên một thực thể, trong `ontology/entities/<Tên>.yaml`:
+
+```yaml
+not_set:
+  system: [id, version, createdAt] # danh sách tên thuộc tính
+  import: [externalCode] # danh sách tên thuộc tính
+  later: { legalStatus: "Lộ trình hàng 10" } # thuộc tính -> ở đâu
+  never: # thuộc tính -> { reason, decided_by }
+    closePrice: { reason: "Chỉ bước chốt bán ghi giá chốt", decided_by: "Lan, 2026-01-05" }
+```
+
+Một thuộc tính được coi là «có thao tác đặt» khi: một thao tác bất kỳ loại nào nêu nó trong `sets`,
+hoặc một thao tác `create`/`update` không có `sets` có ô nhập (`input`) trùng tên với nó.
+
 ## 3. Lựa chọn và lý do
 
 - **`own: [vai]` cạnh `roles`, không đổi sang `scope`.** `roles` vẫn là danh sách duy nhất mã sinh
@@ -115,7 +162,12 @@ Phép kiểm áp dụng cho thực thể có ít nhất một thao tác thêm ho
   báo chỗ thiếu ở mức thực thể. Hỏi thêm từng thuộc tính là ghi một món nợ hai lần, và bắt danh mục
   chỉ nhập từ tệp phải kê hết thuộc tính của nó.
 - **Một câu báo cho mỗi thực thể và mỗi quan hệ.** Căn có 18 thuộc tính; 18 câu báo đỏ giống nhau
-  che mất các lỗi khác.
+  che mất các lỗi khác. Trên onehub-inventory: 5 câu thay cho 44, và 26 câu thay cho 76. Gom không
+  làm kho im lặng về thuộc tính được xanh: thao tác sửa không nêu gì thì mọi thuộc tính của thực
+  thể đó vẫn đỏ.
+- **«Thao tác nào được tính» và «thao tác chạm thực thể nào» mỗi câu ở một hàm.** Cả ba phép kiểm
+  (và phép kiểm vòng đời) hỏi qua `answering_actions` và `action_entities`. Dấu «dự kiến» và thao
+  tác nêu nhiều thực thể, khi làm, mỗi việc sửa một chỗ.
 - **Tên khoá `never`, và `own` chỉ nhận đúng hoặc sai.** Hai bộ đọc YAML đọc `no`, `yes` khác nhau:
   một bên ra đúng/sai, một bên giữ nguyên chữ. Thứ gì không phải đúng/sai thì đỏ, nên chữ `no`
   không bao giờ bị hiểu thành «có». Bài kiểm chạy cả hai bộ đọc.
@@ -167,6 +219,11 @@ thể).
 - Không biết màn nào hiện thuộc tính nào, nút gắn hay gỡ đặt ở đâu. Phần đó thuộc design-assembly.
 
 Không chặn đường các việc để sau: trạng thái của bản ghi và bước chuyển (`states` trên thao tác
-không bị đụng tới, `sets` trên `command` là chỗ nối), dấu «dự kiến» (khi có, cả ba phép kiểm coi
-thao tác dự kiến như một dòng `later`), một thao tác xem nêu nhiều thực thể (phép kiểm «của tôi»
-chạy theo từng thực thể thao tác nêu), và móc chạy phép kiểm sau mỗi lần sửa.
+không bị đụng tới, `sets` trên `command` là chỗ nối), dấu «dự kiến», một thao tác xem nêu nhiều thực
+thể (phép kiểm «của tôi» đã chạy theo từng thực thể thao tác nêu), và móc chạy phép kiểm sau mỗi lần
+sửa.
+
+Một điều việc «dự kiến» phải giữ: thao tác dự kiến không còn là câu trả lời cho vòng đời, nhưng vẫn
+phải làm thực thể bị hỏi về thuộc tính. Ở onehub-inventory mọi thao tác trên căn đều đang «dự
+kiến»; nếu bỏ hẳn chúng khỏi phép kiểm 2.3 thì căn thành «chưa có thao tác thêm hay sửa» và chỗ
+thiếu «sửa thông tin căn ngoài giá» lại im lặng.

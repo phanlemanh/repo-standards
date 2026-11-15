@@ -97,6 +97,20 @@ def load_roles(root: Path) -> list[dict[str, Any]]:
     return [r for r in (items or []) if isinstance(r, dict)]
 
 
+def answering_actions(root: Path) -> list[dict[str, Any]]:
+    """The actions that count as answers in the model checks (lifecycle, relations, properties).
+    Today every declared action counts, also one that has no code yet. This is the one place to
+    change that."""
+    return load_actions(root)
+
+
+def action_entities(action: dict[str, Any]) -> list[str]:
+    """The entities an action acts on: today its `entity`, or none. The model checks read it
+    here, so an action that names several entities is a change in one place."""
+    entity = action.get("entity")
+    return [entity] if isinstance(entity, str) and entity else []
+
+
 def load_relations(root: Path) -> list[dict[str, Any]]:
     data = load_yaml_file(root / "ontology" / "relations.yaml") or {}
     items = data.get("relations") if isinstance(data, dict) else None
@@ -194,13 +208,12 @@ def lint(root: Path, entities: dict[str, dict[str, Any]], error: Any, warn: Any)
 def lint_lifecycle(root: Path, entities: dict[str, dict[str, Any]], error: Any, warn: Any) -> None:
     """Once a repo declares actions, every entity answers create / query / update / delete:
     an action of that kind, or a choice recorded under `lifecycle:` in the entity file."""
-    actions = load_actions(root)
-    if not actions:
+    if not load_actions(root):
         return
     covered: dict[tuple[str, str], str] = {}
-    for a in actions:
-        key = (str(a.get("entity") or ""), str(a.get("kind") or "command"))
-        covered.setdefault(key, str(a.get("name") or ""))
+    for a in answering_actions(root):
+        for ent in action_entities(a):
+            covered.setdefault((ent, str(a.get("kind") or "command")), str(a.get("name") or ""))
     for name, data in entities.items():
         path = f"ontology/entities/{name}.yaml"
         life = data.get("lifecycle")
@@ -276,9 +289,9 @@ def lint_relations(root: Path, entities: dict[str, dict[str, Any]], error: Any, 
     """Once a repo declares actions: an action a role runs only on its "own" records needs a
     relation marked `own: true` that says what "own" means, and every relation answers attach /
     detach / reassign: an action that names it, or a choice under `lifecycle:` on the relation."""
-    actions = load_actions(root)
-    if not actions:
+    if not load_actions(root):
         return
+    actions = answering_actions(root)
     apath, rpath = "ontology/actions.yaml", "ontology/relations.yaml"
     relations = load_relations(root)
     by_name: dict[str, list[dict[str, Any]]] = {}
@@ -332,13 +345,15 @@ def lint_relations(root: Path, entities: dict[str, dict[str, Any]], error: Any, 
         roles = own_roles(a)
         if not roles:
             continue
-        label, ent = f"action '{a.get('name')}'", a.get("entity")
+        label = f"action '{a.get('name')}'"
         for role in _as_list(a.get("own")):
             if role not in (a.get("roles") or []):
                 error(apath, f"{label}: own lists role '{role}', which is not in its roles")
-        if not ent:
+        if not action_entities(a):
             error(apath, f"{label}: own needs entity: the thing a role may hold")
-        elif ent in entities and not own_ends.intersection(_handled_through(ent, entities)):
+        for ent in action_entities(a):
+            if ent not in entities or own_ends.intersection(_handled_through(ent, entities)):
+                continue
             error(
                 apath,
                 f"{label}: {', '.join(roles)} may run it only on their own {ent}, but no relation "
@@ -414,35 +429,33 @@ def lint_properties(root: Path, entities: dict[str, dict[str, Any]], error: Any,
     """Once a repo declares actions, every property of an entity that has a create or update
     action is set by one (`sets: [...]`, or an input field of the same name), or the entity says
     why not under `not_set:`."""
-    actions = load_actions(root)
-    if not actions:
+    if not load_actions(root):
         return
     apath = "ontology/actions.yaml"
     set_by: dict[str, dict[str, str]] = {}  # entity -> property -> the action that sets it
     written: set[str] = set()  # entities with a create or update action
-    for a in actions:
-        aname, ent, kind = str(a.get("name") or ""), a.get("entity"), a.get("kind", "command")
-        label = f"action '{aname}'"
-        props = (entities.get(ent) or {}).get("properties") if ent in entities else None
-        props = props if isinstance(props, dict) else {}
-        if ent and kind in ("create", "update"):
-            written.add(ent)
-        if "sets" not in a:
-            names = [f for f in (a.get("input") or {}) if kind in ("create", "update")]
-        elif not _is_names(a["sets"]):
+    for a in answering_actions(root):
+        aname, kind = str(a.get("name") or ""), a.get("kind", "command")
+        label, explicit = f"action '{aname}'", "sets" in a
+        if explicit and not _is_names(a["sets"]):
             error(apath, f"{label}: sets must be a list of property names")
             continue
-        elif not ent:
+        if explicit and not action_entities(a):
             error(apath, f"{label}: sets needs entity: the thing whose properties it sets")
             continue
-        else:
-            names = a["sets"]
-            for p in names if ent in entities else []:
-                if p not in props:
+        names = a["sets"] if explicit else list(a.get("input") or {})
+        for ent in action_entities(a):
+            if kind in ("create", "update"):
+                written.add(ent)
+            elif not explicit:
+                continue
+            props = (entities.get(ent) or {}).get("properties")
+            props = props if isinstance(props, dict) else {}
+            for p in names:
+                if p in props:
+                    set_by.setdefault(ent, {}).setdefault(str(p), aname)
+                elif explicit and ent in entities:
                     error(apath, f"{label}: sets '{p}', which is not a property of {ent}")
-        for p in names:
-            if p in props:
-                set_by.setdefault(str(ent), {}).setdefault(str(p), aname)
 
     for name, data in entities.items():
         path = f"ontology/entities/{name}.yaml"

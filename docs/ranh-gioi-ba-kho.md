@@ -89,8 +89,8 @@ Khung khác xếp bằng phép thử ở trên.
 ### Thứ tự
 
 1. Repo Standards: quan hệ, thuộc tính, trạng thái. Hai kho kia đọc từ đây.
-2. design-assembly: sổ màn nối với mô hình (đề bài 0003, chờ chủ kho duyệt), rồi phần quan hệ và
-   thuộc tính bên nhìn thấy.
+2. design-assembly: sổ màn nối với mô hình (đề bài 0003, chủ kho duyệt và đã xây ngày
+   2026-11-15), rồi phần quan hệ và thuộc tính bên nhìn thấy.
 3. delivery-loop: đọc hai sổ kia, và ba luật của vòng.
 
 ## Việc đã làm và chưa làm ở kho này
@@ -122,7 +122,8 @@ Hai kho kia chưa nhận phần của mình: đây là đề xuất gửi sang, 
 - onehub-inventory, báo cáo rà soát RS2 ngày 2026-11-14: 7 thao tác thiếu thật, 5 chỉ hứa trên
   giấy, 7 do máy tự loại.
 - design-assembly, đề bài 0003 «Sổ màn nối với mô hình nghiệp vụ» (nhánh
-  `claude/so-man-noi-mo-hinh-95de70`, chờ chủ kho duyệt): số đo trên onehub-inventory.
+  `claude/so-man-noi-mo-hinh-95de70`; chủ kho duyệt ngày 2026-11-15, phép kiểm đã xây trên nhánh
+  đó): số đo trên onehub-inventory.
 - onehub-inventory, mô hình nghiệp vụ ở nhánh chính `20a13c2`, đọc ngày 2026-11-15: sổ quan hệ, sổ
   thao tác, thực thể `Listing`.
 - delivery-loop, hồ sơ «Bản đặc tả UX» (`dac-ta-ux-vat-hoa-cau-truc`): phép đo máy cắt ngày
