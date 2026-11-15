@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Relations and attributes
+- Once a repo has `ontology/actions.yaml`, `make ontology` (wiki-lint) also fails on three things
+  the model used to stay silent about. Each error names the action, relation or entity and every
+  way to fix it; there is one error per relation and per entity, listing all that is missing.
+  - An action a role may run only on its own records has no relation that says what "own" means.
+    An action says it with `own: [role]`, next to `roles`; the permission-table form
+    `scope: { Role: own }` is read too. A relation says it with `own: true`. A relation to the
+    entity the action's entity is handled through (`lifecycle.via`) counts.
+  - A relation in `ontology/relations.yaml` has no answer for `attach`, `detach` or `reassign`
+    (a many-to-many relation: `attach` and `detach`). An action answers with
+    `relations: { <relation name>: [attach] }`. Otherwise the choice goes under `lifecycle:` on the
+    relation, in the same form as for an entity: `{ later: <where it is planned> }`, listed as a
+    warning on every run, or `{ never: <reason>, decided_by: <person> }`. A link that is set when
+    one end is created and never changes is one line: `lifecycle: { via: <that entity> }`.
+  - A property of an entity that has a create or update action is set by no action. An action
+    names what it sets with `sets: [...]`; without it, input fields named like a property count.
+    Otherwise the entity lists the property under `not_set:` with the reason: `system: [...]`,
+    `import: [...]`, `later: { <property>: <where> }` or
+    `never: { <property>: { reason: ..., decided_by: ... } }`.
+- Breaking on upgrade: a repo with actions that takes the new `tools/ontology_actions.py` will fail
+  `make ontology` until every relation has its answers (most are one `via` line), every own scope
+  has its relation, and every entity with a create or update action accounts for its properties
+  (ids, timestamps and counters are one `system: [...]` line). That list is the work. A repo
+  without `ontology/actions.yaml` is not affected, and neither is an entity that has no create or
+  update action or is handled through its parent.
+- A misspelt relation, operation or property name fails too, in actions and in the recorded
+  reasons, so a rename that misses one place does not pass. A recorded choice that an action now
+  covers is reported as out of date.
+- `/ontology-add`, `/review-change`, `.claude/rules/ontology.md`, the ontology README, the entity
+  template and the starter `relations.yaml` describe the new keys. `/review-change` checks a new
+  `via` on a relation, because it claims the link never changes.
+- Not built: `own` in the generated code (`can()` still answers per role only), which role uses
+  which relation when two are marked `own`, record states and transitions, a `planned` status for
+  actions, and properties of an entity handled through its parent.
+
 ### Entity lifecycle
 - Once a repo has `ontology/actions.yaml`, `make ontology` (wiki-lint) fails when an entity has no
   `create`, `query`, `update` or `delete` action and no recorded choice. The choice goes under

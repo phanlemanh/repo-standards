@@ -26,6 +26,14 @@ rules:
 # or, for a part that lives and dies with its parent:
 # lifecycle: { via: Order }
 
+# Each property is set by a create or update action: its `sets: [...]`, or an input field of the
+# same name. List here the ones no action sets, and why:
+# not_set:
+#   system: [id] # the system writes them, or they are derived: ids, timestamps, counters
+#   import: [phone] # only an import writes them
+#   later: { name: "Roadmap row 12" } # planned, not built yet
+#   never: { points: { reason: "Only orders earn points", decided_by: "Lan, 2026-01-05" } }
+
 code:
   model: src/ # where the type/model is defined
   tests: tests/

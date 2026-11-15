@@ -66,7 +66,9 @@ UX sai theo ba kiểu, mỗi kiểu thuộc một kho:
    - «Sửa thông tin căn ngoài giá»: căn khai pháp lý, tài chính, nội thất, tình trạng sử dụng,
      nhưng chỉ có một thao tác sửa tả chung «giá, phí hoặc chi tiết».
 
-   Phần của design-assembly cho hai việc này chờ phần nghĩa ở kho này.
+   Phần của design-assembly cho hai việc này chờ phần nghĩa ở kho này. Phần nghĩa đã dựng ngày
+   2026-11-15 (xem cuối trang): cả ba giờ làm mô hình đỏ; hai thao tác về người giữ căn đỏ qua hai
+   bước, xem mục 4 của bản thiết kế.
 
 3. **Ba luật của vòng chưa vào delivery-loop.** Báo cáo RS2 quy khoảng 14 trên 19 ô thiếu cho bước
    thiết kế, không cho sổ nào:
@@ -87,17 +89,22 @@ Khung khác xếp bằng phép thử ở trên.
 ### Thứ tự
 
 1. Repo Standards: quan hệ, thuộc tính, trạng thái. Hai kho kia đọc từ đây.
-2. design-assembly: sổ màn nối với mô hình (đề bài 0003, chờ chủ kho duyệt), rồi phần quan hệ và
-   thuộc tính bên nhìn thấy.
+2. design-assembly: sổ màn nối với mô hình (đề bài 0003, chủ kho duyệt và đã xây ngày
+   2026-11-15), rồi phần quan hệ và thuộc tính bên nhìn thấy.
 3. delivery-loop: đọc hai sổ kia, và ba luật của vòng.
 
 ## Việc đã làm và chưa làm ở kho này
 
 - Đã làm (gộp vào nhánh chính ngày 2026-11-15): phép kiểm «mỗi thực thể đủ bốn câu trả lời», xem
   [thiết kế](superpowers/specs/2026-11-14-entity-lifecycle-design.md).
-- Chưa làm: trạng thái của bản ghi và bước chuyển; quan hệ có «gỡ» và luật khi xoá; phạm vi «của
-  tôi» đòi một quan hệ đã khai; thao tác sửa nêu thuộc tính; dấu «dự kiến» cho thao tác; móc chạy
-  phép kiểm sau mỗi lần sửa.
+- Đã dựng (nhánh `claude/relations-and-attributes-1dd820`, ngày 2026-11-15, chờ chủ kho xem): phạm
+  vi «của tôi» đòi một quan hệ đã khai; mỗi quan hệ trả lời gắn, gỡ, chuyển; mỗi thuộc tính có thao
+  tác đặt giá trị hoặc có lý do. Xem
+  [thiết kế](superpowers/specs/2026-11-15-relations-and-attributes-design.md), mục 4 có số đo trên
+  onehub-inventory.
+- Chưa làm: trạng thái của bản ghi và bước chuyển; luật khi xoá một đầu của quan hệ; dấu «dự kiến»
+  cho thao tác; một thao tác xem nêu nhiều thực thể; đưa «của tôi» vào mã sinh ra; móc chạy phép
+  kiểm sau mỗi lần sửa.
 - Sẽ chuyển đi khi design-assembly sẵn sàng nhận: sàn thiết kế (`capabilities/design`), câu hỏi màu
   thương hiệu và loại bề mặt. Repo Standards khi đó chỉ còn một lời gọi. Không xây thêm lên phần
   này.
@@ -115,7 +122,8 @@ Hai kho kia chưa nhận phần của mình: đây là đề xuất gửi sang, 
 - onehub-inventory, báo cáo rà soát RS2 ngày 2026-11-14: 7 thao tác thiếu thật, 5 chỉ hứa trên
   giấy, 7 do máy tự loại.
 - design-assembly, đề bài 0003 «Sổ màn nối với mô hình nghiệp vụ» (nhánh
-  `claude/so-man-noi-mo-hinh-95de70`, chờ chủ kho duyệt): số đo trên onehub-inventory.
+  `claude/so-man-noi-mo-hinh-95de70`; chủ kho duyệt ngày 2026-11-15, phép kiểm đã xây trên nhánh
+  đó): số đo trên onehub-inventory.
 - onehub-inventory, mô hình nghiệp vụ ở nhánh chính `20a13c2`, đọc ngày 2026-11-15: sổ quan hệ, sổ
   thao tác, thực thể `Listing`.
 - delivery-loop, hồ sơ «Bản đặc tả UX» (`dac-ta-ux-vat-hoa-cau-truc`): phép đo máy cắt ngày

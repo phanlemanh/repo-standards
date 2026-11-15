@@ -3,3 +3,4 @@ relations:
     name: places
     to: Order
     cardinality: one-to-many
+    lifecycle: { via: Order }

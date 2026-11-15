@@ -5,6 +5,8 @@ properties:
   customerId: { type: ref, target: Customer, required: true }
   total: { type: number, required: true }
   placedOn: { type: date }
+not_set:
+  system: [id, placedOn]
 lifecycle:
   query: { later: Order history screen }
   update:
