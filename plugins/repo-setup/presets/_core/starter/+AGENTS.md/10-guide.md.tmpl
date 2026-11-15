@@ -29,8 +29,8 @@ Stack: {{stack}}
   (e.g. `Client` when the glossary says `Customer`).
 - Use the generated domain types; to change them, change `ontology/` and run `make gen`.
 - Do not add a new entity, relation or rule to the code without adding it to
-  `ontology/` in the same change. Changes to `ontology/` need human review —
-  call them out in the PR description.
+  `ontology/` in the same change. Changes to `ontology/` change what the business
+  means: call them out in the PR description.
 - Every behaviour change comes with a test.
 - Never commit secrets or `.env`. Configuration goes in `.env.example`.
 - Keep changes small and focused; one concern per PR.

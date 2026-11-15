@@ -241,18 +241,20 @@ echo "ok  api breaking-change detection"
 
 # 16. autonomy tiers and the PreToolUse gate
 g="$TMP/combo-ts-api-service-api-container-x"
-tier=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md src/app.ts ontology/actions.yaml | json 'd["tier"]')
+tier=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md src/app.ts governance/autonomy.yaml | json 'd["tier"]')
 [ "$tier" = high ] || fail "autonomy tier: $tier"
+mid=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md src/app.ts ontology/actions.yaml | json 'd["tier"]')
+[ "$mid" = medium ] || fail "autonomy tier of product code and ontology: $mid"
 low=$(cd "$g" && python3 tools/autonomy.py --files wiki/log.md docs/x.md | json 'd["tier"]')
 [ "$low" = low ] || fail "autonomy low tier: $low"
 ( cd "$g" && python3 tools/autonomy.py --check-codeowners >/dev/null ) || fail "codeowners out of sync"
 echo "ok  autonomy tiers"
 
 # 17. tiers on real git history: renames, weakened tests, agent config, non-ASCII names
-r="$TMP/tiers"; mkdir -p "$r/ontology" "$r/src" "$r/tests/a" "$r/wiki" "$r/docs"
+r="$TMP/tiers"; mkdir -p "$r/governance" "$r/src" "$r/tests/a" "$r/wiki" "$r/docs"
 git -C "$r" init -q -b main
-seq 1 30 > "$r/ontology/x.yaml"
-seq 1 30 > "$r/ontology/đơn.yaml"
+seq 1 30 > "$r/governance/x.yaml"
+seq 1 30 > "$r/governance/đơn.yaml"
 seq 1 30 > "$r/src/app.ts"
 seq 1 30 > "$r/tests/a/test_x.py"
 seq 1 30 > "$r/tests/a/app.test.ts"
@@ -263,7 +265,7 @@ expect_tier() {
   actual=$(python3 "$g/tools/autonomy.py" --root "$r" --policy "$g/governance/autonomy.yaml" --base main --head HEAD | json 'd["tier"]')
   [ "$actual" = "$2" ] || miss "tier of '$1': got $actual, want $2"
 }
-start c1; git -C "$r" mv ontology/x.yaml wiki/x.yaml; commit c1
+start c1; git -C "$r" mv governance/x.yaml wiki/x.yaml; commit c1
 expect_tier "high-tier file renamed into wiki/" high
 start c2; git -C "$r" mv src/app.ts docs/app.ts; commit c2
 expect_tier "source file renamed into docs/" medium
@@ -279,7 +281,7 @@ start c7; mkdir -p "$r/docs"; echo x > "$r/docs/CLAUDE.md"; commit c7
 expect_tier "nested CLAUDE.md" high
 start c8; echo '{}' > "$r/tests/.mcp.json"; commit c8
 expect_tier "nested .mcp.json" high
-start c9; echo 31 >> "$r/ontology/đơn.yaml"; commit c9
+start c9; echo 31 >> "$r/governance/đơn.yaml"; commit c9
 expect_tier "non-ASCII high-tier path" high
 start c10; mkdir -p "$r/docs"; echo x > "$r/docs/new.md"; printf 'def test_new(): ...\n' >> "$r/tests/a/test_x.py"; commit c10
 expect_tier "plain docs and an added test" low
@@ -1452,7 +1454,7 @@ esac
 SH
 chmod +x "$TMP/gsbin/gh"
 dry() { ( cd "$1" && shift && PATH="$TMP/gsbin:$PATH" GH_CALLS="$TMP/gs-calls" python3 -B tools/github_setup.py "$@" ) 2>&1; }
-# the fixtures are the dry run as it was before the option existed
+# the fixtures are the dry run without the option
 [ "$(dry "$gs")" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: the dry run without the option changed: $(dry "$gs" | diff "$FX/dry-run-team.txt" - | head -5)"
 [ "$(dry "$gsa")" = "$(cat "$FX/dry-run-team-agents.txt")" ] || miss "merge method: the dry run with agents and without the option changed: $(dry "$gsa" | diff "$FX/dry-run-team-agents.txt" - | head -5)"
 [ "$(dry "$gs" --merge-method squash)" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: squash is not the default: $(dry "$gs" --merge-method squash | head -3)"
@@ -1506,13 +1508,219 @@ SH
 chmod +x "$TMP/pmbin/gh"
 merged_with() { rm -f "$TMP/pm-calls"
   ( PATH="$TMP/pmbin:$PATH" GH_CALLS="$TMP/pm-calls" SQUASH_ALLOWED="$1" PR=7 GITHUB_REPOSITORY=acme/sample \
-    bash -e -c "$(steps_of 'Approve and enable auto-merge')" ) >/dev/null 2>&1 || true
+    bash -e -c "$(steps_of 'Enable auto-merge')" ) >/dev/null 2>&1 || true
   grep '^pr merge' "$TMP/pm-calls" 2>/dev/null || true; }
 [ "$(merged_with true)" = "pr merge 7 --auto --squash" ] || miss "merge method: the pipeline does not squash where squash is allowed: $(merged_with true)"
 [ "$(merged_with false)" = "pr merge 7 --auto --merge" ] || miss "merge method: the pipeline does not use a merge commit where squash is off: $(merged_with false)"
 [ "$(merged_with unknown)" = "pr merge 7 --auto --squash" ] || miss "merge method: the pipeline does not fall back to squash: $(merged_with unknown)"
 grep -q -- '--merge-method merge' "$ROOT/plugins/repo-setup/skills/github/SKILL.md" || miss "merge method: the github skill does not name the option"
 echo "ok  merge method (or misses reported above)"
+
+# 43. people decide, machines check (docs/nguyen-tac-setup.md): nothing the setup generates uses a
+#     person as a checker. A person appears where something is decided: the rules, production.
+pd="$TMP/people-decide"; mkdir -p "$pd" && git -C "$pd" init -q -b main
+python3 "$S/apply.py" --target "$pd" --preset python --level team --with github-agents --var project_name=P --var description=x --var owner=acme >/dev/null
+tier_of() { ( cd "$pd" && python3 tools/autonomy.py --files "$@" | json 'd["tier"]' ); }
+# 43a. high is the rules of the game and nothing else: no product path is high because of its name
+for f in governance/autonomy.yaml .github/workflows/ci.yml .claude/settings.json tools/autonomy.py Makefile AGENTS.md; do
+  [ "$(tier_of "$f")" = high ] || miss "people decide: a rule file is not high: $f is $(tier_of "$f")"
+done
+for f in ontology/actions.yaml src/auth/login.py src/author.py db/migrations/001.sql infra/main.tf deploy/app.yaml Dockerfile compose.yaml; do
+  [ "$(tier_of "$f")" = medium ] || miss "people decide: a product path is judged by its name: $f is $(tier_of "$f")"
+done
+# 43b. the ruleset asks nobody to approve; a code owner decides only where CODEOWNERS names one
+( cd "$pd" && python3 -B -c "
+import sys; sys.path.insert(0,'tools')
+import github_setup as g
+def rules_of(steps):
+    return {r['type']: r.get('parameters', {}) for r in [s for s in steps if 'ruleset' in s][0]['ruleset']['rules']}
+def checks_of(steps):
+    return [c['context'] for c in rules_of(steps)['required_status_checks']['required_status_checks']]
+for agents in (False, True):
+    steps = g.plan('o/r','main','@a',agents)
+    pr = rules_of(steps)['pull_request']
+    assert pr['required_approving_review_count'] == 0, pr
+    assert pr['require_code_owner_review'] is True, pr
+    assert not any('can_approve_pull_request_reviews=true' in a for s in steps for a in s['args']), 'Actions may approve'
+    assert agents == any('can_approve_pull_request_reviews=false' in a for s in steps for a in s['args']), 'Actions not told'
+    own = ['check', 'gate'] if agents else ['check']
+    assert checks_of(steps) == own, checks_of(steps)
+    assert checks_of(g.plan('o/r','main','@a',agents,proof='evidence')) == own + ['evidence']
+" ) || miss "people decide: the ruleset needs an approval, lets Actions approve, or does not require the proof"
+# 43c. a person leaves only when a machine proof takes the place: default low needs proof.check
+policy="$pd/governance/autonomy.yaml"; cp "$policy" "$TMP/policy.orig"
+set_policy() { python3 - "$policy" "$TMP/policy.orig" "$1" "$2" <<'PY'
+import re, sys
+out, src, default, proof = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+t, n = re.subn(r"(?m)^default: .*$", f"default: {default}", t)
+t, m = re.subn(r"(?m)^  check: .*$", f'  check: "{proof}"', t)
+assert n == 1 and m == 1, (n, m)
+open(out, "w", encoding="utf-8").write(t)
+PY
+}
+governance_ok() { ( cd "$pd" && python3 tools/autonomy.py --write-codeowners >/dev/null && python3 tools/autonomy.py --check-codeowners >/dev/null 2>&1 ); }
+grep -q '^default: medium$' "$policy" || miss "people decide: the sample policy must start without a proof, at default medium"
+grep -q '^\*  @acme$' "$pd/.github/CODEOWNERS" || miss "people decide: without a proof, unproven code lost its owner"
+set_policy low "" 2>/dev/null || miss "people decide: the policy has no proof.check to set"
+if governance_ok; then miss "people decide: default low was accepted without a proof"; fi
+[ "$(tier_of src/app.py)" = medium ] || miss "people decide: default low without a proof lets unproven code merge itself: $(tier_of src/app.py)"
+for reserved in check gate; do
+  set_policy low "$reserved" 2>/dev/null || true
+  if governance_ok; then miss "people decide: the repo's own check '$reserved' was accepted as the proof"; fi
+  [ "$(cd "$pd" && python3 tools/autonomy.py --files docs/x.md 2>/dev/null | json 'd.get("proof")')" = "" ] || miss "people decide: the pipeline is told that '$reserved' proves a change"
+done
+set_policy low evidence 2>/dev/null || true
+governance_ok || miss "people decide: default low with a proof was refused"
+[ "$(tier_of src/app.py)" = low ] || miss "people decide: proven code still waits for a person: $(tier_of src/app.py)"
+[ "$(tier_of governance/autonomy.yaml)" = high ] || miss "people decide: with a proof, the rules lost their decider"
+[ "$(cd "$pd" && python3 tools/autonomy.py --files src/app.py | json 'd.get("proof")')" = evidence ] || miss "people decide: the tier result does not name the proof"
+if grep -qE '^\*( |$)' "$pd/.github/CODEOWNERS"; then miss "people decide: with a proof, every path still has an owner"; fi
+grep -q '^/governance/\*\*  @acme$' "$pd/.github/CODEOWNERS" || miss "people decide: with a proof, governance/ lost its owner"
+dry "$pd" | grep -q 'checks check, gate, evidence' || miss "people decide: github_setup does not require the proof the policy names"
+# 43d. a looser agent guard is a rule change, wherever it is written; a new action is not
+mkdir -p "$pd/ontology" "$pd/src"
+printf 'actions:\n  - name: wipe\n    agent: forbidden\n  - name: refund\n    agent: confirm\n' > "$pd/ontology/actions.yaml"
+pd_save() { git -C "$pd" add -A && git -C "$pd" -c user.name=t -c user.email=t@example.com commit -q -m "$1"; }
+pd_start() { git -C "$pd" checkout -q -B "$1" main; }
+pd_tier() { actual=$(cd "$pd" && python3 tools/autonomy.py --base main --head HEAD | json 'd["tier"]')
+  [ "$actual" = "$2" ] || miss "people decide: tier of '$1': got $actual, want $2"; }
+pd_save base
+pd_start e1; subst '/agent: forbidden/d' "$pd/ontology/actions.yaml"; pd_save e1
+pd_tier "agent: forbidden removed" high
+pd_start e2; subst 's/agent: confirm/agent: allowed/' "$pd/ontology/actions.yaml"; pd_save e2
+pd_tier "agent: confirm made allowed" high
+pd_start e3; subst 's/agent: forbidden/agent: confirm/' "$pd/ontology/actions.yaml"; pd_save e3
+pd_tier "agent: forbidden made confirm" high
+pd_start e4; subst 's/agent: confirm/agent: forbidden/' "$pd/ontology/actions.yaml"; pd_save e4
+pd_tier "agent: confirm made forbidden (tighter)" low
+pd_start e5; printf '  - name: greet\n    agent: allowed\n' >> "$pd/ontology/actions.yaml"; pd_save e5
+pd_tier "a new action" low
+pd_start e6; git -C "$pd" rm -q ontology/actions.yaml; pd_save e6
+pd_tier "the file with the guards deleted" high
+pd_start e7; subst 's/agent: confirm/agent: allowed/' "$pd/ontology/actions.yaml"
+printf '  - name: purge\n    agent: forbidden\n' >> "$pd/ontology/actions.yaml"; pd_save e7
+pd_tier "one guard dropped while a new action brings one" high
+pd_start e8; printf 'actions:\n  - name: wipe\n    agent: confirm\n  - name: refund\n    agent: forbidden\n' > "$pd/ontology/actions.yaml"; pd_save e8
+pd_tier "two actions swap their guards" high
+pd_start e9; printf 'actions:\n  - name: refund\n    agent: "confirm"\n  - name: wipe\n    agent: forbidden\n' > "$pd/ontology/actions.yaml"; pd_save e9
+pd_tier "actions reordered and a guard quoted, nothing looser" low
+pd_start e10; printf 'actions:\n  - name: wipe\n    agent: forbidden\n  - name: refund\n    agent: [confirm\n' > "$pd/ontology/actions.yaml"; pd_save e10
+pd_tier "a guarded file that can no longer be read" high
+# 43e. the gate hands the proof to the pipeline, from the base branch
+git -C "$pd" update-ref refs/remotes/origin/main main
+pd_start g1; echo 'X = 1' > "$pd/src/new_module.py"; pd_save g1
+pipeline="$pd/.github/workflows/pr-pipeline.yml"
+mkdir -p "$TMP/runner"; rm -f "$TMP/pd-gate.out"
+( cd "$pd" && RUNNER_TEMP="$TMP/runner" GITHUB_WORKSPACE="$pd" GITHUB_OUTPUT="$TMP/pd-gate.out" \
+  GITHUB_STEP_SUMMARY="$TMP/summary" BASE=main AUTHOR=someone UPDATE_TYPE="" \
+  bash -e -c "$(steps_of 'Load the rules from the base branch'; steps_of 'Classify')" ) >/dev/null 2>&1 \
+  || miss "people decide: the gate failed on a proven change"
+grep -q '^tier=low$' "$TMP/pd-gate.out" 2>/dev/null || miss "people decide: the gate does not judge a proven change as low"
+grep -q '^proof=evidence$' "$TMP/pd-gate.out" 2>/dev/null || miss "people decide: the gate does not tell the pipeline about the proof"
+# 43f. the pipeline: no second reviewer on proven changes, merge by proof and not by author, no approvals
+review=$(sed -n '/^  review:$/,/^  automerge:$/p' "$pipeline")
+automerge=$(sed -n '/^  automerge:$/,$p' "$pipeline")
+echo "$review" | grep -q "needs.gate.outputs.proof == ''" || miss "people decide: the reviewer agent runs again on a change the proof covers"
+echo "$automerge" | grep -q "needs.gate.outputs.proof != ''" || miss "people decide: a proven change does not merge itself without the reviewer agent"
+echo "$automerge" | grep -q 'draft == false' || miss "people decide: auto-merge may fire on a draft"
+if grep -q 'AGENT_AUTHORS' "$pipeline"; then miss "people decide: auto-merge depends on who the author is"; fi
+if grep -qE 'gh pr review|--approve' "$pipeline"; then miss "people decide: the pipeline approves pull requests"; fi
+# a change that stops being low does not keep the auto-merge an earlier push turned on
+mkdir -p "$TMP/holdbin"
+cat > "$TMP/holdbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "pr view") cat "$HOLD_STATE" ;;
+  "pr merge") echo "$*" >> "$GH_CALLS"; if [ "$HOLD_CAN_DISABLE" = yes ]; then echo off > "$HOLD_STATE"; fi ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$TMP/holdbin/gh"
+hold() { echo "$1" > "$TMP/hold-state"; rm -f "$TMP/hold-calls"
+  ( PATH="$TMP/holdbin:$PATH" GH_CALLS="$TMP/hold-calls" HOLD_STATE="$TMP/hold-state" HOLD_CAN_DISABLE="$2" PR=7 \
+    bash -e -c "$(steps_of 'Hold a change that is no longer low')" ) >/dev/null 2>&1; }
+grep -A1 'Hold a change that is no longer low' "$pipeline" | grep -q "needs.tier.outputs.tier != 'low'" || miss "people decide: the hold does not run for every tier above low"
+gate_job=$(sed -n '/^  gate:$/,/^  review:$/p' "$pipeline")
+echo "$gate_job" | grep -q 'if: always()' || miss "people decide: the required check is skipped, and so counts as passed, when the tier job fails"
+echo "$gate_job" | grep -q "needs.tier.result != 'success'" || miss "people decide: the required check passes without a tier"
+echo "$gate_job" | grep -q 'contents: write' || miss "people decide: the job that turns auto-merge off may not do so"
+if echo "$gate_job" | grep -q 'actions/checkout'; then miss "people decide: the job that may write checks out the pull request"; fi
+sed -n '/^  tier:$/,/^  gate:$/p' "$pipeline" | grep -q 'contents: read' || miss "people decide: the job that reads the pull request may write"
+( bash -e -c "$(steps_of 'Fail when the tier is unknown')" ) >/dev/null 2>&1 && miss "people decide: the step for an unknown tier does not fail"
+hold off yes && [ ! -e "$TMP/hold-calls" ] || miss "people decide: the gate touches an auto-merge that is off"
+hold on yes && grep -q '^pr merge 7 --disable-auto$' "$TMP/hold-calls" 2>/dev/null || miss "people decide: a change that stopped being low keeps its auto-merge"
+if hold on no; then miss "people decide: the gate passes while auto-merge stays on for a change above low"; fi
+if hold "" no; then miss "people decide: the gate passes without knowing whether auto-merge is on"; fi
+# auto-merge on the strength of a proof only when GitHub itself requires that proof
+mkdir -p "$TMP/prbin"
+printf '#!/bin/sh\n[ "$1" = api ] || exit 1\n[ -f "$REQUIRED" ] || exit 1\ncat "$REQUIRED"\n' > "$TMP/prbin/gh"; chmod +x "$TMP/prbin/gh"
+proof_required() { ( PATH="$TMP/prbin:$PATH" REQUIRED="$1" PROOF=evidence BASE=main GITHUB_REPOSITORY=acme/sample \
+    bash -e -o pipefail -c "$(steps_of 'Require that GitHub requires the proof')" ) >/dev/null 2>&1; }
+printf 'check\ngate\nevidence\n' > "$TMP/required-yes"; printf 'check\ngate\nevidence-old\n' > "$TMP/required-no"
+proof_required "$TMP/required-yes" || miss "people decide: a required proof is not recognised"
+if proof_required "$TMP/required-no"; then miss "people decide: auto-merge trusts a proof the branch does not require"; fi
+if proof_required "$TMP/required-missing"; then miss "people decide: auto-merge trusts a proof when the rules cannot be read"; fi
+echo "$automerge" | grep -q "needs.gate.result == 'success'" || miss "people decide: auto-merge may run although the gate failed"
+# 43g. generated instructions add no stop of their own; settings ask nothing and keep the silent walls
+for phrase in 'get approval before you start' 'ask in the issue and stop' 'need human review' 'need a human reviewer' 'one approval is required' '(high tier)'; do
+  if grep -qiF "$phrase" "$pd/AGENTS.md" "$pd/CONTRIBUTING.md" "$pd/.github/pull_request_template.md" "$pd/ontology/README.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/+AGENTS.md/40-service-api.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/tools/api_compat.py"; then miss "people decide: generated text stops for a person: $phrase"; fi
+done
+grep -q 'never a reason to stop' "$pd/AGENTS.md" || miss "people decide: AGENTS.md does not say that a tier is no reason to stop"
+python3 - "$pd/.claude/settings.json" <<'PY' || miss "people decide: settings.json asks, blocks Bash by pattern, or lost a silent wall"
+import json, sys
+p = json.load(open(sys.argv[1], encoding="utf-8"))["permissions"]
+assert not p.get("ask"), p.get("ask")
+assert not [r for r in p["deny"] if r.startswith("Bash(")], p["deny"]
+for wall in ("Read(./.env)", "Edit(./.github/workflows/**)", "Edit(./governance/**)"):
+    assert wall in p["deny"], wall
+PY
+if grep -q 'gate hook' "$ROOT/plugins/repo-setup/skills/explain/SKILL.md"; then miss "people decide: explain names a gate hook the plugin no longer ships"; fi
+# 43h. the principle is written down where the next change to the plugin will find it
+[ -f "$ROOT/docs/nguyen-tac-setup.md" ] || miss "people decide: docs/nguyen-tac-setup.md is missing"
+grep -q 'docs/nguyen-tac-setup.md' "$ROOT/README.md" || miss "people decide: README.md does not point to the principle"
+grep -q 'nguyen-tac-setup.md' "$ROOT/plugins/repo-setup/README.md" || miss "people decide: the plugin README does not point to the principle"
+grep -q 'docs/nguyen-tac-setup.md' "$ROOT/CLAUDE.md" 2>/dev/null || miss "people decide: the root CLAUDE.md does not point to the principle, so the next session will not load it"
+# 43i. doctor: protection is a pull request plus required checks; it asks for no approval count
+mkdir -p "$TMP/bpbin"
+cat > "$TMP/bpbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
+  "api repos/acme/sample/branches/main/protection") echo 'Not Found (HTTP 404)' >&2; exit 1 ;;
+  "api repos/acme/sample/rules/branches/main") cat "$FAKE_RULES" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$TMP/bpbin/gh"
+bp_verdict() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd" branch_protection '--level team --remote'; }
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":true}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep -q '^pass$' || miss "people decide: doctor wants an approval count: $(bp_verdict)"
+echo '[{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts a branch that needs no pull request: $(bp_verdict)"
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":true}}]' > "$TMP/rules.json"
+bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts approvals in place of required checks: $(bp_verdict)"
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts a branch where the rules have lost their decider: $(bp_verdict)"
+# 43j. a ruleset from an earlier run is brought up to date, so an upgrade reaches the repository
+mkdir -p "$TMP/rsbin"
+cat > "$TMP/rsbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
+  "secret list") ;;
+  "api repos/acme/sample/rulesets") cat "$FAKE_RULESET_IDS" ;;
+  *) echo "$*" >> "$GH_CALLS" ;;
+esac
+SH
+chmod +x "$TMP/rsbin/gh"
+ruleset_call() { echo "$1" > "$TMP/ruleset-ids"; rm -f "$TMP/rs-calls"
+  ( cd "$pd" && PATH="$TMP/rsbin:$PATH" GH_CALLS="$TMP/rs-calls" FAKE_RULESET_IDS="$TMP/ruleset-ids" \
+    python3 -B tools/github_setup.py --apply </dev/null ) >/dev/null 2>&1 || true
+  grep 'rulesets' "$TMP/rs-calls" 2>/dev/null || true; }
+[ "$(ruleset_call '')" = "api -X POST repos/acme/sample/rulesets --input -" ] || miss "people decide: a first run does not create the ruleset: $(ruleset_call '')"
+[ "$(ruleset_call 41)" = "api -X PUT repos/acme/sample/rulesets/41 --input -" ] || miss "people decide: an old ruleset keeps asking for an approval after the upgrade: $(ruleset_call 41)"
+echo "ok  people decide, machines check (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

@@ -6,7 +6,7 @@ Dry run for acme/sample (default branch main)
       gh api -X PUT repos/acme/sample/environments/staging
   - environment production (human approval by @acme)
       gh api -X PUT repos/acme/sample/environments/production --input -
-  - ruleset on main: PR + code-owner review + checks check
+  - ruleset on main: PR + code owner where CODEOWNERS names one + checks check
       gh api -X POST repos/acme/sample/rulesets --input -
 
 Secrets (values are never read):

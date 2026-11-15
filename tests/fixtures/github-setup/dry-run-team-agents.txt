@@ -1,11 +1,11 @@
 Dry run for acme/sample (default branch main)
 
   - label risk:low
-      gh label create risk:low --color 0e8a16 --description Autonomy gate: agents may merge --force
+      gh label create risk:low --color 0e8a16 --description Autonomy gate: merges itself when the checks pass --force
   - label risk:medium
-      gh label create risk:medium --color fbca04 --description Autonomy gate: a human approves --force
+      gh label create risk:medium --color fbca04 --description Autonomy gate: not proven by a machine, a person merges --force
   - label risk:high
-      gh label create risk:high --color b60205 --description Autonomy gate: a code owner approves --force
+      gh label create risk:high --color b60205 --description Autonomy gate: changes the rules, a code owner decides --force
   - label intent
       gh label create intent --color 5319e7 --description A human intent for the agents --force
   - label agent:spec
@@ -22,13 +22,13 @@ Dry run for acme/sample (default branch main)
       gh label create agent-review:changes --color d93f0b --description Independent agent review requested changes --force
   - squash-only merges, delete merged branches, auto-merge
       gh api -X PATCH repos/acme/sample -F allow_auto_merge=true -F delete_branch_on_merge=true -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false
-  - GitHub Actions may approve PRs (needed for low-tier auto-merge)
-      gh api -X PUT repos/acme/sample/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true
+  - GitHub Actions cannot approve PRs (no merge needs an approval from it)
+      gh api -X PUT repos/acme/sample/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
   - environment staging
       gh api -X PUT repos/acme/sample/environments/staging
   - environment production (human approval by @acme)
       gh api -X PUT repos/acme/sample/environments/production --input -
-  - ruleset on main: PR + code-owner review + checks check, gate
+  - ruleset on main: PR + code owner where CODEOWNERS names one + checks check, gate
       gh api -X POST repos/acme/sample/rulesets --input -
 
 Secrets (values are never read):

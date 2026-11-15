@@ -23,4 +23,5 @@
 - [ ] No secrets, credentials or personal data in the diff
 
 <!-- The autonomy gate labels this PR risk:low / risk:medium / risk:high.
-     low: agents may merge after CI + independent agent review. medium/high: a human approves. -->
+     low: merges itself when the required checks pass. medium: a person merges.
+     high: it changes the rules of the game, a code owner decides. -->

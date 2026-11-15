@@ -38,7 +38,7 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | gitleaks | Blocks passwords/API keys from being committed |
 | Dependabot | Opens small PRs to keep libraries up to date |
 | CodeQL | Automatic security review of the code |
-| CODEOWNERS | Who is asked to review which folders |
+| CODEOWNERS | Who decides changes to which paths. A path with no owner needs no person |
 | release-please | Writes the CHANGELOG and version numbers from commit messages |
 | `AGENTS.md` / `CLAUDE.md` | Onboarding guide for AI agents (CLAUDE.md imports AGENTS.md) |
 | `tools/wiki_lint.py` | Checks the wiki and ontology for broken links, unknown concepts, missing sections |
@@ -49,9 +49,9 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `ontology/` | The dictionary + map of business concepts (one meaning for everyone) |
 | `wiki/` | Why things are the way they are: decisions, incidents, notes |
 | `.repo-setup.json` | Remembers how the repo was set up, so upgrades are safe |
-| `governance/autonomy.yaml` | Which changes agents may merge alone (low), which need a person (medium/high) |
+| `governance/autonomy.yaml` | Who decides that a change may merge: the checks alone (low), a person (medium), a code owner (high). `proof.check` names the check that proves a change, so a person need not |
 | `risk:low/medium/high` label | The tier the PR pipeline computed for this PR from the files it changes |
-| "needs approval" when an agent edits a file | The gate hook: that file is high-tier; approve the edit or the spec |
+| A pull request waits although CI is green | Its tier is medium or high. The `risk:` label and the summary of the `gate` job name the file behind it |
 | `wiki/specs/` | Agent-written plan of a change, with acceptance criteria; humans approve risky ones |
 | `ontology/actions.yaml` / `roles.yaml` | What can be done in the system, and who may do it (people and AI agents) |
 | `pii: true` | Personal data: masked in what agents receive, for top-level fields only. Logs are not masked for you, so keep personal data out of them |

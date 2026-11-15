@@ -53,6 +53,10 @@ trust the folder; until then the setting is ignored without any message.
 
 ## Develop the plugin
 
+Read [docs/nguyen-tac-setup.md](docs/nguyen-tac-setup.md) (Vietnamese) before changing what the
+plugin generates. The rule: people decide, machines check. A setup that brings a person in to
+make a change more reliable is not a good setup. `tests/run.sh` holds the rule in section 43.
+
 ```bash
 bash tests/run.sh                        # fast tests, no network
 bash tests/e2e.sh                        # real installs + make check for each combination (network)

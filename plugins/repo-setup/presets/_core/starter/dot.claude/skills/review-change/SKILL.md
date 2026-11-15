@@ -44,8 +44,9 @@ do not report tests as passing.
    (`pull_request_target` with a checkout of PR code).
 9. **Design**: module boundaries hold, errors are handled, and the code follows existing patterns
    and the conventions in `AGENTS.md`.
-10. **Tier**: if `tools/autonomy.py` exists, run `python3 tools/autonomy.py --base origin/<base>`. Auth,
-    data or migrations classified below high is blocking.
+10. **Tier**: if `tools/autonomy.py` exists, run `python3 tools/autonomy.py --base origin/<base>`
+    and report the tier with the file behind it. A removed or switched-off test, or a looser
+    `agent:` setting, that the gate did not raise is blocking.
 11. **Records**: `wiki/` is updated when the change has a lasting why, and the PR's "Human decisions
     needed" is honest.
 

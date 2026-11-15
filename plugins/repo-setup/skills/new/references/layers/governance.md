@@ -1,6 +1,6 @@
 # Layer: governance
 
-**Framing.** How much may agents do on this repo, and who approves? Also: should the system offer tools to agents (MCP), and should agents work from GitHub issues?
+**Framing.** How much may agents do on this repo, and who decides what merges? People decide, machines check: do not add a person as a checker. Also: should the system offer tools to agents (MCP), and should agents work from GitHub issues?
 
 **Depends on:** ai, quality. Say how those decisions constrain this layer.
 
@@ -16,6 +16,7 @@ recommend it. Say when each option would be wrong.
 | Local Claude Code only | Edits ask a person; nothing runs on GitHub | No agent picks up issues | The team wants agents on GitHub | `automated` |
 | Add `github-agents` (level `team`) | Agents work from issues and open PRs | Needs the GitHub App, one secret and API spend. Not yet run against a real Claude session | No one will review the results | `automated` |
 | Add `mcp` | Agents use the system through checked actions | Another surface to secure | Nothing outside needs the actions | `automated` |
+| Name a proof check (`proof.check`) | A tool already proves each change in CI, so product code can merge itself | That check must report on every pull request; a person edits `governance/autonomy.yaml` | Nothing proves changes yet | `partial` |
 | Custom tiers or approvers | An existing team policy | `governance/` is blocked for agents, so a person edits it | The sample policy fits | `partial` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and

@@ -8,4 +8,5 @@
 - `agent: confirm` tools carry `_meta["anthropic/requiresUserInteraction"]`: Claude Code asks a
   person before each call. Other MCP clients may ignore it, and the server cannot tell whether
   anyone approved. Over HTTP, role `agent` gets 403 on these actions.
-- New actions or a wider `agent:` setting are domain changes (high tier).
+- A wider `agent:` setting changes what agents may do: never loosen one on your own. Where the
+  repo has an autonomy gate (`tools/autonomy.py`), that change is high tier and a person decides.

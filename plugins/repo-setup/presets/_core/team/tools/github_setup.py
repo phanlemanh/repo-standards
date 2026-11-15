@@ -7,10 +7,13 @@
 
 Always: one merge method (squash unless --merge-method says otherwise); environments "staging"
 and "production" (production requires a human reviewer); a ruleset on the default branch (pull
-request + code-owner review + required checks).
+request + required checks; a code owner decides only where .github/CODEOWNERS names one, and
+nobody else has to approve). When governance/autonomy.yaml names a proof (proof.check), that
+check is required too.
 With agent workflows (--with github-agents at apply time): labels used by agents and the
-autonomy gate, auto-merge, GitHub Actions allowed to approve low-tier pull requests, the "gate"
-required check, and repository variables.
+autonomy gate, auto-merge, the "gate" required check, and GitHub Actions kept from approving
+pull requests.
+A ruleset this script made earlier is updated in place.
 It never prints or sets secret values: it only tells you which secrets are missing.
 """
 
@@ -25,12 +28,13 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from autonomy import OWN_CHECKS, proof_check
 from repo_ontology import find_repo_root, load_yaml_file
 
 LABELS = [
-    ("risk:low", "0e8a16", "Autonomy gate: agents may merge"),
-    ("risk:medium", "fbca04", "Autonomy gate: a human approves"),
-    ("risk:high", "b60205", "Autonomy gate: a code owner approves"),
+    ("risk:low", "0e8a16", "Autonomy gate: merges itself when the checks pass"),
+    ("risk:medium", "fbca04", "Autonomy gate: not proven by a machine, a person merges"),
+    ("risk:high", "b60205", "Autonomy gate: changes the rules, a code owner decides"),
     ("intent", "5319e7", "A human intent for the agents"),
     ("agent:spec", "1d76db", "Agent writes the spec only"),
     ("agent:implement", "1d76db", "Agent writes spec + implementation + PR"),
@@ -79,7 +83,12 @@ def reviewer_entity(handle: str) -> dict[str, Any] | None:
 
 
 def plan(
-    repo: str, branch: str, reviewer: str, agents: bool, merge_method: str = "squash"
+    repo: str,
+    branch: str,
+    reviewer: str,
+    agents: bool,
+    merge_method: str = "squash",
+    proof: str = "",
 ) -> list[dict[str, Any]]:
     merge_title, merge_allowed = MERGE_METHODS[merge_method]
     merge_fields = [
@@ -89,6 +98,8 @@ def plan(
     ]
     steps: list[dict[str, Any]] = []
     required_checks = ["check", "gate"] if agents else ["check"]
+    if proof and proof not in OWN_CHECKS:
+        required_checks.append(proof)
     for name, color, desc in LABELS if agents else []:
         steps.append(
             {
@@ -123,7 +134,7 @@ def plan(
     if agents:
         steps.append(
             {
-                "what": "GitHub Actions may approve PRs (needed for low-tier auto-merge)",
+                "what": "GitHub Actions cannot approve PRs (no merge needs an approval from it)",
                 "args": [
                     "api",
                     "-X",
@@ -132,7 +143,7 @@ def plan(
                     "-f",
                     "default_workflow_permissions=read",
                     "-F",
-                    "can_approve_pull_request_reviews=true",
+                    "can_approve_pull_request_reviews=false",
                 ],
             }
         )
@@ -160,7 +171,9 @@ def plan(
             {
                 "type": "pull_request",
                 "parameters": {
-                    "required_approving_review_count": 1,
+                    # Nobody approves as a checker: the required checks are the proof. A
+                    # person decides only where CODEOWNERS names an owner.
+                    "required_approving_review_count": 0,
                     "require_code_owner_review": True,
                     "dismiss_stale_reviews_on_push": True,
                     "require_last_push_approval": False,
@@ -178,7 +191,7 @@ def plan(
     }
     steps.append(
         {
-            "what": f"ruleset on {branch}: PR + code-owner review + checks "
+            "what": f"ruleset on {branch}: PR + code owner where CODEOWNERS names one + checks "
             f"{', '.join(required_checks)}",
             "ruleset": ruleset,
             "args": ["api", "-X", "POST", f"repos/{repo}/rulesets", "--input", "-"],
@@ -222,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     reviewer = args.reviewer or (owners[0] if owners else "")
 
     agents = has_agents(root)
-    steps = plan(repo, branch, reviewer, agents, args.merge_method)
+    steps = plan(repo, branch, reviewer, agents, args.merge_method, proof_check(policy))
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     failures = 0
     for step in steps:
@@ -231,10 +244,14 @@ def main(argv: list[str] | None = None) -> int:
             continue
         body = None
         if "ruleset" in step:
-            ok, existing = gh(["api", f"repos/{repo}/rulesets", "--jq", ".[].name"])
-            if ok and step["ruleset"]["name"] in existing.splitlines():
-                print(f"  = {step['what']} (already exists)")
-                continue
+            # A ruleset from an earlier run is brought up to date, not left as it was.
+            name = step["ruleset"]["name"]
+            found, ids = gh(
+                ["api", f"repos/{repo}/rulesets", "--jq", f'.[] | select(.name == "{name}") | .id']
+            )
+            if found and ids.split():
+                target = f"repos/{repo}/rulesets/{ids.split()[0]}"
+                step = {**step, "args": ["api", "-X", "PUT", target, "--input", "-"]}
             body = json.dumps(step["ruleset"])
         if "reviewer" in step:
             entity = reviewer_entity(step["reviewer"]) if step["reviewer"] else None
