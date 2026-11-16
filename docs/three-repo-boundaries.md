@@ -99,8 +99,8 @@ Khung khác xếp bằng phép thử ở trên.
 
 - Đã làm (gộp vào nhánh chính ngày 2026-11-15): phép kiểm «mỗi thực thể đủ bốn câu trả lời», xem
   [thiết kế](superpowers/specs/2026-11-14-entity-lifecycle-design.md).
-- Đã dựng (nhánh `claude/relations-and-attributes-1dd820`, ngày 2026-11-15, chờ chủ kho xem): phạm
-  vi «của tôi» đòi một quan hệ đã khai; mỗi quan hệ trả lời gắn, gỡ, chuyển; mỗi thuộc tính có thao
+- Đã làm (PR 11, gộp vào nhánh chính ngày 2026-11-15, phát hành ở 0.6.0): phạm vi «của tôi» đòi
+  một quan hệ đã khai; mỗi quan hệ trả lời gắn, gỡ, chuyển; mỗi thuộc tính có thao
   tác đặt giá trị hoặc có lý do. Xem
   [thiết kế](superpowers/specs/2026-11-15-relations-and-attributes-design.md), mục 4 có số đo trên
   onehub-inventory.
