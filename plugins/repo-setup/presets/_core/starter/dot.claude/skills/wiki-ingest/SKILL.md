@@ -13,7 +13,8 @@ You compile raw material into short, linked, sourced pages. Humans read; you wri
 Pick what applies (ask if unclear):
 
 - current branch: `git diff --stat main...HEAD` and `git log main..HEAD --oneline`;
-- since the last ingest: date of the newest line in `wiki/log.md`, then
+- since the last ingest: the latest date in `wiki/log.md` (after a merge the newest line is not
+  always the first one), then
   `git log --since=<date> --oneline --merges` (or all commits);
 - a PR or issue: `gh pr view <n>` / `gh issue view <n>` if `gh` is available;
 - an incident or decision described in the conversation;

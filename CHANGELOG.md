@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Parallel work
+Step B of the plan in `docs/three-repo-overview-design.md` (packages RS2a and RS10): the one file
+every pull request writes stops conflicting, and the numbers that say whether work queues come from
+a command.
+
+- `.gitattributes` merges `wiki/log.md` by union. Every branch adds its line at the top of that
+  list, so merging the default branch into a branch conflicted there almost every time. Git now
+  keeps the lines of both sides. It applies when a branch is merged or rebased on a machine;
+  whether the merge button on GitHub follows it is not verified. After such a merge the lines are
+  not strictly newest first, so the `wiki-ingest` skill reads the latest date instead of the first
+  line. The rule suits a file where lines are added and never edited.
+- `tools/sdlc_metrics.py` gains a "Flow" section, and `--json` gains the keys `lead_time_max_h`,
+  `back_merges`, `ci` and `capped`:
+  - the longest time from open to merge, next to the median;
+  - merges of the default branch into a pull request branch: how many, how many conflict when
+    replayed with `git merge-tree`, and the files in conflict most often. It needs a full clone
+    and git 2.38, fetches `refs/pull/<n>/head` for commits it lacks, and uses the merge rules of
+    the checkout it runs in;
+  - CI machine minutes per merged pull request (the job durations of every run in the window);
+  - late red: heads where a job ended red after `gate` had passed;
+  - red runs on the default branch, per workflow. Late red and this one count every attempt of a
+    run, so a run made green by running it again still counts.
+
+  A part that could not be read says `not read` and why; it is never shown as zero. That covers a
+  shallow clone, commits that cannot be fetched, a list of workflow runs that GitHub cuts at 1,000,
+  and a list of pull requests that stops at 300.
+
+What changes on upgrade:
+- A repository that edited its `.gitattributes` does not receive the new line: add
+  `wiki/log.md merge=union` by hand.
+- The metrics script makes one request per pull request and per workflow run, eight at a time. A
+  week of a busy repository takes minutes, and can reach the hourly request limit of the Actions
+  token; it then says that CI was not read.
+- The row "Median PR lead time" now reads `<median> h, longest <max> h`.
+
 ### Documents renamed
 - Four documents carried Vietnamese file names, against the rule the plugin gives every repository
   it sets up (file names are English; only the text follows the repository's language). They are
