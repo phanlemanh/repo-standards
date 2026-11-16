@@ -3,7 +3,7 @@
 Ngày: 2026-11-16. Trạng thái: máy tổng hợp từ buổi thảo luận với chủ kho cùng ngày. Chủ kho đã chốt
 bốn tiêu chí ở mục 1, luật «gộp là phải xanh» và sáu biên uỷ quyền ở mục 5. Mọi gói việc ở mục 7 là
 đề xuất: việc ở hai kho kia chờ chủ kho cho phép tại kho đó. Trang này đứng trước bản thiết kế chi
-tiết của từng kho; nó nói vấn đề là gì, hướng giải là gì, kho nào nhận phần nào. Việc nào ở kho nào
+tiết của từng kho; nó nói vấn đề là gì, hướng giải là gì, kho nào nhận phần nào. Phiên Design Assembly đã kiểm ba gói DA với mã thật cùng ngày; kết quả ở cuối mục 7. Việc nào ở kho nào
 xem [ranh giới ba kho](ranh-gioi-ba-kho.md); setup phải giữ điều gì xem
 [nguyên tắc của setup](nguyen-tac-setup.md).
 
@@ -54,7 +54,8 @@ là 29%, và con số này là trần vì hai PR cùng sửa một tệp chưa c
 | `wiki/log.md`                                                | 30                   | Repo Standards  |
 | `LO-TRINH.html`, `PRODUCT-MAP.md`                            | 25                   | delivery-loop   |
 | `_acceptance/config.yaml`                                    | 20                   | delivery-loop   |
-| `design/component-registry.json`, `so-khoi.yaml`             | 14, 13               | design-assembly |
+| `design/component-registry.json`                             | 14                   | design-assembly |
+| `design/so-khoi.yaml`                                        | 13                   | design-assembly, theo luật chủ kho chốt ở cuối mục 7 |
 | `wiki/index.md`                                              | 12                   | Repo Standards  |
 | `design/screens.yaml`                                        | 9                    | design-assembly |
 
@@ -161,9 +162,46 @@ Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-t
 
 | Mã  | Gói việc                                                                         | Tiêu chí  |
 | --- | -------------------------------------------------------------------------------- | --------- |
-| DA1 | Ba sổ thiết kế nằm trong tám tệp nóng: tách thành mảnh theo màn hoặc linh kiện   | Nhanh     |
-| DA2 | Bản đồ màn đến bài trình duyệt, kèm khổ màn nào cần cho màn nào                  | Nguồn lực |
-| DA3 | Sổ quyết định trả lời thay vai trưởng thiết kế; câu chưa có thì hỏi một lần rồi ghi | Ít người  |
+| DA1 | Các sổ thiết kế nằm trong tệp nóng (sổ linh kiện, sổ màn, sổ khối, bảng vai × màn × nút): PR không còn phải mang chúng | Nhanh     |
+| DA2 | Từ tệp đổi ra màn bị ảnh hưởng, rồi ra bài trình duyệt; khổ màn theo từng màn     | Nguồn lực |
+| DA3 | Sổ quyết định thay vai trưởng thiết kế: thêm hàng chờ cho câu mới, phép so tổng, tường cho khuôn mới và màu thương hiệu | Ít người  |
+
+Phiên Design Assembly kiểm ba gói này với mã thật ngày 2026-11-16 (design-assembly tại `75d55cc`,
+`onehub-inventory` tại `b6f4f29`). Chưa dựng gì; hướng làm do chủ kho quyết ở kho đó.
+
+- **DA1 đúng với hai trên ba tệp.** Sổ linh kiện là vật dẫn xuất mà vẫn commit: `make check` đỏ khi
+  sổ lệch mã, nên PR nào đụng linh kiện cũng phải ghi lại tệp. Sổ màn là một danh sách chung, thêm
+  mỗi màn một mục. Vướng: vòng nghiệm thu đang đọc đúng đường dẫn của sổ linh kiện, nên bỏ tệp khỏi
+  PR cần một đường chuyển tiếp không đụng delivery-loop.
+- **`design/so-khoi.yaml` hôm nay chưa thuộc design-assembly.** Hợp đồng sổ của kho đó không có nó;
+  phiên Repo-standards tìm cả kho design-assembly cũng không thấy tên tệp này. Vòng làm việc ghi nó,
+  `tools/proof_gate` của `onehub-inventory` đọc nó. Chủ của nó xếp theo luật bên dưới.
+- **DA2 đã có một nửa nền.** Bài trình duyệt đã sinh theo màn và trạng thái, sổ màn có mã và đường
+  dẫn. Thiếu phép tính từ tệp đổi ra màn bị ảnh hưởng; khổ màn hiện là một danh sách chung.
+- **DA3 đã có một phần.** Sổ quyết định 55 dòng, 49 dòng có lệnh kiểm, và có lệnh ghi lời đáp của
+  chủ kho để không hỏi lại. Thiếu ba thứ: đường cho tác tử đang dựng đẩy câu mới vào hàng chờ thay
+  vì hỏi giữa chừng; phép so tổng «mọi lựa chọn trỏ về một dòng sổ»; và tường cho «khuôn mới, màu
+  thương hiệu phải hỏi».
+- **Hai tệp nóng nữa** chưa ai nhận: `design/behaviors.md` (8 trên 30 PR) và `design/vai-man-nut.md`
+  (6).
+
+**Luật xếp chủ cho tệp chưa ai nhận (chủ kho chốt ngày 2026-11-16):** liên quan thiết kế thì về
+design-assembly, không thì về delivery-loop. Máy áp luật đó cho ba tệp trên, đọc đầu tệp ở
+`onehub-inventory` tại `b6f4f29`; cả ba về design-assembly, kho đó xác nhận khi nhận:
+
+| Tệp                     | Nó là gì                                                                            | Về kho          |
+| ----------------------- | ----------------------------------------------------------------------------------- | --------------- |
+| `design/so-khoi.yaml`   | Sổ khối: khối giao diện đã chọn từ ReUI hoặc tự làm. Cổng chứng minh màn đọc nó     | design-assembly |
+| `design/behaviors.md`   | Mẫu hành vi: câu trả lời đóng cho việc lặp lại, mỗi mục có nguồn trong sổ quyết định | design-assembly |
+| `design/vai-man-nut.md` | Bảng vai × màn × nút, máy sinh từ sổ thao tác, sổ màn và nút trong mã               | design-assembly |
+
+Hai điều kéo theo. Sổ khối có hai cột do vòng làm việc ghi (hồ sơ nhận khối và ngày duyệt), nên
+khi chuyển chủ phải giữ luật «mỗi sổ một bên ghi». Bảng vai × màn × nút là vật dẫn xuất mà vẫn
+commit, cùng dạng với sổ linh kiện.
+
+Thứ design-assembly có thể cần ở kho này, sơ bộ: cơ chế vẽ lại tệp tổng hợp trên nhánh chính, dùng
+chung với `wiki/index.md` (RS2); ô trình duyệt nhận danh sách màn hoặc bài để chạy (RS3); tường nâng
+hạng cho PR đụng khuôn hay dòng màu thương hiệu (RS5). DA2 không cần RS4.
 
 **delivery-loop**
 
@@ -195,8 +233,8 @@ Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-t
 3. delivery-loop nâng cấp sau khi chuyển nhà xong.
 
 Hệ quả: mọi gói DL đứng sau cùng trong đợt của nó. Ở đợt 2, hai kho đầu chỉ gỡ được tệp sổ của
-mình (`wiki/` và `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md` và `_acceptance/config.yaml` còn
-nguyên cho tới DL1, nên phần lớn mức giảm va chạm đến sau bước 3.
+mình (`wiki/` và các sổ trong `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md` và
+`_acceptance/config.yaml` còn nguyên cho tới DL1, nên phần lớn mức giảm va chạm đến sau bước 3.
 
 Đợt 5 có thể khai sớm hơn vì nó không phụ thuộc đợt nào; nó xếp sau vì các đợt trước dịch chuyển số
 đo nhiều hơn. Mọi mức lợi là ước tính từ số đo ở mục 2, chưa đợt nào được thử.
@@ -207,13 +245,16 @@ nguyên cho tới DL1, nên phần lớn mức giảm va chạm đến sau bư�
   nhưng một phiên gọi thẳng `gh pr merge` chỉ bị chặn bởi các ô bắt buộc. RS1 thu hẹp khoảng này.
 - **Ô bị bỏ qua được tính là xanh**, ở cả GitHub lẫn lệnh gộp. Xếp tầng CI (RS3) phải có một ô tổng
   luôn chạy, nếu không tầng nặng bị bỏ qua sẽ lọt.
-- **Chọn bài có thể bỏ sót.** Bài trình duyệt gọi ứng dụng qua HTTP nên máy không tự lần ra ảnh
-  hưởng; nó cần bản đồ màn khai tay (DA2). Bộ có cơ sở dữ liệu phụ thuộc cả lược đồ lẫn mã nên bớt
-  được ít hơn.
+- **Chọn bài có thể bỏ sót.** Chiều từ tệp đổi ra màn lần được tĩnh, từ đồ thị `import` của tệp
+  trang; chiều từ bài ra màn lấy từ mã và đường dẫn trong sổ màn. Phần không lần được (dữ liệu, CSS
+  toàn cục, khung) phải khai tay, và không biết thì chạy trọn bộ. Bộ có cơ sở dữ liệu phụ thuộc cả
+  lược đồ lẫn mã nên bớt được ít hơn.
 - **Gom ba quyền vào một phiên.** Phiên giám sát vừa sắp lộ trình, vừa theo dõi tiến độ, vừa gộp.
   Biên tối thiểu là ba điều cuối mục 5.
 - **Một người quyết.** Chủ kho vắng thì mọi mục «phải hỏi» đứng lại. Danh sách đó vì thế phải ngắn.
-- **Chưa đọc design-assembly.** DA1 đến DA3 suy ra từ dữ liệu của `onehub-inventory`.
+- **Phần DA do phiên khác kiểm.** Nhận định ở cuối mục 7 là báo cáo của phiên Design Assembly.
+  Phiên Repo-standards chỉ tự kiểm lại hai điều: kho design-assembly không nhắc tới `so-khoi.yaml`,
+  và hợp đồng sổ của nó có sổ linh kiện và sổ màn.
 - **Chưa đo phía Máy.** Thời gian chấm, token và lượt gọi người lấy từ lời báo cáo của phiên làm
   việc, chưa được kiểm.
 
@@ -224,6 +265,8 @@ nguyên cho tới DL1, nên phần lớn mức giảm va chạm đến sau bư�
 3. Kho nào giữ phép so của từng bất biến ở mục 5.
 4. Có bắt buộc cả chín ô trên GitHub không, hay chỉ các ô kho khai là tường.
 5. Khoá bật lối gộp nhanh của gói `dieu-phoi` có đang bật ở `onehub-inventory` không.
+6. Đã chốt: tệp chưa ai nhận thì theo luật ở cuối mục 7. Còn mở: design-assembly xác nhận nhận ba
+   tệp, và cách chuyển sổ khối mà không sửa delivery-loop trước khi kho đó chuyển nhà xong.
 
 ## Nguồn
 
