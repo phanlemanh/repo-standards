@@ -26,9 +26,15 @@ it sets the repository back to squash only.
 Run `python3 tools/github_setup.py` (with `--merge-method merge` when that is the repository's
 way) and explain in plain words what it will do: the merge method, environments `staging` and
 `production` (production needs a human reviewer), and a ruleset on the default branch (PR
-required, required checks `check` and `secret-scan`, a code owner only where `.github/CODEOWNERS`
-names one, and no other approval). Checks of the repository's own, a browser suite for example,
-become required when `governance/autonomy.yaml` names them under `required_checks`.
+required, required checks `check`, `secret-scan`, `conventional-title` and `conventional-commits`,
+a code owner only where `.github/CODEOWNERS` names one, and no other approval). Checks of the
+repository's own, a browser suite for example, become required when `governance/autonomy.yaml`
+names them under `required_checks`.
+
+The two commit-format checks run as the default branch defines them. When the dry run says one is
+"not a required check yet", the default branch does not have its job: merge the upgrade that
+brings it, then run the command again. On a private repository without GitHub Advanced Security,
+CodeQL says it is off and ends green; it is not a required check.
 
 A ruleset from an earlier run is updated in place. When that would drop a required check someone
 added by hand, the dry run names it and `--apply` stops. Ask the user which they mean: name the

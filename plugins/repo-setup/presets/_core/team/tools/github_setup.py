@@ -8,8 +8,10 @@
 Always: one merge method (squash unless --merge-method says otherwise); environments "staging"
 and "production" (production requires a human reviewer); a ruleset on the default branch (pull
 request + required checks; a code owner decides only where .github/CODEOWNERS names one, and
-nobody else has to approve). Required: `check`, `secret-scan`, the checks governance/autonomy.yaml
-names under required_checks, and its proof (proof.check) when it names one.
+nobody else has to approve). Required: `check`, `secret-scan`, the commit-format checks
+(`conventional-title`, `conventional-commits`) once the default branch defines them, the checks
+governance/autonomy.yaml names under required_checks, and its proof (proof.check) when it names
+one.
 With agent workflows (--with github-agents at apply time): labels used by agents and the
 autonomy gate, auto-merge, the "gate" required check, and GitHub Actions kept from approving
 pull requests.
@@ -78,6 +80,72 @@ def has_secret_scan(root: Path) -> bool:
     return workflow_has(root, r"^  secret-scan:\s*$")
 
 
+# They run from the default branch (pull_request_target), whatever the pull request holds.
+COMMIT_FORMAT_JOBS = ("conventional-title", "conventional-commits")
+RAW = "Accept: application/vnd.github.raw"
+RULESET_NAME = "repo-setup: protect default branch"
+
+
+def job_pattern(name: str) -> str:
+    return rf"^  {re.escape(name)}:\s*$"
+
+
+def commit_format_checks(
+    root: Path, repo: str, branch: str
+) -> tuple[list[str], list[str], list[str]]:
+    """The commit-format checks to require, a note for each one left out, and those not read.
+
+    Such a job runs as the default branch defines it. A check it does not define there never
+    reports, and a required check that never reports blocks every pull request, the upgrade that
+    brings the job included.
+    """
+    folder = root / ".github" / "workflows"
+    required: list[str] = []
+    notes: list[str] = []
+    unread: list[str] = []
+    for name in COMMIT_FORMAT_JOBS:
+        found = re.compile(job_pattern(name), re.MULTILINE)
+        local = [
+            path
+            for path in sorted(folder.glob("*.y*ml"))
+            if found.search(path.read_text(encoding="utf-8", errors="replace"))
+        ]
+        if not local:
+            continue
+        rel = local[0].relative_to(root).as_posix()
+        ok, text = gh(["api", "-H", RAW, f"repos/{repo}/contents/{rel}?ref={branch}"])
+        if ok and found.search(text):
+            required.append(name)
+        elif ok or "HTTP 404" in text:
+            notes.append(
+                f"{name} is not a required check yet: {rel} on {branch} does not define it (or "
+                "the file is not there). Merge the upgrade, then run this again."
+            )
+        else:
+            reason = (text.splitlines() or ["no answer"])[0]
+            unread.append(name)
+            notes.append(
+                f"{name}: {rel} on {branch} could not be read ({reason}). A ruleset that requires "
+                "it keeps it; it is not added."
+            )
+    return required, notes, unread
+
+
+def kept_checks(repo: str, names: list[str]) -> list[str]:
+    """The checks among these names that the ruleset of an earlier run requires today.
+
+    A read that fails is not a reason to drop a wall: what the ruleset has, it keeps.
+    """
+    if not names:
+        return []
+    try:
+        earlier = existing_ruleset(repo, RULESET_NAME)
+    except LookupError:
+        return []
+    current = (earlier[1] if earlier else None) or []
+    return [name for name in names if name in current]
+
+
 def secret_names(repo: str) -> set[str] | None:
     """Names of the secrets this repository's workflows can read; None when not listable."""
     ok, out = gh(["secret", "list", "--json", "name", "--jq", ".[].name"])
@@ -128,6 +196,7 @@ def plan(
     proof: str = "",
     extra: tuple[str, ...] | list[str] = (),
     secret_scan: bool = True,
+    commit_format: tuple[str, ...] | list[str] = (),
 ) -> list[dict[str, Any]]:
     merge_title, merge_allowed = MERGE_METHODS[merge_method]
     merge_fields = [
@@ -139,6 +208,7 @@ def plan(
     # The setup's own checks, then the ones the repository names, then the proof.
     checks = ["check", "gate"] if agents else ["check"]
     checks += ["secret-scan"] if secret_scan else []
+    checks += [name for name in commit_format if name not in checks]
     checks += [name for name in extra if name not in checks and name != proof]
     if proof and proof not in OWN_CHECKS:
         checks.append(proof)
@@ -203,7 +273,7 @@ def plan(
         }
     )
     ruleset = {
-        "name": "repo-setup: protect default branch",
+        "name": RULESET_NAME,
         "target": "branch",
         "enforcement": "active",
         "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
@@ -319,6 +389,8 @@ def main(argv: list[str] | None = None) -> int:
     reviewer = args.reviewer or (owners[0] if owners else "")
 
     agents = has_agents(root)
+    commit_format, commit_format_notes, unread_format = commit_format_checks(root, repo, branch)
+    commit_format += kept_checks(repo, unread_format)
     steps = plan(
         repo,
         branch,
@@ -328,9 +400,11 @@ def main(argv: list[str] | None = None) -> int:
         proof_check(policy),
         required_checks(policy),
         has_secret_scan(root),
+        commit_format,
     )
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
-    failures = 0
+    # What could not be read is a failure, also when nothing else went wrong.
+    failures = len(unread_format)
     for step in steps:
         gone: list[str] = []
         pruned: list[str] = []
@@ -391,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
             "\n  ! secret-scan is not a required check: no workflow of this repository has a job "
             "with that name."
         )
+    for note in commit_format_notes:
+        print(f"\n  ! {note}")
     names = secret_names(repo)
     print("\nSecrets (values are never read):")
     if names is None:

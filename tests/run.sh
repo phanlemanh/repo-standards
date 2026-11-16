@@ -1451,6 +1451,11 @@ case "$1 $2" in
   "secret list") ;;
   "api repos/acme/sample/rulesets") ;;   # a read: no ruleset from an earlier run
   "api repos/acme/sample/actions/organization-secrets") ;;   # a read: no shared secret
+  "api -H")   # a read: a file of the default branch
+    [ -z "${GS_BASE_DOWN:-}" ] || { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
+    file="${GS_BASE:-.}/$(echo "$4" | sed 's|^repos/acme/sample/contents/||; s|?ref=main$||')"
+    [ -f "$file" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+    cat "$file" ;;
   *) echo "$*" >> "$GH_CALLS"; exit 1 ;;
 esac
 SH
@@ -1579,7 +1584,7 @@ governance_ok || miss "people decide: default low with a proof was refused"
 [ "$(cd "$pd" && python3 tools/autonomy.py --files src/app.py | json 'd.get("proof")')" = evidence ] || miss "people decide: the tier result does not name the proof"
 if grep -qE '^\*( |$)' "$pd/.github/CODEOWNERS"; then miss "people decide: with a proof, every path still has an owner"; fi
 grep -q '^/governance/\*\*  @acme$' "$pd/.github/CODEOWNERS" || miss "people decide: with a proof, governance/ lost its owner"
-dry "$pd" | grep -q 'checks check, gate, secret-scan, evidence' || miss "people decide: github_setup does not require the proof the policy names"
+dry "$pd" | grep -q 'checks check, gate, secret-scan, conventional-title, conventional-commits, evidence' || miss "people decide: github_setup does not require the proof the policy names"
 # 43d. a looser agent guard is a rule change, wherever it is written; a new action is not
 mkdir -p "$pd/ontology" "$pd/src"
 printf 'actions:\n  - name: wipe\n    agent: forbidden\n  - name: refund\n    agent: confirm\n' > "$pd/ontology/actions.yaml"
@@ -1713,7 +1718,11 @@ case "$1 $2" in
   "secret list") ;;
   "api repos/acme/sample/rulesets") cat "$FAKE_RULESET_IDS" ;;
   "api repos/acme/sample/rulesets/41") [ "$3" = "--jq" ] && { [ -f "${FAKE_CHECKS:-}" ] && cat "$FAKE_CHECKS"; true; } || echo "$*" >> "$GH_CALLS" ;;
-  *) echo "$*" >> "$GH_CALLS" ;;
+  "api -H")   # a read: a file of the default branch, here the repository's own
+    [ -z "${RS_BASE_DOWN:-}" ] || { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
+    cat "./$(echo "$4" | sed 's|^repos/acme/sample/contents/||; s|?ref=main$||')" ;;
+  *) echo "$*" >> "$GH_CALLS"
+     case "$*" in *rulesets*"--input -"*) cat > "$GH_CALLS.body" ;; esac ;;
 esac
 SH
 chmod +x "$TMP/rsbin/gh"
@@ -1837,10 +1846,10 @@ PY
 }
 rw_governance_ok() { ( cd "$rw" && python3 tools/autonomy.py --write-codeowners >/dev/null && python3 tools/autonomy.py --check-codeowners >/dev/null 2>&1 ); }
 grep -q '^required_checks: \[\]$' "$rw_policy" || miss "real walls: the sample policy has no required_checks to fill in"
-dry "$rw" | grep -q 'checks check, secret-scan$' || miss "real walls: the secret scan is not a required check: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional-commits$' || miss "real walls: the secret scan is not a required check: $(dry "$rw" | grep 'ruleset on')"
 rw_checks '[e2e, e2e-db]' 2>/dev/null || true
 rw_governance_ok || miss "real walls: a policy that names its own checks was refused"
-dry "$rw" | grep -q 'checks check, secret-scan, e2e, e2e-db$' || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional-commits, e2e, e2e-db$' || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
 for reserved in check gate secret-scan; do
   rw_checks "[$reserved]" 2>/dev/null || true
   if rw_governance_ok; then miss "real walls: the setup's own check '$reserved' was accepted under required_checks"; fi
@@ -1887,9 +1896,92 @@ rw_checks '[e2e, ""]' 2>/dev/null || true
 if rw_governance_ok; then miss "real walls: an empty name was accepted under required_checks"; fi
 cp "$TMP/rw-policy.orig" "$rw_policy"
 mv "$rw/.github/workflows/security.yml" "$TMP/security.yml.kept"
-dry "$rw" | grep -q 'checks check$' || miss "real walls: secret-scan is required in a repository where no job has that name: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep -q 'checks check, conventional-title, conventional-commits$' || miss "real walls: secret-scan is required in a repository where no job has that name: $(dry "$rw" | grep 'ruleset on')"
 dry "$rw" | grep -q 'secret-scan is not a required check' || miss "real walls: github_setup does not say that secret-scan is not required"
 mv "$TMP/security.yml.kept" "$rw/.github/workflows/security.yml"
+# 44i. CodeQL says it is off where code scanning is not enabled, and ends green; any other answer
+#      runs it. A private repository needs GitHub Advanced Security, and a check that is red
+#      whatever the code says teaches people to ignore red.
+cs_step() {
+  python3 - "$1" <<'PY'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+start = next(n for n, line in enumerate(lines) if line.strip() == "id: scanning")
+run = next(n for n in range(start, len(lines)) if lines[n].strip() == "run: |")
+indent = len(lines[run]) - len(lines[run].lstrip())
+body = []
+for line in lines[run + 1:]:
+    if line.strip() and len(line) - len(line.lstrip()) <= indent:
+        break
+    body.append(line)
+print("\n".join(body))
+PY
+}
+mkdir -p "$TMP/csbin"
+cat > "$TMP/csbin/gh" <<'SH'
+#!/bin/sh
+# What GitHub answers to a list of code scanning analyses, as gh prints it.
+case "$CS_ANSWER" in
+  off) echo '{"message":"Code scanning is not enabled for this repository. Please enable code scanning in the repository settings.","status":"403"}'
+       echo "gh: Code scanning is not enabled for this repository. Please enable code scanning in the repository settings. (HTTP 403)" >&2; exit 1 ;;
+  ghas) echo "gh: Advanced Security must be enabled for this repository to use code scanning. (HTTP 403)" >&2; exit 1 ;;
+  none) echo '{"message":"no analysis found","status":"404"}'; echo "gh: no analysis found (HTTP 404)" >&2; exit 1 ;;
+  denied) echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1 ;;
+  *) echo '[]' ;;
+esac
+SH
+chmod +x "$TMP/csbin/gh"
+cs_run() {
+  : > "$TMP/cs-out"; : > "$TMP/cs-summary"
+  ( PATH="$TMP/csbin:$PATH" CS_ANSWER="$2" GITHUB_REPOSITORY=acme/sample GITHUB_OUTPUT="$TMP/cs-out" \
+    GITHUB_STEP_SUMMARY="$TMP/cs-summary" bash -e -c "$1" ) >/dev/null 2>&1 || echo "step failed" >> "$TMP/cs-out"
+  cat "$TMP/cs-out"
+}
+for preset in ts-node python claude-plugin; do
+  sec="$ROOT/plugins/repo-setup/presets/$preset/team/dot.github/workflows/security.yml"
+  job=$(sed -n '/^  codeql:/,$p' "$sec")
+  echo "$job" | grep -q 'actions: read' || miss "real walls: the $preset CodeQL job may not read its own run, which a private repository needs"
+  for uses in actions/checkout github/codeql-action/init github/codeql-action/analyze; do
+    echo "$job" | grep -A1 "uses: $uses" | grep -q "if: steps.scanning.outputs.on != 'false'" \
+      || miss "real walls: the $preset CodeQL job runs $uses where code scanning is off"
+  done
+  step=$(cs_step "$sec" 2>/dev/null || true)
+  [ -n "$step" ] || { miss "real walls: the $preset CodeQL job does not ask whether code scanning is on"; continue; }
+  for answer in off ghas; do
+    [ "$(cs_run "$step" $answer)" = "on=false" ] || miss "real walls: the $preset CodeQL job runs where GitHub says code scanning is off ($answer): $(cs_run "$step" $answer)"
+  done
+  grep -q 'CodeQL is off' "$TMP/cs-summary" || miss "real walls: the $preset CodeQL job is off without saying so"
+  for answer in none denied list; do
+    [ "$(cs_run "$step" $answer)" = "on=true" ] || miss "real walls: the $preset CodeQL job is off on an answer that does not say so ($answer): $(cs_run "$step" $answer)"
+  done
+done
+# 44j. the commit-format checks are required, once the default branch defines them: they run from
+#      the default branch (pull_request_target), and a required check that never reports blocks
+#      every pull request, the upgrade that brings the job included
+gs_base="$TMP/gs-base"; mkdir -p "$gs_base/.github/workflows"
+python3 - "$rw/.github/workflows/pr-title.yml" "$gs_base/.github/workflows/pr-title.yml" <<'PY'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read()
+cut = text.index("\n  conventional-commits:")
+open(sys.argv[2], "w", encoding="utf-8").write(text[:cut] + "\n")
+PY
+out=$(GS_BASE="$gs_base" dry "$rw")
+echo "$out" | grep -q 'checks check, secret-scan, conventional-title$' || miss "real walls: a commit-format check the default branch does not define yet is required: $(echo "$out" | grep 'ruleset on')"
+echo "$out" | grep -q 'conventional-commits is not a required check yet' || miss "real walls: github_setup does not say that conventional-commits waits for the default branch"
+out=$(GS_BASE_DOWN=1 dry "$rw" || true)
+echo "$out" | grep -q 'checks check, secret-scan$' || miss "real walls: a commit-format check is required although the default branch could not be read: $(echo "$out" | grep 'ruleset on')"
+echo "$out" | grep -q 'could not be read' || miss "real walls: github_setup is silent when it cannot read the workflows of the default branch"
+# 44k. a default branch that cannot be read is no reason to drop a wall the ruleset has, and the
+#      command says it failed
+printf 'check\nsecret-scan\nconventional-title\nconventional-commits\n' > "$TMP/rw-checks"
+for prune in "" --prune; do
+  rm -f "$TMP/rw-calls.body"
+  if RS_BASE_DOWN=1 rw_apply $prune >/dev/null; then miss "real walls: github_setup ends well although it could not read the default branch ($prune)"; fi
+  [ "$(rw_put)" = 1 ] || miss "real walls: an unreadable default branch stopped the update of the ruleset ($prune)"
+  for name in conventional-title conventional-commits; do
+    grep -q "\"$name\"" "$TMP/rw-calls.body" 2>/dev/null || miss "real walls: an unreadable default branch dropped the required check $name ($prune)"
+  done
+done
 echo "ok  real walls (or misses reported above)"
 
 # 45. this repository keeps the rule it gives every repository it sets up (AGENTS.md, "Language"):

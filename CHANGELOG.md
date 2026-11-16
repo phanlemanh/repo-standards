@@ -85,10 +85,27 @@ repositories: `docs/three-repo-overview-design.md`.
   until `RELEASE_PLEASE_TOKEN` is set. Every pull request gets the new check
   `conventional-commits`. `tools/github_setup.py --apply` now fails on a ruleset that requires a
   check the policy does not name: name it under `required_checks`, or pass `--prune`.
+- `codeql` can go green. On a private repository without GitHub Advanced Security it could only
+  fail ("Code scanning is not enabled for this repository"), since 0.4.0. The job now asks GitHub
+  first: when the answer says code scanning is not enabled it skips the analysis, says CodeQL is
+  off, and ends green; any other answer runs CodeQL as before. It also gets `actions: read`, which
+  a private repository needs.
+- The commit-format checks block a merge. `conventional-title` and `conventional-commits` were red
+  on the right commits but required by nothing, so a pull request could merge with them red.
+  `tools/github_setup.py` now requires both; each passes and says why when it does not apply to
+  the repository's merge method. They run as the default branch defines them
+  (`pull_request_target`), so a check is required only once the workflow on the default branch
+  defines its job. Until then the command says so and leaves it out: a required check that never
+  reports would block every pull request, the upgrade included. When that file cannot be read, a
+  ruleset that already requires the check keeps it (also with `--prune`), and the command fails.
+- Run on GitHub (a private probe repository built from 0.4.0): the secret scan is red on a token
+  committed and deleted by the next commit, `conventional-commits` is red on a commit out of
+  format and skips merges of the default branch, Release ends green and says releases are off, and
+  the ruleset blocks a pull request whose secret scan is red.
+- Breaking on upgrade: after `tools/github_setup.py --apply`, a pull request whose title or commits
+  do not follow Conventional Commits cannot merge.
 - Not built: `dependency-audit` and `codeql` stay advisory, because they judge the world and not
-  the change. Staged CI, and a scan of other branches. Not run on GitHub: the release job's
-  condition on the secret, and whether the Actions token can read the merge settings (when it
-  cannot, the title is checked as before and the commits are not).
+  the change. Staged CI, and a scan of other branches.
 
 ### People decide, machines check
 - The rule the plugin now holds itself to is written in `docs/setup-principles.md`: a setup that
