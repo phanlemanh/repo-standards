@@ -151,6 +151,22 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     echo "FAIL: non-conventional commit message was accepted"; exit 1
   fi
   git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: initial setup" >/dev/null
+  # The secret scan of CI (security.yml), run as CI runs it: green on a clean history, red once a
+  # commit holds a token. The plain hook reads staged changes only and would pass both.
+  case ",${SKIP:-}," in *,gitleaks,*) ;; *)
+    if grep -q 'alias: gitleaks-history' .pre-commit-config.yaml 2>/dev/null; then
+      pre-commit run gitleaks-history --hook-stage manual --all-files >/dev/null \
+        || { echo "FAIL: the CI secret scan is red on a clean repository"; exit 1; }
+      # Made at run time, so no token-shaped text sits in this file.
+      python3 -c "import random, string; print('token = \"ghp_' + ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(36)) + '\"')" > e2e-planted.txt
+      git add e2e-planted.txt
+      SKIP=gitleaks git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: planted token" >/dev/null
+      if pre-commit run gitleaks-history --hook-stage manual --all-files >/dev/null 2>&1; then
+        echo "FAIL: a committed token passes the CI secret scan"; exit 1
+      fi
+      git reset -q --hard HEAD~1
+    fi ;;
+  esac
   echo "ok  $spec"
 done
 echo "E2E passed."

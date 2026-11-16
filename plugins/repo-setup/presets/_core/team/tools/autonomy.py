@@ -49,7 +49,7 @@ ONTOLOGY_PATH = re.compile(r"(^|/)ontology/.*\.ya?ml$")
 GUARD_LEVELS = {"forbidden": 2, "confirm": 1}
 AGENT_GUARD = re.compile(r"\bagent:\s*[\"']?(?:forbidden|confirm)\b")
 # The repository's own checks. A proof is a different check, reported by whatever proves the work.
-OWN_CHECKS = ("check", "gate")
+OWN_CHECKS = ("check", "gate", "secret-scan")
 
 
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -94,6 +94,24 @@ def proof_check(policy: dict[str, Any]) -> str:
     return "" if name in OWN_CHECKS else name
 
 
+def named_checks(policy: dict[str, Any]) -> list[str]:
+    """The status checks the repository names under required_checks, as written."""
+    names = policy.get("required_checks") or []
+    if not isinstance(names, list):
+        return []
+    return [n.strip() for n in names if isinstance(n, str) and n.strip()]
+
+
+def required_checks(policy: dict[str, Any]) -> list[str]:
+    """The repository's own required status checks, each once, without the setup's and the proof."""
+    taken, out = {*OWN_CHECKS, proof_check(policy)}, []
+    for name in named_checks(policy):
+        if name and name not in taken:
+            taken.add(name)
+            out.append(name)
+    return out
+
+
 def policy_problems(policy: dict[str, Any]) -> list[str]:
     problems = []
     default, named = str(policy.get("default", "medium")), named_proof(policy)
@@ -109,6 +127,20 @@ def policy_problems(policy: dict[str, Any]) -> list[str]:
             "default: low lets code merge with no person, so a machine must prove it: "
             "set proof.check, or keep default: medium."
         )
+    listed = policy.get("required_checks") or []
+    if not isinstance(listed, list):
+        problems.append("required_checks: must be a list of status check names")
+    elif any(not (isinstance(n, str) and n.strip()) for n in listed):
+        problems.append(
+            "required_checks: every entry must be the name of a status check. A name no job "
+            "reports blocks every pull request."
+        )
+    for name in named_checks(policy):
+        if name in OWN_CHECKS:
+            problems.append(
+                f"required_checks: {name} is one of the setup's own checks and is required "
+                "already. Name only the checks this repository adds."
+            )
     return problems
 
 

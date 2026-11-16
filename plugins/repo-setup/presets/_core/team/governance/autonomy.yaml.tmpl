@@ -24,6 +24,12 @@ default: medium
 proof:
   check: ""
 
+# Status checks of this repository's own that the default branch must require, besides the setup's
+# (`check`, `secret-scan`, and `gate` with agent workflows) and the proof above: for example a
+# browser suite. `python3 tools/github_setup.py --apply` requires them. A required check must run
+# and report on every pull request; on GitHub a skipped job counts as passed.
+required_checks: []
+
 # Deciders by tier (rendered into .github/CODEOWNERS by `make codeowners`).
 # A path with no owner needs no person.
 owners:

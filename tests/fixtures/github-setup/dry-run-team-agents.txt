@@ -28,13 +28,15 @@ Dry run for acme/sample (default branch main)
       gh api -X PUT repos/acme/sample/environments/staging
   - environment production (human approval by @acme)
       gh api -X PUT repos/acme/sample/environments/production --input -
-  - ruleset on main: PR + code owner where CODEOWNERS names one + checks check, gate
+  - ruleset on main: PR + code owner where CODEOWNERS names one + checks check, gate, secret-scan
       gh api -X POST repos/acme/sample/rulesets --input -
 
 Secrets (values are never read):
   ! missing ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
-    Easiest: in Claude Code run /install-github-app, or `claude setup-token` then
-    `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Also install https://github.com/apps/claude
-  - optional RELEASE_PLEASE_TOKEN (PAT/App token) so CI runs on release PRs
+    Easiest: in Claude Code run /install-github-app, or `claude setup-token`
+    then `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Also install https://github.com/apps/claude
+  ! RELEASE_PLEASE_TOKEN is missing: releases are off until it is set.
+    GitHub Actions may not open pull requests with its own token: store a
+    PAT or GitHub App token that may, with `gh secret set RELEASE_PLEASE_TOKEN`.
 
 Run again with --apply to make these changes.

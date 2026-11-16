@@ -18,7 +18,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
-      - run: uvx pre-commit run gitleaks --all-files
+      # Every commit of this branch. The plain `gitleaks` hook reads staged changes only,
+      # and nothing is staged here: it would pass whatever the commits hold.
+      - run: uvx pre-commit run gitleaks-history --hook-stage manual --all-files
 
   dependency-audit:
     runs-on: ubuntu-latest

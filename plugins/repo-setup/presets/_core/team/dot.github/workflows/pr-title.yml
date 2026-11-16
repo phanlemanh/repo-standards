@@ -1,7 +1,11 @@
 name: PR title
 
-# PRs are squash-merged, so the PR title becomes the commit message on main.
-# It must follow Conventional Commits (feat: ..., fix(scope): ...) for automated releases.
+# What reaches the default branch must follow Conventional Commits (feat: ..., fix(scope): ...):
+# automated releases read it. Which text reaches it depends on how the repository merges:
+#   squash                -> the pull request title becomes the commit: conventional-title
+#   merge commit, rebase  -> every commit of the branch lands as it is: conventional-commits
+# Each job reads the repository's merge settings and, when it does not apply, passes and says why.
+# Both run from the base branch and read the pull request as data: none of its code runs here.
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
@@ -13,6 +17,54 @@ jobs:
   conventional-title:
     runs-on: ubuntu-latest
     steps:
+      - name: Does this repository squash?
+        id: how
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Unknown counts as yes: the title is checked unless squashing is known to be off.
+        run: |
+          squash=$(gh repo view "$GITHUB_REPOSITORY" --json squashMergeAllowed --jq .squashMergeAllowed 2>/dev/null || true)
+          echo "squash=$squash" >> "$GITHUB_OUTPUT"
+          if [ "$squash" = "false" ]; then
+            echo "Squash merging is off: the title is not a commit on the default branch. See conventional-commits." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: amannn/action-semantic-pull-request@v6
+        if: steps.how.outputs.squash != 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  conventional-commits:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # The base branch: the hook that judges the commits comes from it, not from the pull request.
+      - uses: actions/checkout@v7
+      - name: Check every commit the branch would add
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        # Runs only when the branch's own commits are known to reach the default branch.
+        run: |
+          keeps=$(gh repo view "$GITHUB_REPOSITORY" --json mergeCommitAllowed,rebaseMergeAllowed \
+            --jq '.mergeCommitAllowed or .rebaseMergeAllowed' 2>/dev/null || true)
+          case "$keeps" in
+            true) ;;
+            false)
+              echo "This repository squashes: the branch's commits do not reach the default branch as they are. Nothing to check here." >> "$GITHUB_STEP_SUMMARY"
+              exit 0 ;;
+            *)
+              echo "::warning::The merge settings could not be read: the commits of this branch were not checked."
+              exit 0 ;;
+          esac
+          # Merge commits (two parents) carry Git's own message.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/commits" \
+            --jq '.[] | select((.parents | length) < 2) | .sha' > "$RUNNER_TEMP/shas"
+          failed=0
+          while read -r sha; do
+            gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq .commit.message > "$RUNNER_TEMP/message"
+            pipx run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message" \
+              || { echo "::error::Commit $sha does not follow Conventional Commits: $(head -1 "$RUNNER_TEMP/message")"; failed=1; }
+          done < "$RUNNER_TEMP/shas"
+          exit "$failed"

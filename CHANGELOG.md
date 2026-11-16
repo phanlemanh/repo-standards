@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Real walls
+Four checks carried the name of a wall and held nothing. Each now has a test that makes it go red.
+Design: `docs/superpowers/specs/2026-11-16-tuong-that-design.md`; the picture across the three
+repositories: `docs/thiet-ke-tong-quan-ba-kho.md`.
+
+- Secret scan in CI: `security.yml` ran `pre-commit run gitleaks --all-files`. That hook reads
+  staged changes, and CI stages nothing, so it scanned zero bytes and passed whatever the commits
+  held. `.pre-commit-config.yaml` gets a second gitleaks hook for CI (`gitleaks-history`, stage
+  `manual`) that reads every commit of the branch being checked, and `security.yml` runs that one.
+  A leak on another branch does not turn this branch red.
+- `Release`: the workflow fell back to the Actions token, which may not open pull requests, so it
+  failed after every merge. It now needs `RELEASE_PLEASE_TOKEN`; without it the job says that
+  releases are off and ends green. `tools/github_setup.py` and `doctor.py --remote` (check
+  `release_key`) report the missing key.
+- `PR title`: the workflow checked the title on the ground that pull requests are squashed. It now
+  reads the merge settings on each pull request. Job `conventional-title` checks the title unless
+  squash merging is off; the new job `conventional-commits` checks each commit of the branch with
+  the repository's own commit-msg hook when merge commits or rebase are allowed. Both run from the
+  base branch. The `github` skill no longer asks a person to edit the workflow by hand.
+- Ruleset: `secret-scan` is a required check. A repository names its own required checks under
+  `required_checks` in `governance/autonomy.yaml` (a browser suite, for example), and
+  `tools/github_setup.py` requires them. Before it updates a ruleset it reads the checks the
+  branch requires today: it stops instead of dropping one the policy does not name, and says
+  which. `--prune` drops them on purpose and names them. The dry run shows the same warning.
+  `secret-scan` is required only where a workflow has a job of that name, and an entry under
+  `required_checks` must be a name: a required check that no job reports blocks every pull
+  request.
+- `tools/github_setup.py` no longer takes "GitHub would not say" for "none". When it cannot read
+  the rulesets it stops instead of making a second one; when it cannot list the secrets it says
+  so instead of calling one missing. Secrets an organisation shares with the repository count.
+- Breaking on upgrade: `secret-scan` can go red on the first run in a repository whose history
+  already holds something shaped like a secret (rotate the key, then record its fingerprint in
+  `.gitleaksignore`); after `tools/github_setup.py --apply` it is required. A repository that had
+  turned on "Allow GitHub Actions to create and approve pull requests" stops opening release PRs
+  until `RELEASE_PLEASE_TOKEN` is set. Every pull request gets the new check
+  `conventional-commits`. `tools/github_setup.py --apply` now fails on a ruleset that requires a
+  check the policy does not name: name it under `required_checks`, or pass `--prune`.
+- Not built: `dependency-audit` and `codeql` stay advisory, because they judge the world and not
+  the change. Staged CI, and a scan of other branches. Not run on GitHub: the release job's
+  condition on the secret, and whether the Actions token can read the merge settings (when it
+  cannot, the title is checked as before and the commits are not).
+
 ### People decide, machines check
 - The rule the plugin now holds itself to is written in `docs/nguyen-tac-setup.md`: a setup that
   brings a person in to make a change more reliable is not a good setup. A person appears where

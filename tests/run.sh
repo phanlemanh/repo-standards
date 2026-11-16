@@ -372,8 +372,8 @@ steps() { ( cd "$1" && python3 -B -c "
 import json,sys; sys.path.insert(0,'tools')
 import github_setup as g
 print(json.dumps(g.plan('o/r','main','@a',agents=$2)))" ); }
-steps "$n" False | python3 -c "import json,sys; d=json.load(sys.stdin); w=[x['what'] for x in d]; r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check'],c; assert not any('label' in a for a in w),w; assert not any('approve' in a for a in w),w; assert not any('REPO_SETUP_MARKETPLACE' in a for a in w),w" || miss "github_setup without agents"
-steps "$n" True | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check','gate'],c" || miss "github_setup with agents"
+steps "$n" False | python3 -c "import json,sys; d=json.load(sys.stdin); w=[x['what'] for x in d]; r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check','secret-scan'],c; assert not any('label' in a for a in w),w; assert not any('approve' in a for a in w),w; assert not any('REPO_SETUP_MARKETPLACE' in a for a in w),w" || miss "github_setup without agents"
+steps "$n" True | python3 -c "import json,sys; d=json.load(sys.stdin); r=[x for x in d if 'ruleset' in x][0]; c=[k['context'] for k in r['ruleset']['rules'][-1]['parameters']['required_status_checks']]; assert c==['check','gate','secret-scan'],c" || miss "github_setup with agents"
 ( cd "$o2" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert g.has_agents(pathlib.Path('.'))" ) || miss "old team repo not detected as having agents"
 ( cd "$n" && python3 -B -c "import sys; sys.path.insert(0,'tools'); import github_setup as g, pathlib; assert not g.has_agents(pathlib.Path('.'))" ) || miss "team repo wrongly detected as having agents"
 echo "ok  github-agents (or misses reported above)"
@@ -1449,6 +1449,8 @@ cat > "$TMP/gsbin/gh" <<'SH'
 case "$1 $2" in
   "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
   "secret list") ;;
+  "api repos/acme/sample/rulesets") ;;   # a read: no ruleset from an earlier run
+  "api repos/acme/sample/actions/organization-secrets") ;;   # a read: no shared secret
   *) echo "$*" >> "$GH_CALLS"; exit 1 ;;
 esac
 SH
@@ -1543,7 +1545,7 @@ for agents in (False, True):
     assert pr['require_code_owner_review'] is True, pr
     assert not any('can_approve_pull_request_reviews=true' in a for s in steps for a in s['args']), 'Actions may approve'
     assert agents == any('can_approve_pull_request_reviews=false' in a for s in steps for a in s['args']), 'Actions not told'
-    own = ['check', 'gate'] if agents else ['check']
+    own = ['check', 'gate', 'secret-scan'] if agents else ['check', 'secret-scan']
     assert checks_of(steps) == own, checks_of(steps)
     assert checks_of(g.plan('o/r','main','@a',agents,proof='evidence')) == own + ['evidence']
 " ) || miss "people decide: the ruleset needs an approval, lets Actions approve, or does not require the proof"
@@ -1577,7 +1579,7 @@ governance_ok || miss "people decide: default low with a proof was refused"
 [ "$(cd "$pd" && python3 tools/autonomy.py --files src/app.py | json 'd.get("proof")')" = evidence ] || miss "people decide: the tier result does not name the proof"
 if grep -qE '^\*( |$)' "$pd/.github/CODEOWNERS"; then miss "people decide: with a proof, every path still has an owner"; fi
 grep -q '^/governance/\*\*  @acme$' "$pd/.github/CODEOWNERS" || miss "people decide: with a proof, governance/ lost its owner"
-dry "$pd" | grep -q 'checks check, gate, evidence' || miss "people decide: github_setup does not require the proof the policy names"
+dry "$pd" | grep -q 'checks check, gate, secret-scan, evidence' || miss "people decide: github_setup does not require the proof the policy names"
 # 43d. a looser agent guard is a rule change, wherever it is written; a new action is not
 mkdir -p "$pd/ontology" "$pd/src"
 printf 'actions:\n  - name: wipe\n    agent: forbidden\n  - name: refund\n    agent: confirm\n' > "$pd/ontology/actions.yaml"
@@ -1710,6 +1712,7 @@ case "$1 $2" in
   "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
   "secret list") ;;
   "api repos/acme/sample/rulesets") cat "$FAKE_RULESET_IDS" ;;
+  "api repos/acme/sample/rulesets/41") [ "$3" = "--jq" ] && { [ -f "${FAKE_CHECKS:-}" ] && cat "$FAKE_CHECKS"; true; } || echo "$*" >> "$GH_CALLS" ;;
   *) echo "$*" >> "$GH_CALLS" ;;
 esac
 SH
@@ -1721,6 +1724,173 @@ ruleset_call() { echo "$1" > "$TMP/ruleset-ids"; rm -f "$TMP/rs-calls"
 [ "$(ruleset_call '')" = "api -X POST repos/acme/sample/rulesets --input -" ] || miss "people decide: a first run does not create the ruleset: $(ruleset_call '')"
 [ "$(ruleset_call 41)" = "api -X PUT repos/acme/sample/rulesets/41 --input -" ] || miss "people decide: an old ruleset keeps asking for an approval after the upgrade: $(ruleset_call 41)"
 echo "ok  people decide, machines check (or misses reported above)"
+
+# 44. real walls (docs/superpowers/specs/2026-11-16-tuong-that-design.md): a check that carries the
+#     name of a wall must be able to go red.
+rw="$TMP/real-walls"; mkdir -p "$rw" && git -C "$rw" init -q -b main
+python3 "$S/apply.py" --target "$rw" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+# 44a. the secret scan in CI reads commits, not the staging area that CI leaves empty
+for preset in ts-node python claude-plugin; do
+  grep -q 'pre-commit run gitleaks-history --hook-stage manual' "$ROOT/plugins/repo-setup/presets/$preset/team/dot.github/workflows/security.yml" \
+    || miss "real walls: the $preset secret scan still reads the staging area, which CI leaves empty"
+done
+scan=$({ grep -A4 'alias: gitleaks-history' "$rw/.pre-commit-config.yaml" || true; } | sed -n 's/^ *entry: //p')
+[ -n "$scan" ] || miss "real walls: no gitleaks hook for CI in .pre-commit-config.yaml"
+case "$scan" in *--staged*) miss "real walls: the CI secret scan reads staged changes only" ;; esac
+case "$scan" in *--log-opts=HEAD*) ;; *) miss "real walls: the CI secret scan reads other branches, so one leak turns every pull request red" ;; esac
+{ grep -A4 'alias: gitleaks-history' "$rw/.pre-commit-config.yaml" || true; } | grep -q 'stages: \[manual\]' || miss "real walls: the CI secret scan also runs on every local commit"
+# 44b. the red direction: a token in a commit turns the scan red, also after a later commit deletes it
+rw_save() { git -C "$rw" add -A && git -C "$rw" -c user.name=t -c user.email=t@example.com commit -q -m "$1"; }
+rw_scan() { ( cd "$rw" && $scan >/dev/null 2>&1 ); }
+if command -v gitleaks >/dev/null 2>&1 && [ -n "$scan" ]; then
+  rw_save "chore: base"
+  rw_scan || miss "real walls: the secret scan is red on a clean repository"
+  # Made at run time, so no token-shaped text sits in this file.
+  python3 -c "import random, string; print('const token = \"ghp_' + ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(36)) + '\";')" > "$rw/src/planted.ts"
+  rw_save "feat: planted"
+  if rw_scan; then miss "real walls: a committed token passes the secret scan"; fi
+  git -C "$rw" rm -q src/planted.ts && rw_save "fix: remove the token"
+  if rw_scan; then miss "real walls: a token deleted by a later commit passes the secret scan"; fi
+  git -C "$rw" checkout -q -b clean "$(git -C "$rw" rev-list --max-parents=0 HEAD)"
+  rw_scan || miss "real walls: a leak on another branch turns a clean branch red"
+  git -C "$rw" checkout -q main
+else
+  echo "skip  real walls 44b: gitleaks is not installed, the red direction was not run"
+fi
+# 44c. Release is not red for want of a key: without the key it says so and ends green
+rel="$rw/.github/workflows/release.yml"
+if grep -q 'github.token' "$rel"; then miss "real walls: Release falls back to the Actions token, which may not open pull requests"; fi
+grep -q "secrets.RELEASE_PLEASE_TOKEN != ''" "$rel" || miss "real walls: Release does not look at whether its key exists"
+grep -q "if: env.HAS_RELEASE_TOKEN == 'true'" "$rel" || miss "real walls: release-please runs without its key"
+grep -q "if: env.HAS_RELEASE_TOKEN != 'true'" "$rel" || miss "real walls: Release without a key says nothing"
+dry "$rw" | grep -q 'RELEASE_PLEASE_TOKEN is missing: releases are off' || miss "real walls: github_setup does not say that releases are off"
+mkdir -p "$TMP/rkbin"
+cat > "$TMP/rkbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
+  "secret list") cat "$FAKE_SECRETS" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$TMP/rkbin/gh"
+rk_verdict() { PATH="$TMP/rkbin:$PATH" FAKE_SECRETS="$TMP/secrets" verdict "$rw" release_key '--level team --remote'; }
+: > "$TMP/secrets"
+rk_verdict | grep -q '^fail' || miss "real walls: doctor is content with releases that have no key: $(rk_verdict)"
+echo RELEASE_PLEASE_TOKEN > "$TMP/secrets"
+rk_verdict | grep -q '^pass$' || miss "real walls: doctor does not see the release key: $(rk_verdict)"
+# 44d. the commit-format check judges what reaches the default branch: the title when squashing, the commits otherwise
+pt="$rw/.github/workflows/pr-title.yml"
+for job in conventional-title conventional-commits; do
+  grep -q "^  $job:\$" "$pt" || miss "real walls: pr-title.yml has no $job job"
+done
+grep -q 'squashMergeAllowed' "$pt" || miss "real walls: the title check does not read whether the repository squashes"
+grep -q 'mergeCommitAllowed' "$pt" || miss "real walls: the commit check does not read whether the repository keeps commits"
+grep -q 'pre-commit run conventional-pre-commit --hook-stage commit-msg' "$pt" || miss "real walls: commits are not judged by the repository's own commit-msg hook"
+# the commit check, run with stand-ins for gh (two commits, the second one given) and for the hook
+pipeline="$pt"
+mkdir -p "$TMP/ccbin" "$TMP/ccrun"
+cat > "$TMP/ccbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") [ "$CC_KEEPS" = unreadable ] && exit 1; echo "$CC_KEEPS" ;;
+  "api --paginate") printf 'aaa\nbbb\n' ;;
+  "api repos/acme/sample/commits/aaa") echo "feat: one" ;;
+  "api repos/acme/sample/commits/bbb") cat "$CC_SECOND" ;;
+  *) exit 1 ;;
+esac
+SH
+cat > "$TMP/ccbin/pipx" <<'SH'
+#!/bin/sh
+# Stand-in for the commit-msg hook: the last argument is the file with the message.
+for a in "$@"; do f=$a; done
+echo "$f" >> "$CC_CALLS"
+grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f"
+SH
+chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
+cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
+  ( PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" PR=7 GITHUB_REPOSITORY=acme/sample \
+    RUNNER_TEMP="$TMP/ccrun" GITHUB_STEP_SUMMARY="$TMP/cc-summary" bash -e -c "$(steps_of 'Check every commit the branch would add')" ) 2>&1; }
+cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a branch whose commits are all conventional"
+[ "$(wc -l < "$TMP/cc-calls" | tr -d ' ')" = 2 ] || miss "real walls: the commit check did not judge both commits"
+if cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a commit that is not conventional"; fi
+{ cc true 'changed stuff' || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name the commit it rejects"
+cc false 'changed stuff' >/dev/null || miss "real walls: the commit check judges commits in a repository that squashes"
+[ ! -s "$TMP/cc-calls" ] || miss "real walls: the commit check ran the hook in a repository that squashes"
+{ cc unreadable 'changed stuff' || true; } | grep -q '::warning::' || miss "real walls: the commit check is silent when it cannot read how the repository merges"
+if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then
+  miss "real walls: the github skill still asks a person to edit pr-title.yml by hand"
+fi
+if grep -q 'nothing checks them' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then
+  miss "real walls: the github skill still says nothing checks the commits of a branch"
+fi
+# 44e. the ruleset requires the checks the repository names, and the secret scan
+rw_policy="$rw/governance/autonomy.yaml"; cp "$rw_policy" "$TMP/rw-policy.orig"
+rw_checks() { python3 - "$rw_policy" "$TMP/rw-policy.orig" "$1" <<'PY'
+import re, sys
+out, src, value = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+t, n = re.subn(r"(?m)^required_checks: .*$", f"required_checks: {value}", t)
+assert n == 1, n
+open(out, "w", encoding="utf-8").write(t)
+PY
+}
+rw_governance_ok() { ( cd "$rw" && python3 tools/autonomy.py --write-codeowners >/dev/null && python3 tools/autonomy.py --check-codeowners >/dev/null 2>&1 ); }
+grep -q '^required_checks: \[\]$' "$rw_policy" || miss "real walls: the sample policy has no required_checks to fill in"
+dry "$rw" | grep -q 'checks check, secret-scan$' || miss "real walls: the secret scan is not a required check: $(dry "$rw" | grep 'ruleset on')"
+rw_checks '[e2e, e2e-db]' 2>/dev/null || true
+rw_governance_ok || miss "real walls: a policy that names its own checks was refused"
+dry "$rw" | grep -q 'checks check, secret-scan, e2e, e2e-db$' || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
+for reserved in check gate secret-scan; do
+  rw_checks "[$reserved]" 2>/dev/null || true
+  if rw_governance_ok; then miss "real walls: the setup's own check '$reserved' was accepted under required_checks"; fi
+done
+# 44f. an upgrade never drops a required check that nobody named: it stops and says which
+echo 41 > "$TMP/rw-ids"
+rw_apply() { rm -f "$TMP/rw-calls"
+  ( cd "$rw" && PATH="$TMP/rsbin:$PATH" GH_CALLS="$TMP/rw-calls" FAKE_RULESET_IDS="$TMP/rw-ids" FAKE_CHECKS="$TMP/rw-checks" \
+    python3 -B tools/github_setup.py --apply "$@" </dev/null ) 2>&1; }
+rw_put() { { grep -- '-X PUT repos/acme/sample/rulesets/41' "$TMP/rw-calls" 2>/dev/null || true; } | wc -l | tr -d ' '; }
+printf 'check\ne2e\n' > "$TMP/rw-checks"
+rw_checks '[]' 2>/dev/null || true
+out=$(rw_apply || true)
+[ "$(rw_put)" = 0 ] || miss "real walls: an upgrade dropped the required check e2e that the policy does not name"
+echo "$out" | grep -q 'e2e' || miss "real walls: the refusal does not say which required check would go"
+echo "$out" | grep -q -- '--prune' || miss "real walls: the refusal does not say how to drop the check on purpose"
+rw_apply --prune >/dev/null || true
+[ "$(rw_put)" = 1 ] || miss "real walls: --prune does not update the ruleset"
+rw_checks '[e2e]' 2>/dev/null || true
+rw_apply >/dev/null || true
+[ "$(rw_put)" = 1 ] || miss "real walls: a ruleset whose extra check is named in the policy was not updated"
+printf 'check\ne2e\n' > "$TMP/rw-checks"; rw_checks '[]' 2>/dev/null || true
+{ rw_apply --prune || true; } | grep -q 'dropping the required check(s) e2e' || miss "real walls: --prune does not say which required check it drops"
+cp "$TMP/rw-policy.orig" "$rw_policy"
+# 44g. what GitHub would not say is not taken for "none": no second ruleset, no "missing" secret
+mkdir -p "$TMP/nrbin"
+cat > "$TMP/nrbin/gh" <<'SH'
+#!/bin/sh
+case "$1 $2" in
+  "repo view") echo '{"nameWithOwner":"acme/sample","defaultBranchRef":{"name":"main"}}' ;;
+  *) echo "$*" >> "$GH_CALLS"; exit 1 ;;
+esac
+SH
+chmod +x "$TMP/nrbin/gh"
+nr() { rm -f "$TMP/nr-calls"; ( cd "$rw" && PATH="$TMP/nrbin:$PATH" GH_CALLS="$TMP/nr-calls" python3 -B tools/github_setup.py "$@" </dev/null ) 2>&1 || true; }
+out=$(nr)
+echo "$out" | grep -q 'could not be listed' || miss "real walls: github_setup is silent when it cannot list the secrets"
+if echo "$out" | grep -q 'is missing'; then miss "real walls: github_setup calls a secret missing when it could not list the secrets"; fi
+echo "$out" | grep -q 'rulesets could not be read' || miss "real walls: the dry run is silent when it cannot read the rulesets"
+nr --apply >/dev/null
+if grep -q -- '-X POST repos/acme/sample/rulesets' "$TMP/nr-calls" 2>/dev/null; then miss "real walls: github_setup made a ruleset without knowing whether one exists"; fi
+# 44h. a required check must be one that a job reports
+rw_checks '[e2e, ""]' 2>/dev/null || true
+if rw_governance_ok; then miss "real walls: an empty name was accepted under required_checks"; fi
+cp "$TMP/rw-policy.orig" "$rw_policy"
+mv "$rw/.github/workflows/security.yml" "$TMP/security.yml.kept"
+dry "$rw" | grep -q 'checks check$' || miss "real walls: secret-scan is required in a repository where no job has that name: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep -q 'secret-scan is not a required check' || miss "real walls: github_setup does not say that secret-scan is not required"
+mv "$TMP/security.yml.kept" "$rw/.github/workflows/security.yml"
+echo "ok  real walls (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
