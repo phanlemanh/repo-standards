@@ -263,6 +263,9 @@ Ghi chú cho các gói mới và gói đổi:
      is not enabled for this repository». Đây là tường đỏ vô cớ cùng loại với «Release» trước RS1:
      nên báo «tắt» rồi kết thúc xanh khi kho không bật code scanning. Luật «mỗi bức tường phải có
      bài kiểm chiều đỏ» cần thêm vế ngược lại: bức tường cũng phải xanh được.
+     **Đã sửa (RS1, lượt tiếp):** job hỏi GitHub trước; câu trả lời «not enabled» thì bỏ qua phân
+     tích, báo «CodeQL is off» và xanh. Trên kho thử, với khoá của Actions: ba bước CodeQL bị bỏ
+     qua, ô xanh. Mục 44i của bộ kiểm.
 
   Sau đó `tools/github_setup.py --merge-method merge --apply` đặt ruleset trên `main`: PR bắt buộc,
   ô bắt buộc `check` và `secret-scan`, chủ mã theo `.github/CODEOWNERS`, không cần ai duyệt. PR có
@@ -273,6 +276,9 @@ Ghi chú cho các gói mới và gói đổi:
      tường trên danh nghĩa (gốc rễ 3) cho tới khi nó, hoặc `conventional-title`, vào danh sách bắt
      buộc theo cách gộp kho chọn. Chủ mã không chặn PR của chính chủ mã, nên ở kho một người chỉ
      còn ô kiểm là tường.
+     **Đã sửa (RS1, lượt tiếp):** `github_setup.py` bắt buộc cả `conventional-title` lẫn
+     `conventional-commits`, khi workflow trên nhánh gốc đã có job đó (chúng chạy từ nhánh gốc).
+     Trên kho thử, PR có commit sai khuôn chuyển từ gộp được sang bị chặn. Mục 44j, 44k.
   5. **Trên kho riêng tư gói miễn phí, «production cần người duyệt» không dựng được.** GitHub từ chối
      quy tắc người duyệt của môi trường («billing plan», 422). Lệnh báo `!` và trả mã 1, nhưng môi
      trường `production` vẫn được tạo, không có quy tắc nào. Job `production` trong `deploy.yml` khi

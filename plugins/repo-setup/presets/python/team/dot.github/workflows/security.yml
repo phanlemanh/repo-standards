@@ -36,9 +36,31 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      # CodeQL reads its own run; a private repository does not allow that by default.
+      actions: read
     steps:
+      # Code scanning needs GitHub Advanced Security on a private repository. Without it CodeQL
+      # can only fail, and a check that is red whatever the code says teaches people to ignore
+      # red. Only a clear "not enabled" from GitHub turns it off: any other answer runs CodeQL.
+      - name: Is code scanning on here?
+        id: scanning
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          answer=$(gh api "repos/$GITHUB_REPOSITORY/code-scanning/analyses?per_page=1" 2>&1 || true)
+          case "$answer" in
+            *"Code scanning is not enabled"* | *"Advanced Security must be enabled"*)
+              echo "on=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::CodeQL is off: code scanning is not enabled for this repository."
+              echo "CodeQL is off: code scanning is not enabled for this repository (a private repository needs GitHub Advanced Security)." >> "$GITHUB_STEP_SUMMARY" ;;
+            *)
+              echo "on=true" >> "$GITHUB_OUTPUT" ;;
+          esac
       - uses: actions/checkout@v7
+        if: steps.scanning.outputs.on != 'false'
       - uses: github/codeql-action/init@v4
+        if: steps.scanning.outputs.on != 'false'
         with:
           languages: python
       - uses: github/codeql-action/analyze@v4
+        if: steps.scanning.outputs.on != 'false'
