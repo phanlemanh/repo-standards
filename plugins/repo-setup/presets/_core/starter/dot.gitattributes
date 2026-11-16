@@ -1,6 +1,11 @@
 # Normalise line endings in the repository; check out LF everywhere.
 * text=auto eol=lf
 
+# The wiki log is a list every branch adds a line to, at the same place. Keep the lines of both
+# sides instead of stopping on a conflict. Git applies this when a branch is merged or rebased on
+# a machine; it only suits a file where lines are added and never edited.
+wiki/log.md merge=union
+
 # Binary files
 *.png binary
 *.jpg binary

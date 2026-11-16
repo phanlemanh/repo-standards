@@ -1907,5 +1907,212 @@ stale=$(cd "$ROOT" && git grep -l -E "$old_names" -- . ':!tests/run.sh' || true)
 [ -z "$stale" ] || miss "own rules: a file still points at a renamed document: $(echo $stale)"
 echo "ok  own rules (or misses reported above)"
 
+# 46. parallel work does not queue (docs/three-repo-overview-design.md, RS2a and RS10): the one file
+#     every pull request writes merges by itself, and the numbers that say whether work queues come
+#     from a command, not from a count made by hand once.
+fl="$TMP/flow"; mkdir -p "$fl" && git -C "$fl" init -q -b main
+python3 "$S/apply.py" --target "$fl" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+fl_git() { git -C "$fl" -c user.name=t -c user.email=t@example.com "$@"; }
+fl_save() { fl_git add -A && fl_git commit -q -m "$1"; }
+# The log is "newest first": every branch adds its line at the same place.
+fl_log() {
+  python3 - "$fl/wiki/log.md" "$1" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+first = next(n for n, line in enumerate(lines) if line.startswith("- "))
+path.write_text("\n".join([*lines[:first], sys.argv[2], *lines[first:]]) + "\n", encoding="utf-8")
+PY
+}
+echo 'export const grid = "base";' > "$fl/src/grid.ts"
+fl_save "chore: base"
+fl_git checkout -q -b one && fl_log "- 2026-01-02 — one — #1" && fl_save "docs: one"
+fl_git checkout -q -b two main && fl_log "- 2026-01-03 — two — #2" && fl_save "docs: two"
+fl_git checkout -q -b three main && echo 'export const grid = "three";' > "$fl/src/grid.ts" && fl_save "feat: three"
+fl_git checkout -q main && fl_git merge -q --ff-only one
+echo 'export const grid = "main";' > "$fl/src/grid.ts" && fl_save "feat: main moves"
+# 46a. two branches that each add a line to wiki/log.md merge without a conflict, and both lines stay
+grep -q '^wiki/log.md  *merge=union' "$fl/.gitattributes" || miss "flow: .gitattributes does not merge wiki/log.md by union"
+# Branch two also merges a branch of its own: both parents are its commits, so it is no merge of main.
+fl_git checkout -q -b two-side two && echo 'export const side = 1;' > "$fl/src/side.ts" && fl_save "feat: side"
+fl_git checkout -q two && echo 'export const own = 1;' > "$fl/src/own.ts" && fl_save "feat: own"
+fl_git merge -q --no-ff --no-edit two-side
+fl_before=$(fl_git rev-parse two)
+# The red direction first: without the rule the same merge conflicts, so the check below can fail.
+subst '/merge=union/d' "$fl/.gitattributes"
+if fl_git merge -q --no-edit main >/dev/null 2>&1; then
+  miss "flow: the wiki log merges cleanly without the rule, so the check that follows proves nothing"
+else
+  fl_git merge --abort >/dev/null 2>&1 || true
+fi
+fl_git reset -q --hard "$fl_before"
+if fl_git merge -q --no-edit main >/dev/null 2>&1; then
+  for entry in one two; do
+    [ "$(grep -c -- "— $entry —" "$fl/wiki/log.md" || true)" = 1 ] || miss "flow: the merged wiki log does not hold the line of branch $entry exactly once"
+  done
+else
+  miss "flow: two branches that each add a line to wiki/log.md conflict"
+  fl_git merge --abort >/dev/null 2>&1 || true
+fi
+# 46b. the measure: tools/sdlc_metrics.py replays every merge of the default branch into a pull
+#      request branch and says how many conflict and in which files
+fl_git checkout -q three
+fl_git merge -q --no-edit main >/dev/null 2>&1 || true
+echo 'export const grid = "three and main";' > "$fl/src/grid.ts" && fl_git add -A && fl_git commit -q --no-edit
+fl_git checkout -q main
+mkdir -p "$TMP/flbin" "$TMP/flowgh"
+# The answers have the shape GitHub gives: the fake gh below runs the tool's own --jq program on them.
+python3 - "$fl" "$TMP/flowgh" <<'PY'
+import json, pathlib, subprocess, sys
+
+repo, out = sys.argv[1], pathlib.Path(sys.argv[2])
+DAY = "2026-01-02T00:"
+
+
+def listed(branch: str) -> list[dict]:
+    """What GitHub lists for a pull request: the commits of the branch that main does not have."""
+    rows = subprocess.run(["git", "-C", repo, "rev-list", "--parents", branch, "^main"],
+                          capture_output=True, text=True, check=True).stdout.splitlines()
+    return [commit(r.split()[0], r.split()[1:]) for r in rows]
+
+
+def commit(sha: str, parents: list[str]) -> dict:
+    return {"sha": sha, "commit": {"message": "x"}, "parents": [{"sha": p, "url": "u"} for p in parents]}
+
+
+def pull(number: int, base: str = "main", merged: str | None = None) -> dict:
+    return {"number": number, "title": f"feat: {number}", "author": {"login": "dev"}, "labels": [], "reviews": [],
+            "createdAt": "2026-01-01T00:00:00Z", "mergedAt": merged, "closedAt": merged, "baseRefName": base}
+
+
+def job(name: str, conclusion: str, start: int, end: int) -> dict:
+    return {"id": 1, "name": name, "conclusion": conclusion, "status": "completed",
+            "started_at": f"{DAY}{start:02d}:00Z", "completed_at": f"{DAY}{end:02d}:00Z"}
+
+
+def run(number: int, name: str, event: str, branch: str, conclusion: str) -> dict:
+    return {"id": number, "name": name, "event": event, "head_branch": branch, "status": "completed",
+            "head_sha": f"{number:040x}", "conclusion": conclusion, "run_attempt": 1}
+
+
+def save(name: str, *pages: object) -> None:
+    (out / name).write_text("".join(json.dumps(page) + "\n" for page in pages))
+
+
+save("merged.json", [pull(2, merged="2026-01-01T10:00:00Z"), pull(3, merged="2026-01-01T20:00:00Z")])
+save("closed.json", [pull(6)])
+# Pull request 5 goes into branch two: the branch it merges is not the default one.
+save("open.json", [pull(4), pull(5, base="two")])
+save("pr2.json", listed("two"))
+save("pr3.json", listed("three"))
+# A merge whose commits this clone does not have, and cannot fetch: there is no remote.
+save("pr4.json", [commit("a" * 40, ["b" * 40, "c" * 40])])
+save("pr5.json", [commit("d" * 40, ["e" * 40, "f" * 40])])
+save("pr6.json", [commit("9" * 40, ["8" * 40])])
+runs = [
+    run(1, "CI", "pull_request", "two", "failure"),
+    run(2, "CI", "pull_request", "three", "success"),
+    run(5, "CI", "pull_request", "five", "success"),
+    run(3, "CI", "push", "main", "success"),
+    run(6, "CI", "push", "main", "success"),
+    run(4, "Release", "push", "main", "failure"),
+]
+# Two pages, as GitHub pages a long list.
+save("runs.json", {"total_count": 6, "workflow_runs": runs[:3]}, {"total_count": 6, "workflow_runs": runs[3:]})
+# A list GitHub cut short: it says nine runs and hands over one.
+save("runs-short.json", {"total_count": 9, "workflow_runs": runs[:1]})
+save("runs-none.json", {"total_count": 0, "workflow_runs": []})
+jobs = {
+    # gate passed and a heavier job ended red afterwards on the same head: a late red.
+    1: [job("gate", "success", 0, 2), job("check", "success", 0, 3), job("e2e-db", "failure", 0, 30)],
+    # red first, then run again: gate passed only after the red had ended. Not a late red.
+    2: [job("check", "failure", 0, 3), job("gate", "failure", 0, 1),
+        job("check", "success", 10, 13), job("gate", "success", 10, 12)],
+    # a late red that a second attempt turned green: it still counts.
+    5: [job("gate", "success", 0, 2), job("e2e", "failure", 0, 10),
+        job("gate", "success", 20, 22), job("e2e", "success", 20, 30)],
+    # the default branch: red on the first attempt, green on the second.
+    3: [job("check", "failure", 0, 5), job("check", "success", 10, 15)],
+    6: [job("check", "success", 0, 4)],
+    4: [job("release-please", "failure", 0, 1)],
+}
+for number, rows in jobs.items():
+    save(f"jobs-{number}.json", {"total_count": len(rows), "jobs": rows})
+PY
+cat > "$TMP/flbin/gh" <<'SH'
+#!/bin/sh
+# Canned answers in the shape GitHub gives. A list is asked for the way the tool must ask (every
+# page, 100 a page, the filter that matters), and its --jq program runs here on the raw answer.
+all="$*"
+rows() {
+  file="$FLOW_GH/$1"; shift
+  case "$all" in *--paginate*per_page=100*) ;; *) echo "not every page is asked for: $all" >&2; exit 1 ;; esac
+  while [ "$#" -gt 1 ] && [ "$1" != --jq ]; do shift; done
+  jq -c "$2" "$file"
+}
+case "$all" in
+  "pr list --state merged"*baseRefName*) cat "$FLOW_GH/merged.json" ;;
+  "pr list --state closed"*baseRefName*) cat "$FLOW_GH/closed.json" ;;
+  "pr list --state open"*baseRefName*) cat "$FLOW_GH/open.json" ;;
+  "repo view"*) echo '{"nameWithOwner":"acme/p","defaultBranchRef":{"name":"main"}}' ;;
+  *deployments*) echo '[]' ;;
+  *"/pulls/"*"/commits"*) rows "pr$(echo "$all" | sed 's|.*/pulls/\([0-9]*\)/commits.*|\1|').json" "$@" ;;
+  *"/actions/runs/"*"/jobs"*filter=all*) rows "jobs-$(echo "$all" | sed 's|.*/actions/runs/\([0-9]*\)/jobs.*|\1|').json" "$@" ;;
+  *"/actions/runs "*"created="*)
+    # The runs are asked for one day at a time; all of them fall on the first day of the window.
+    [ -z "${FLOW_NO_RUNS:-}" ] || { echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1; }
+    case "$all" in *"created=$FLOW_DAY "*) rows "${FLOW_RUNS:-runs}.json" "$@" ;; *) rows runs-none.json "$@" ;; esac ;;
+  *) echo "unexpected gh call: $all" >&2; exit 1 ;;
+esac
+SH
+chmod +x "$TMP/flbin/gh"
+fl_day=$(python3 -c "import datetime as d; print((d.datetime.now(d.UTC) - d.timedelta(days=7)).date())")
+fl_metrics() { ( cd "$1" && PATH="$TMP/flbin:$PATH" FLOW_GH="$TMP/flowgh" FLOW_DAY="$fl_day" python3 tools/sdlc_metrics.py --days 7 "${@:2}" 2>/dev/null || true ); }
+fl_is() { [ "$(echo "$flow" | json "$1" 2>/dev/null || true)" = "$2" ] || miss "flow: $3"; }
+if command -v jq >/dev/null 2>&1; then
+  flow=$(fl_metrics "$fl" --json)
+  fl_is 'd["lead_time_median_h"]' 15.0 "the median time from open to merge changed"
+  fl_is 'd["lead_time_max_h"]' 20.0 "the longest time from open to merge is not reported"
+  fl_is 'd["back_merges"]["pull_requests"]' 4 "merges of main are not looked for on merged, closed and open pull requests into the default branch, and only those"
+  fl_is 'd["back_merges"]["found"]' 3 "a merge of main is missed, or a merge of the branch's own commits or of another base is taken for one"
+  fl_is 'd["back_merges"]["replayed"]' 2 "the merges of main whose commits are here are not replayed"
+  fl_is 'd["back_merges"]["conflicting"]' 1 "a merge of main that conflicted is not counted as one (or the union rule of the wiki log is not read)"
+  fl_is 'd["back_merges"]["files"]' "{'src/grid.ts': 1}" "the files in conflict are not named"
+  # 46c. what could not be read is not counted as clean, and the reason is given
+  fl_is 'd["back_merges"]["not_replayed"]' 1 "a merge whose commits are not in this clone is dropped or counted as clean"
+  fl_is 'd["back_merges"]["not_replayed_because"].startswith("git fetch")' True "a merge that could not be replayed carries no reason"
+  git clone -q --depth 1 "file://$fl" "$TMP/flow-shallow" 2>/dev/null
+  shallow=$(fl_metrics "$TMP/flow-shallow" --json | json 'd["back_merges"].get("unread", "")' 2>/dev/null || true)
+  case "$shallow" in *shallow*) ;; *) miss "flow: a shallow clone replays merges on a history it does not have" ;; esac
+  # 46d. machine minutes per merged pull request, late red, and red on the default branch
+  fl_is 'd["ci"]["runs"]' 6 "the workflow runs of every page and of every day of the window are not counted once each"
+  fl_is 'd["ci"]["machine_minutes"]' 83.0 "machine minutes are not the sum of the job durations of every attempt"
+  fl_is 'd["ci"]["machine_minutes_per_merged_pr"]' 41.5 "machine minutes are not set against the merged pull requests"
+  fl_is 'd["ci"]["late_red"]' "[2, 3]" "late red is not: a job that ended red after gate passed on that head, also when a second attempt turned it green, and not when the red came first"
+  fl_is 'd["ci"]["default_branch"]' "{'CI': [1, 2], 'Release': [1, 1]}" "red on the default branch is not counted per workflow, or a run made green by a second attempt is not counted as red"
+  flow=$(FLOW_NO_RUNS=1 fl_metrics "$fl" --json)
+  fl_is 'bool(d["ci"]["unread"])' True "workflow runs that could not be read are reported as zero runs"
+  fl_is 'd["back_merges"]["conflicting"]' 1 "one part that cannot be read hides the parts that can"
+  flow=$(FLOW_RUNS=runs-short fl_metrics "$fl" --json)
+  fl_is '"1 of 9" in d["ci"]["unread"]' True "a list of workflow runs that GitHub cut short is reported as the whole list"
+  # 46e. the page a person reads carries the same lines
+  page=$(fl_metrics "$fl")
+  for line in 'longest 20.0 h' 'Merges of the default branch into a pull request branch | 3 on 4' \
+    'conflict when replayed | 1 of 2' 'could not be replayed | 1 (git fetch' '`src/grid.ts` 1' \
+    'per merged pull request (every run in the window) | 41.5' \
+    'Late red (a job ended red on a head after `gate` passed) | 2 of 3' 'CI 1 of 2, Release 1 of 1'; do
+    echo "$page" | grep -qF -- "$line" || miss "flow: the report does not carry the line: $line"
+  done
+  FLOW_NO_RUNS=1 fl_metrics "$fl" | grep -q 'not read' || miss "flow: the report shows numbers for workflow runs it could not read"
+else
+  echo "skip  flow 46b-46e: jq is not installed, the measure was not run"
+fi
+# 46f. a list of pull requests that stops at the limit of the query is said to be partial
+partial=$(cd "$fl" && python3 -c "
+import sys; sys.path.insert(0, 'tools'); import sdlc_metrics as s
+print(s.capped({'merged': [0] * s.PR_LIMIT, 'open': [0]}))" 2>/dev/null || true)
+[ "$partial" = "['merged']" ] || miss "flow: a list of pull requests cut at the limit is taken for the whole list"
+echo "ok  flow (or misses reported above)"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

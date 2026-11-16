@@ -188,8 +188,8 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 
 | Mã   | Gói việc                                                                                                                              | Gốc rễ  | Tiêu chí         | Trạng thái                           |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
-| RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã dựng, PR 14, chưa gộp             |
-| RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã thử bằng phát lại, chưa dựng      |
+| RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); chưa chạy ở kho thật |
+| RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Chưa thiết kế                        |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Chưa thiết kế                        |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
@@ -199,7 +199,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Chưa thiết kế                        |
 | RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Chưa thiết kế                        |
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
-| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Chưa thiết kế                        |
+| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 
 Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md).
 
@@ -209,6 +209,28 @@ Ghi chú cho các gói mới và gói đổi:
   `wiki/index.md`: xung đột ở hai tệp này từ 60 và 3 về 0, số lần gộp ngược sạch từ 6 lên 22, một
   bản gộp soi tay không mất dòng nào. Nó chỉ gỡ xung đột; hai PR vẫn «cùng chạm một tệp», nên lối
   gộp nhanh của lệnh gộp vẫn đóng. Vì thế vẫn cần RS2b.
+- **RS2a và RS10 đã dựng (bước B).** Mẫu `.gitattributes` có dòng `wiki/log.md merge=union`, và
+  `tools/sdlc_metrics.py` in thêm phần «Flow». Chạy lệnh đó trên một bản sao đầy đủ của
+  `onehub-inventory`, cửa sổ 3 ngày tới 16/11:
+
+  | Dòng                                               | Luật gộp hiện tại   | Thêm dòng của RS2a |
+  | -------------------------------------------------- | ------------------- | ------------------ |
+  | Gộp nhánh chính ngược vào nhánh (38 PR)            | 103                 | 103                |
+  | Lần gộp ngược xung đột khi phát lại                | 96                  | 76                 |
+  | Lần `wiki/log.md` xung đột                         | 65                  | 0                  |
+  | Phút máy cho mỗi PR gộp (880 lượt chạy, 30 PR gộp) | 430                 | không đổi          |
+  | Đỏ muộn: đầu nhánh có job đỏ sau khi `gate` đã qua | 11 trên 55          | không đổi          |
+  | Nhánh chính đỏ: `CI` · `Security` · `Release`      | 0/29 · 0/30 · 30/30 | không đổi          |
+
+  Số gộp ngược khớp lần đo tay ở mục 2 (99 lần, 93 xung đột, `wiki/log.md` 60). Lệnh cho thấy ba
+  điều lần đo tay chưa thấy. Kho có khoảng 300 lượt chạy mỗi ngày, nên lệnh hỏi GitHub theo từng
+  ngày (GitHub cắt danh sách ở 1.000 lượt). «Đỏ muộn» đếm cả lượt đã được chạy lại cho xanh, nên
+  11 trên 55 (20%) cao hơn con số 2 trên 16 đo tay. Và chỗ nào không đọc được thì lệnh ghi «not
+  read» kèm lý do, không ghi 0. Ba giới hạn còn lại: chưa kiểm nút gộp trên GitHub có theo luật gộp
+  kiểu hợp không (lần gộp ngược trên máy thì có); `onehub-inventory` chưa nhận được dòng mẫu vì tệp
+  `.gitattributes` của nó đã sửa tại chỗ (chờ RS8); và một tuần của kho này là khoảng 2.000 lượt
+  hỏi GitHub, quá hạn mức mỗi giờ của khoá Actions, nên báo cáo hằng tuần trong CI sẽ ghi phần CI
+  là «not read» cho tới khi lệnh đọc rẻ hơn.
 - **RS2b rộng hơn bản trước.** Ngoài `wiki/`, kho này còn sinh ra tệp cùng dạng: `src/generated/*`
   (mã sinh từ mô hình, 5 đến 8 trên 30 PR chạm), `ontology/glossary.md` và `ontology/labels.yaml`
   (danh sách chung, 7 đến 8). design-assembly cần cùng cơ chế cho sổ linh kiện và bảng vai × màn ×
