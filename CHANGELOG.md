@@ -9,8 +9,10 @@ a command.
 
 - `.gitattributes` merges `wiki/log.md` by union. Every branch adds its line at the top of that
   list, so merging the default branch into a branch conflicted there almost every time. Git now
-  keeps the lines of both sides. It applies when a branch is merged or rebased on a machine;
-  whether the merge button on GitHub follows it is not verified. After such a merge the lines are
+  keeps the lines of both sides. It applies when a branch is merged or rebased on a machine.
+  GitHub does not follow it: its merge button, its "Update branch" and auto-merge still see a
+  conflict until the default branch is merged into the branch on a machine and pushed (seen on a
+  probe repository, 2026-11-16). After such a merge the lines are
   not strictly newest first, so the `wiki-ingest` skill reads the latest date instead of the first
   line. The rule suits a file where lines are added and never edited.
 - `tools/sdlc_metrics.py` gains a "Flow" section, and `--json` gains the keys `lead_time_max_h`,
