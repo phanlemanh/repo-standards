@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-17
 
 ### Parallel work
 Step B of the plan in `docs/three-repo-overview-design.md` (packages RS2a and RS10): the one file
@@ -161,9 +161,9 @@ repositories: `docs/three-repo-overview-design.md`.
 - Not built, and listed in the principle under what is still open: a way for a repo with one
   owner to merge its own change to the rules; a wall on GitHub for a pull request raised to
   `medium` on a path with no owner (anyone who can write, an agent included, can merge it once
-  the checks pass); telling a new fixture in `conftest.py` from a switched-off test. None of
-  this has run against a real GitHub repository yet, including whether the `gate` job is
-  allowed to turn auto-merge off.
+  the checks pass); telling a new fixture in `conftest.py` from a switched-off test. The
+  ruleset has run on a probe repository (see "Verified"); the PR pipeline has not, including
+  whether the `gate` job is allowed to turn auto-merge off.
 
 ### Merge method
 - `tools/github_setup.py --merge-method merge` allows merge commits and turns squash and rebase
@@ -278,16 +278,28 @@ repositories: `docs/three-repo-overview-design.md`.
   full report; `make check` ends with one line. At `team`, a passing coverage run still prints its
   table, except with the `design` capability.
 
-### Fixes
-- `pr-pipeline.yml` (`github-agents`): the reviewer accepts PRs opened by `claude[bot]`; before, its
-  run failed and low-tier auto-merge never happened. A custom bot in `AGENT_AUTHORS` must also be
-  added to `allowed_bots`.
-- The reviewer no longer runs PR code in a job that holds tokens: no dependency install, no `make`,
-  no MCP servers from the repo. It reads test results from `gh pr checks`.
-- The gate keeps its base-branch rules in `$RUNNER_TEMP`, so a PR cannot plant `.gate/yaml.py` and
-  run code in the job that sets the risk tier.
+### Verified
+- Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI on
+  every pull request of this release.
+- Run on GitHub, on a private probe repository built from 0.4.0 and upgraded to the default branch
+  before the last two walls landed: the walls listed under "Real walls", the ruleset with no
+  approval and code owners from `.github/CODEOWNERS`, and the union merge of `wiki/log.md` on a
+  machine (GitHub's own merge does not follow it). After the upgrade `codeql` ended green and off,
+  the ruleset required four checks, and a pull request with a commit out of format was blocked.
+- Not yet run: the PR pipeline of `github-agents` on GitHub (`gate`, a low-tier pull request that
+  merges itself, `gate` turning auto-merge off, `proof.check`); an upgrade from 0.5.0 to this
+  release; CodeQL on a public repository after the upgrade; the setup skills in a live Claude Code
+  session.
 
-Re-apply to get these. The reviewer and its inline comments have not yet run on GitHub.
+### Known gaps
+- On a private repository on GitHub's free plan, `tools/github_setup.py` cannot give the
+  `production` environment a required reviewer (GitHub answers 422). It says so and exits 1, but
+  the environment is created without the rule, so the `production` job of `deploy.yml` runs with
+  nobody approving it.
+- An upgrade leaves the files a repository owns (`src/index.css`, `package.json`, `pyproject.toml`
+  and the like) as they are, even when nobody edited them, and names them only on the first
+  install. Compare them with the plugin's copy by hand after an upgrade; on `react-vite`, the
+  design tokens in `src/index.css` come first.
 
 ## 0.5.0 — 2026-11-11
 
