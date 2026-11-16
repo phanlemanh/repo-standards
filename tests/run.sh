@@ -1518,7 +1518,7 @@ merged_with() { rm -f "$TMP/pm-calls"
 grep -q -- '--merge-method merge' "$ROOT/plugins/repo-setup/skills/github/SKILL.md" || miss "merge method: the github skill does not name the option"
 echo "ok  merge method (or misses reported above)"
 
-# 43. people decide, machines check (docs/nguyen-tac-setup.md): nothing the setup generates uses a
+# 43. people decide, machines check (docs/setup-principles.md): nothing the setup generates uses a
 #     person as a checker. A person appears where something is decided: the rules, production.
 pd="$TMP/people-decide"; mkdir -p "$pd" && git -C "$pd" init -q -b main
 python3 "$S/apply.py" --target "$pd" --preset python --level team --with github-agents --var project_name=P --var description=x --var owner=acme >/dev/null
@@ -1679,10 +1679,10 @@ for wall in ("Read(./.env)", "Edit(./.github/workflows/**)", "Edit(./governance/
 PY
 if grep -q 'gate hook' "$ROOT/plugins/repo-setup/skills/explain/SKILL.md"; then miss "people decide: explain names a gate hook the plugin no longer ships"; fi
 # 43h. the principle is written down where the next change to the plugin will find it
-[ -f "$ROOT/docs/nguyen-tac-setup.md" ] || miss "people decide: docs/nguyen-tac-setup.md is missing"
-grep -q 'docs/nguyen-tac-setup.md' "$ROOT/README.md" || miss "people decide: README.md does not point to the principle"
-grep -q 'nguyen-tac-setup.md' "$ROOT/plugins/repo-setup/README.md" || miss "people decide: the plugin README does not point to the principle"
-grep -q 'docs/nguyen-tac-setup.md' "$ROOT/CLAUDE.md" 2>/dev/null || miss "people decide: the root CLAUDE.md does not point to the principle, so the next session will not load it"
+[ -f "$ROOT/docs/setup-principles.md" ] || miss "people decide: docs/setup-principles.md is missing"
+grep -q 'docs/setup-principles.md' "$ROOT/README.md" || miss "people decide: README.md does not point to the principle"
+grep -q 'setup-principles.md' "$ROOT/plugins/repo-setup/README.md" || miss "people decide: the plugin README does not point to the principle"
+grep -q 'docs/setup-principles.md' "$ROOT/CLAUDE.md" 2>/dev/null || miss "people decide: the root CLAUDE.md does not point to the principle, so the next session will not load it"
 # 43i. doctor: protection is a pull request plus required checks; it asks for no approval count
 mkdir -p "$TMP/bpbin"
 cat > "$TMP/bpbin/gh" <<'SH'
@@ -1725,7 +1725,7 @@ ruleset_call() { echo "$1" > "$TMP/ruleset-ids"; rm -f "$TMP/rs-calls"
 [ "$(ruleset_call 41)" = "api -X PUT repos/acme/sample/rulesets/41 --input -" ] || miss "people decide: an old ruleset keeps asking for an approval after the upgrade: $(ruleset_call 41)"
 echo "ok  people decide, machines check (or misses reported above)"
 
-# 44. real walls (docs/superpowers/specs/2026-11-16-tuong-that-design.md): a check that carries the
+# 44. real walls (docs/superpowers/specs/2026-11-16-real-walls-design.md): a check that carries the
 #     name of a wall must be able to go red.
 rw="$TMP/real-walls"; mkdir -p "$rw" && git -C "$rw" init -q -b main
 python3 "$S/apply.py" --target "$rw" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
@@ -1891,6 +1891,21 @@ dry "$rw" | grep -q 'checks check$' || miss "real walls: secret-scan is required
 dry "$rw" | grep -q 'secret-scan is not a required check' || miss "real walls: github_setup does not say that secret-scan is not required"
 mv "$TMP/security.yml.kept" "$rw/.github/workflows/security.yml"
 echo "ok  real walls (or misses reported above)"
+
+# 45. this repository keeps the rule it gives every repository it sets up (AGENTS.md, "Language"):
+#     file names are English, whatever language the document is written in. No check can tell a
+#     Vietnamese name from an English one, so the rule is a line in CLAUDE.md, the four documents
+#     that broke it carry English names, and nothing points at the old names.
+grep -q 'names are English' "$ROOT/CLAUDE.md" || miss "own rules: CLAUDE.md does not say that file, folder and branch names are English"
+for doc in docs/setup-principles.md docs/three-repo-boundaries.md docs/three-repo-overview-design.md docs/superpowers/specs/2026-11-16-real-walls-design.md; do
+  [ -f "$ROOT/$doc" ] || miss "own rules: $doc is missing"
+done
+old_names='nguyen-tac-setup\.md|ranh-gioi-ba-kho\.md|thiet-ke-tong-quan-ba-kho\.md|tuong-that-design\.md'
+stale=$(cd "$ROOT" && git ls-files | grep -E "$old_names" || true)
+[ -z "$stale" ] || miss "own rules: a document still has a Vietnamese file name: $stale"
+stale=$(cd "$ROOT" && git grep -l -E "$old_names" -- . ':!tests/run.sh' || true)
+[ -z "$stale" ] || miss "own rules: a file still points at a renamed document: $(echo $stale)"
+echo "ok  own rules (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

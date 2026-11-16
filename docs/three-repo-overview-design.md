@@ -3,9 +3,10 @@
 Ngày: 2026-11-16. Trạng thái: máy tổng hợp từ buổi thảo luận với chủ kho cùng ngày. Chủ kho đã chốt
 bốn tiêu chí ở mục 1, luật «gộp là phải xanh» và sáu biên uỷ quyền ở mục 5. Mọi gói việc ở mục 7 là
 đề xuất: việc ở hai kho kia chờ chủ kho cho phép tại kho đó. Trang này đứng trước bản thiết kế chi
-tiết của từng kho; nó nói vấn đề là gì, hướng giải là gì, kho nào nhận phần nào. Phiên Design Assembly đã kiểm ba gói DA với mã thật cùng ngày; kết quả ở cuối mục 7. Việc nào ở kho nào
-xem [ranh giới ba kho](ranh-gioi-ba-kho.md); setup phải giữ điều gì xem
-[nguyên tắc của setup](nguyen-tac-setup.md).
+tiết của từng kho; nó nói vấn đề là gì, hướng giải là gì, kho nào nhận phần nào. Phiên Design
+Assembly đã kiểm ba gói DA với mã thật cùng ngày; kết quả ở cuối mục 7. Kế hoạch được rà lại cùng
+ngày bằng số đo xung đột thật; kết quả ở mục 8. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md); setup phải giữ điều gì xem
+[nguyên tắc của setup](setup-principles.md).
 
 ## 1. Sứ mệnh và thước
 
@@ -38,7 +39,8 @@ Số đo trên `onehub-inventory`, nhánh chính tại `b6f4f29`, đọc từ Gi
 | Phút máy GitHub cho mỗi PR gộp               | 548 phút (73 giờ chạy, 8 PR gộp)                  |
 | Phần chạy lúc ô `gate` đỏ, PR chưa thể gộp   | 64%                                               |
 | Cặp PR cùng chạm ít nhất một tệp (30 PR)     | 435 trên 435                                      |
-| Gộp nhánh chính ngược vào nhánh · ghim lại   | 64 lần · 71 commit trên 30 PR                     |
+| Gộp nhánh chính ngược vào nhánh · ghim lại   | 99 lần · 71 commit trên 30 PR                     |
+| Lần gộp ngược có xung đột (phát lại bằng git) | 93 trên 99                                        |
 | Đỏ muộn trên đầu nhánh đã qua `gate`         | 2 trên 16 lượt                                    |
 | Nhánh chính đỏ sau gộp                       | 0 trên 8 lượt                                     |
 | Ô bắt buộc trên GitHub                       | 3 trên 9 (`check`, `e2e`, `gate`)                 |
@@ -61,7 +63,33 @@ là 29%, và con số này là trần vì hai PR cùng sửa một tệp chưa c
 
 `wiki/log.md` ghi «mới nhất ở trên», nên PR nào cũng chèn vào cùng một dòng và chắc chắn xung đột.
 
-## 3. Bốn gốc rễ
+«Cùng chạm một tệp» mới là dấu hiệu gián tiếp. Phát lại 99 lần gộp nhánh chính ngược vào nhánh bằng
+`git merge-tree` cho số xung đột thật: 93 lần xung đột, ở các tệp sau.
+
+| Tệp xung đột                                 | Số lần (trên 93) | Kho             |
+| -------------------------------------------- | ---------------- | --------------- |
+| `LO-TRINH.html`                              | 71               | delivery-loop   |
+| `wiki/log.md`                                | 60               | Repo Standards  |
+| `PRODUCT-MAP.md`                             | 45               | delivery-loop   |
+| `_acceptance/config.yaml`                    | 17               | delivery-loop   |
+| `design/so-khoi.yaml`, `behaviors.md`        | 9, 6             | design-assembly |
+| `ontology/glossary.md`, `wiki/entities/*.md` | 8, 5             | Repo Standards  |
+| Mã sản phẩm (tệp nhiều nhất: lưới hàng)      | 8                | Kho sản phẩm    |
+
+Gỡ phần của từng kho thì còn bao nhiêu lần gộp ngược xung đột:
+
+| Gỡ tệp của                        | Còn xung đột (trên 93) |
+| --------------------------------- | ---------------------- |
+| Repo Standards                    | 76                     |
+| Repo Standards và design-assembly | 73                     |
+| Riêng delivery-loop               | 73                     |
+| Cả ba kho                         | 16                     |
+
+Mỗi kho gỡ riêng chỉ bớt khoảng một phần năm; cả ba cùng gỡ mới bớt 83%. 16 lần còn lại là xung đột
+thật ở mã sản phẩm. Hai lưu ý: `PRODUCT-MAP.md` ở kho thật có luật gộp riêng nên nhiều lần đã tự gỡ;
+và con số «64 lần gộp ngược» ở bản trước đếm theo lời commit, đếm theo cấu trúc commit là 99.
+
+## 3. Năm gốc rễ
 
 1. **Độ mịn quá thô.** Hệ thống coi mọi thay đổi là thay đổi của mọi thứ, ở ba chỗ:
    - chỗ ghi: vòng nào cũng ghi vào cùng mấy tệp sổ, nên PR nào cũng chạm PR khác;
@@ -77,10 +105,21 @@ là 29%, và con số này là trần vì hai PR cùng sửa một tệp chưa c
 3. **Tường trên danh nghĩa.** Có ô mang tên một bức tường mà không giữ gì: `secret-scan` quét 0
    byte, sáu trên chín ô không bắt buộc, ô tên PR kiểm thứ không commit nào dùng, «Release» đỏ sau
    mọi lần gộp nên màu đỏ mất nghĩa.
-4. **Quyền sống bằng lời dặn.** Phiên giám sát điều phối thay chủ kho xếp hàng gộp, sắp lại lộ
-   trình, mở và dọn phiên. Phần cơ chế đã là mã (gói `dieu-phoi`), nhưng nó được quyết gì, tới đâu,
-   khi nào phải hỏi thì vẫn nằm trong lời dặn: không bền, đồng đội không đọc được, không có biên,
-   không đo được.
+4. **Luật và quyền sống bằng lời dặn.** Hai dạng:
+   - Quyền: phiên giám sát điều phối thay chủ kho xếp hàng gộp, sắp lại lộ trình, mở và dọn phiên.
+     Phần cơ chế đã là mã (gói `dieu-phoi`), nhưng nó được quyết gì, tới đâu, khi nào phải hỏi thì
+     vẫn nằm trong lời dặn: không bền, đồng đội không đọc được, không có biên, không đo được.
+   - Luật: `AGENTS.md` mà plugin sinh ra nêu khoảng 16 luật dạng «luôn» hay «không được»; máy đọc và
+     xếp thì khoảng 6 luật có máy giữ, 10 luật chỉ là câu chữ. Luật «tên tệp tiếng Anh» nằm trong
+     10 luật đó: `onehub-inventory` có khoảng 59 trên 62 thư mục vòng tên tiếng Việt, và bốn tệp
+     tài liệu ở chính kho này từng mang tên tiếng Việt (ba tệp do máy đặt trong buổi này; đã đổi
+     cùng ngày, gói RS9).
+5. **Bản sao trôi khỏi nguồn.** Plugin chép mẫu vào kho một lần; sau đó bản sửa ở nguồn không tự
+   tới. `onehub-inventory` dựng từ bản 0.4.0; 34 trên 81 tệp sinh ra đã bị sửa tại chỗ, gồm
+   `security.yml`, `ci.yml`, `.pre-commit-config.yaml` và `AGENTS.md`. Chạy lại `apply.py` thì tệp
+   đã sửa bị báo «conflict» và để nguyên, nên bản sửa quét bí mật của đợt 1 không tự tới kho đó.
+   Cùng gốc: kho Repo Standards không áp bộ setup lên chính mình (không có `AGENTS.md`), nên luật nó
+   dạy kho khác không ràng nó.
 
 ## 4. Sáu nguyên tắc thiết kế
 
@@ -147,16 +186,53 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 
 **Repo Standards**
 
-| Mã  | Gói việc                                                                                           | Tiêu chí          |
-| --- | -------------------------------------------------------------------------------------------------- | ----------------- |
-| RS1 | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô tên PR theo cách gộp; ruleset bắt buộc đúng các ô kho khai | Tin cậy           |
-| RS2 | Luật «mỗi tệp một người ghi»: `wiki/log.md` thành mảnh, `wiki/index.md` thành vật dẫn xuất, có phép kiểm | Nhanh             |
-| RS3 | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy, chia song song | Nguồn lực, nhanh  |
-| RS4 | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`             | Nền cho DL và DA  |
-| RS5 | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc, đổi nó là đổi luật chơi      | Ít người          |
-| RS6 | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](nguyen-tac-setup.md), kèm bài kiểm            | Giữ hướng         |
+| Mã   | Gói việc                                                                                                                              | Gốc rễ  | Tiêu chí         | Trạng thái                           |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
+| RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã dựng, PR 14, chưa gộp             |
+| RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã thử bằng phát lại, chưa dựng      |
+| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Chưa thiết kế                        |
+| RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Chưa thiết kế                        |
+| RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
+| RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
+| RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
+| RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Làm cùng RS9                         |
+| RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Chưa thiết kế                        |
+| RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Chưa thiết kế                        |
+| RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
+| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Chưa thiết kế                        |
 
-Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-tuong-that-design.md).
+Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md).
+
+Ghi chú cho các gói mới và gói đổi:
+
+- **RS2a đã thử.** Phát lại 99 lần gộp ngược với luật gộp kiểu hợp cho `wiki/log.md` và
+  `wiki/index.md`: xung đột ở hai tệp này từ 60 và 3 về 0, số lần gộp ngược sạch từ 6 lên 22, một
+  bản gộp soi tay không mất dòng nào. Nó chỉ gỡ xung đột; hai PR vẫn «cùng chạm một tệp», nên lối
+  gộp nhanh của lệnh gộp vẫn đóng. Vì thế vẫn cần RS2b.
+- **RS2b rộng hơn bản trước.** Ngoài `wiki/`, kho này còn sinh ra tệp cùng dạng: `src/generated/*`
+  (mã sinh từ mô hình, 5 đến 8 trên 30 PR chạm), `ontology/glossary.md` và `ontology/labels.yaml`
+  (danh sách chung, 7 đến 8). design-assembly cần cùng cơ chế cho sổ linh kiện và bảng vai × màn ×
+  nút.
+- **Bảng markdown được căn cột là một tệp nóng tự tạo.** `ontology/glossary.md` do mẫu của kho này
+  sinh ra là một bảng. Ở `onehub-inventory`, bảy lần sửa gần đây mỗi lần đổi 21 đến 27 dòng trên một
+  bảng 34 dòng: thêm một thuật ngữ dài thì bộ định dạng căn lại cả bảng. Phiên Design Assembly thấy
+  cùng bệnh ở trang mẫu hành vi và báo sang. RS2b vì thế gồm cả việc đổi dạng của bảng này (mỗi thuật
+  ngữ một mảnh, hoặc một dạng không căn cột).
+- **RS2b không cần cơ chế đẩy lên nhánh chính.** design-assembly chọn hướng cho DA1 (đề bài 0005 của
+  kho đó, chờ chủ kho duyệt): mảnh là nguồn, tệp ở đường dẫn cũ thành vật dẫn xuất không commit,
+  lệnh sinh chạy trước cổng. Kho này nên theo cùng hướng cho `wiki/index.md` và `src/generated/*`,
+  để hai kho không dựng hai cơ chế. DA1 vì thế không chờ RS2b.
+- **Đầu vào từ design-assembly cho RS3 và RS5a đã rõ.** DA2 cấp một lệnh in danh sách màn bị ảnh
+  hưởng, khổ màn, hoặc «trọn bộ»; nối lệnh đó vào CI là RS3, và lệnh chạy bài trình duyệt nằm ở
+  `mk/design.mk` do kho này giữ. Tường cho khuôn mới và màu gốc: design-assembly dựng phép kiểm
+  trong cổng, còn nâng hạng PR trên GitHub là RS5a.
+- **RS7 không gồm tường cho tên tệp.** Máy thử kiểm tên tệp bằng từ điển tiếng Anh trên
+  `onehub-inventory`: bắt được 38 trên 61 thư mục vòng tên tiếng Việt và báo nhầm 26 trên 277 tên
+  trong `src/`. Tiếng Việt không dấu trùng nhiều từ tiếng Anh ngắn, nên phép kiểm này không đủ làm ô
+  bắt buộc. Luật tên tệp vì thế được ghi là «giữ bằng lời», và sửa ở nơi tên sinh ra: tên vòng do
+  vòng làm việc đặt, rồi lan sang tên thư mục, tên bài kiểm và tên lệnh.
+- **RS8 đứng trước bước «chạy trên `onehub-inventory`».** Không có nó, mỗi bản sửa phải có người gộp
+  tay vào 34 tệp đã lệch.
 
 **design-assembly**
 
@@ -239,6 +315,38 @@ mình (`wiki/` và các sổ trong `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md`
 Đợt 5 có thể khai sớm hơn vì nó không phụ thuộc đợt nào; nó xếp sau vì các đợt trước dịch chuyển số
 đo nhiều hơn. Mọi mức lợi là ước tính từ số đo ở mục 2, chưa đợt nào được thử.
 
+### Rà lại kế hoạch (2026-11-16)
+
+Bảng đợt ở trên viết trước khi có số xung đột thật và trước khi biết thứ tự theo kho. Bảy điều lệch:
+
+1. **Đợt 2 không trả công nếu thiếu delivery-loop.** Kỳ vọng «va chạm từ 100% về 37%» chỉ đúng khi
+   cả ba kho cùng gỡ. Hai kho đi trước gỡ xong thì còn 73 trên 93 lần gộp ngược xung đột; đòn lớn
+   nhất nằm ở kho đi sau cùng.
+2. **Có một bước rẻ chưa được tính:** RS2a, một dòng mẫu, bỏ 60 lần xung đột ở `wiki/log.md`.
+3. **RS4 chưa có bên đọc.** DA2 không cần nó; DL2 và DL4 chờ delivery-loop chuyển nhà. Dựng bây giờ
+   là dựng trước khi cần.
+4. **RS5 chỉ có bên đọc cho một phần:** tường cho biên thiết kế (RS5a). Khe uỷ quyền đầy đủ (RS5b)
+   chờ DL6.
+5. **Bước «chạy trên `onehub-inventory`» chưa có đường đi** (gốc rễ 5): thiếu RS8.
+6. **Chưa có thước lặp lại được.** Mọi số ở mục 2 do máy đo tay một lần. Không có RS10 thì không đợt
+   nào chứng minh được là đã dịch chuyển số đo.
+7. **RS6 xếp cuối là sai thứ tự.** Lỗi đặt tên tệp trong buổi này xảy ra vì luật chưa được ghi ở kho
+   này. Phần ghi luật (RS9) rẻ và nên đi trước.
+
+Thứ tự đề xuất cho Repo Standards, thay cột của kho này trong bảng đợt:
+
+| Bước | Gói việc             | Vì sao ở đây                                                   | Xong là gì                                                         |
+| ---- | -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
+| A    | RS1 (gộp PR 14), RS9 | Đã dựng; và kho phải giữ luật của mình trước khi dạy tiếp      | Ba workflow chạy thật trên một kho thử; bốn tệp có tên tiếng Anh   |
+| B    | RS2a, RS10           | Rẻ nhất, đo được ngay; có thước rồi mới chấm được các bước sau | `wiki/log.md` hết xung đột khi phát lại; lệnh in đủ các dòng mục 2 |
+| C    | RS8                  | Điều kiện để mọi bản sửa tới được `onehub-inventory`           | Kho thử có tệp sửa tại chỗ vẫn nhận được bản sửa của mẫu           |
+| D    | RS2b, RS3            | Phần cấu trúc; dùng chung với DA1 và DA2                       | PR không mang tệp dẫn xuất; tầng nặng chỉ chạy khi PR sẵn sàng     |
+| E    | RS7, RS5a            | Luật có máy giữ hoặc khai là lời                               | Bài kiểm đỏ khi thêm luật không có chủ                             |
+| F    | RS4, RS5b            | Chỉ khi delivery-loop chuyển nhà xong và sẵn sàng đọc          | Có bên đọc dùng thật                                               |
+
+Bước A đến C không phụ thuộc kho nào khác. Bước D nên đi cùng nhịp với design-assembly. Sau bước C
+mới chạy trên `onehub-inventory`.
+
 ## 9. Rủi ro và giới hạn đã biết
 
 - **GitHub không ép được «chỉ gộp qua lệnh gộp».** Lệnh gộp của gói `dieu-phoi` đòi mọi ô xanh,
@@ -257,6 +365,12 @@ mình (`wiki/` và các sổ trong `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md`
   và hợp đồng sổ của nó có sổ linh kiện và sổ màn.
 - **Chưa đo phía Máy.** Thời gian chấm, token và lượt gọi người lấy từ lời báo cáo của phiên làm
   việc, chưa được kiểm.
+- **Luật gộp kiểu hợp mới thử ở máy.** Phép phát lại dùng git tại chỗ, đúng nơi các phiên gộp nhánh
+  chính vào nhánh. GitHub có theo luật đó khi tự tính «có xung đột» hay không thì chưa kiểm.
+- **Cách xếp 16 luật của `AGENTS.md`** thành «máy giữ» và «lời» là do máy đọc và xếp, chưa đối
+  chiếu từng luật với một bài kiểm chiều đỏ.
+- **Số xung đột phát lại không dùng luật gộp riêng của kho thật** cho `PRODUCT-MAP.md`, nên 45 lần
+  ở tệp đó cao hơn thực tế.
 
 ## 10. Điều còn mở cho chủ kho
 
@@ -267,6 +381,10 @@ mình (`wiki/` và các sổ trong `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md`
 5. Khoá bật lối gộp nhanh của gói `dieu-phoi` có đang bật ở `onehub-inventory` không.
 6. Đã chốt: tệp chưa ai nhận thì theo luật ở cuối mục 7. Còn mở: design-assembly xác nhận nhận ba
    tệp, và cách chuyển sổ khối mà không sửa delivery-loop trước khi kho đó chuyển nhà xong.
+7. Thứ tự A đến F cho Repo Standards ở cuối mục 8.
+8. Đã chốt và đã làm: RS9. `CLAUDE.md` ghi luật tên tiếng Anh; bốn tệp tài liệu đã đổi tên. Nhánh
+   `claude/thiet-ke-tong-quan-ba-kho` giữ tên cũ vì PR 14 đang mở trên nó.
+9. Một kho thử trên GitHub để chạy thật ba workflow của RS1 trước khi gộp PR 14.
 
 ## Nguồn
 
@@ -278,5 +396,15 @@ mình (`wiki/` và các sổ trong `design/`); `LO-TRINH.html`, `PRODUCT-MAP.md`
   chính, đọc qua GitHub ngày 15–16/11.
 - Phép thử `secret-scan`: cấy một token giả vào bản clone tạm; lệnh của móc báo 0 commit được
   quét, hai lệnh quét đối chứng đều bắt được.
+- Phát lại gộp ngược: 30 PR gộp gần nhất của `onehub-inventory`, 99 commit gộp nhánh chính vào
+  nhánh, `git merge-tree --write-tree` trên hai cha của từng commit; chạy lại với luật gộp kiểu hợp
+  cho hai tệp `wiki/`.
+- `onehub-inventory`, `.repo-setup.json` ở nhánh chính: bản 0.4.0, 81 tệp ghi băm; so băm với tệp
+  hiện có: 38 nguyên, 34 đã sửa, 9 đã bỏ.
+- design-assembly, đề bài 0005 «ledgers stop riding pull requests» và quyết định 0048, nhánh
+  `docs/ledgers-stop-riding-pull-requests` tại `9ab2d54` (chưa đẩy, đọc trên máy ngày 2026-11-16).
+- `onehub-inventory`, 12 commit gần nhất chạm `ontology/glossary.md`: số dòng thêm và bớt của tệp đó
+  trong từng commit.
+- Phép thử tên tệp: tách tên thành từ, tra `/usr/share/dict/words` cộng một danh sách từ kỹ thuật.
 - Chủ kho, buổi thảo luận ngày 2026-11-16: bốn tiêu chí, «gộp là phải xanh», sáu biên uỷ quyền,
   «chỉ mình tôi quyết».

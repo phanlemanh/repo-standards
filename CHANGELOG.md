@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+### Documents renamed
+- Four documents carried Vietnamese file names, against the rule the plugin gives every repository
+  it sets up (file names are English; only the text follows the repository's language). They are
+  now `docs/setup-principles.md`, `docs/three-repo-boundaries.md`,
+  `docs/three-repo-overview-design.md` and `docs/superpowers/specs/2026-11-16-real-walls-design.md`;
+  the text is unchanged and still Vietnamese. `CLAUDE.md` states the rule for this repository, and
+  section 45 of `tests/run.sh` fails when a file points at an old name. A link from outside to an
+  old name no longer resolves.
+
 ### Real walls
 Four checks carried the name of a wall and held nothing. Each now has a test that makes it go red.
-Design: `docs/superpowers/specs/2026-11-16-tuong-that-design.md`; the picture across the three
-repositories: `docs/thiet-ke-tong-quan-ba-kho.md`.
+Design: `docs/superpowers/specs/2026-11-16-real-walls-design.md`; the picture across the three
+repositories: `docs/three-repo-overview-design.md`.
 
 - Secret scan in CI: `security.yml` ran `pre-commit run gitleaks --all-files`. That hook reads
   staged changes, and CI stages nothing, so it scanned zero bytes and passed whatever the commits
@@ -45,7 +54,7 @@ repositories: `docs/thiet-ke-tong-quan-ba-kho.md`.
   cannot, the title is checked as before and the commits are not).
 
 ### People decide, machines check
-- The rule the plugin now holds itself to is written in `docs/nguyen-tac-setup.md`: a setup that
+- The rule the plugin now holds itself to is written in `docs/setup-principles.md`: a setup that
   brings a person in to make a change more reliable is not a good setup. A person appears where
   something is decided (a change to the rules, production, a secret); checking is a machine's
   job. Section 43 of `tests/run.sh` fails when a change to the plugin breaks the rule, and a root
@@ -167,7 +176,7 @@ repositories: `docs/thiet-ke-tong-quan-ba-kho.md`.
   `make ontology` after each edit, four answers per entity, never fill `decided_by` yourself.
 - Not built: a hook that runs the lint after each edit, and a `planned` status for actions (an
   action that is declared but has no code still counts as an answer).
-- `docs/ranh-gioi-ba-kho.md` records what belongs to this repository, to design-assembly and to
+- `docs/three-repo-boundaries.md` records what belongs to this repository, to design-assembly and to
   delivery-loop.
 - The same page now says which repository answers which UX question, where the three overlap
   today, and what each should carry next. Proposals only: nothing in the plugin changed.

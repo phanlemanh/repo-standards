@@ -2,7 +2,7 @@
 
 Ngày: 2026-11-15. Trạng thái: đã dựng trên nhánh `claude/relations-and-attributes-1dd820`, chờ chủ
 kho xem. Áp dụng cho plugin `repo-setup`. Ranh giới với hai kho bên cạnh:
-[ranh giới ba kho](../../ranh-gioi-ba-kho.md). Nối tiếp
+[ranh giới ba kho](../../three-repo-boundaries.md). Nối tiếp
 [mỗi thực thể đủ bốn câu trả lời](2026-11-14-entity-lifecycle-design.md).
 
 ## 1. Ý định

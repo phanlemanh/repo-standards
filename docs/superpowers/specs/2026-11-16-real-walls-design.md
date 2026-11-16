@@ -2,8 +2,8 @@
 
 Ngày: 2026-11-16. Trạng thái: đã dựng trên nhánh `claude/thiet-ke-tong-quan-ba-kho` cùng ngày, chờ chủ
 kho xem; ba lựa chọn ở mục 6 dựng theo đề nghị của máy. Áp dụng cho plugin
-`repo-setup`. Đây là gói RS1 của [thiết kế tổng quan](../../thiet-ke-tong-quan-ba-kho.md); nguyên tắc
-phải giữ xem [nguyên tắc của setup](../../nguyen-tac-setup.md).
+`repo-setup`. Đây là gói RS1 của [thiết kế tổng quan](../../three-repo-overview-design.md); nguyên tắc
+phải giữ xem [nguyên tắc của setup](../../setup-principles.md).
 
 ## 1. Ý định
 
