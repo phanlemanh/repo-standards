@@ -1,7 +1,7 @@
 # Nguyên tắc của setup: người quyết, máy kiểm
 
 Ngày: 2026-11-16. Trạng thái: chủ kho nêu tiêu chí và cho sửa cùng ngày. Trang này nói thứ
-repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](ranh-gioi-ba-kho.md).
+repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md).
 
 ## Ý định
 

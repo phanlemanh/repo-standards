@@ -3,6 +3,8 @@
 Ngày: 2026-11-14. Trạng thái: chủ kho đã chốt phần «bảng vai × màn × nút» cùng ngày («Tách ba
 phần»). Phần còn lại chép từ các quyết định đã có, ghi ở mục Nguồn. Mục «UX: kho nào mang gì» thêm
 ngày 2026-11-15, do máy xếp. Trang này chỉ nói việc nào ở kho nào; cách làm từng việc nằm ở kho đó.
+Vấn đề đang gặp và hướng đi chung của ba kho xem
+[thiết kế tổng quan](three-repo-overview-design.md).
 
 ## Mỗi kho trả lời một câu
 

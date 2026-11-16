@@ -707,6 +707,16 @@ why = "A red main blocks everyone and hides new failures."
 fix = "Open the failing run (gh run view --log-failed) and fix it first."
 
 [[check]]
+id = "release_key"
+level = "team"
+weight = 1
+type = "remote"
+probe = "release_key"
+title = "Releases have the key they need"
+why = "GitHub Actions may not open pull requests with its own token: without a key, release-please opens no release PR."
+fix = "Store a PAT or GitHub App token that may open pull requests: gh secret set RELEASE_PLEASE_TOKEN"
+
+[[check]]
 id = "secrets_store"
 level = "team"
 type = "manual"

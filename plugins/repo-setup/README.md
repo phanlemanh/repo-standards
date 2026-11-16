@@ -116,7 +116,7 @@ this plugin. A plugin marketplace gets `/review-change` only, written for plugin
 The rule behind every part: **people decide, machines check**. Nothing the plugin generates puts a
 person in to check a change. A person appears where something is decided: a change to the rules
 of the game, production, a secret. The full rule, where each part of it lives in the code and
-what is still open: [docs/nguyen-tac-setup.md](../../docs/nguyen-tac-setup.md) (Vietnamese).
+what is still open: [docs/setup-principles.md](../../docs/setup-principles.md) (Vietnamese).
 
 Two groups, with different strength:
 

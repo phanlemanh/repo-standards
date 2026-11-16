@@ -1,7 +1,7 @@
 # Thiết kế: mỗi thực thể đủ bốn câu trả lời
 
 Ngày: 2026-11-14. Trạng thái: đã dựng trên nhánh `feat/entity-lifecycle`, chờ chủ kho xem. Áp dụng
-cho plugin `repo-setup`. Ranh giới với hai kho bên cạnh: [ranh giới ba kho](../../ranh-gioi-ba-kho.md).
+cho plugin `repo-setup`. Ranh giới với hai kho bên cạnh: [ranh giới ba kho](../../three-repo-boundaries.md).
 
 ## 1. Ý định
 

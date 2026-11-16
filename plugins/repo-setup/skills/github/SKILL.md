@@ -26,17 +26,25 @@ it sets the repository back to squash only.
 Run `python3 tools/github_setup.py` (with `--merge-method merge` when that is the repository's
 way) and explain in plain words what it will do: the merge method, environments `staging` and
 `production` (production needs a human reviewer), and a ruleset on the default branch (PR
-required, required check `check`, a code owner only where `.github/CODEOWNERS` names one, and no
-other approval). A ruleset from an earlier run is updated in place. Ask for the go-ahead, then
+required, required checks `check` and `secret-scan`, a code owner only where `.github/CODEOWNERS`
+names one, and no other approval). Checks of the repository's own, a browser suite for example,
+become required when `governance/autonomy.yaml` names them under `required_checks`.
+
+A ruleset from an earlier run is updated in place. When that would drop a required check someone
+added by hand, the dry run names it and `--apply` stops. Ask the user which they mean: name the
+check under `required_checks` to keep it, or pass `--prune` to drop it. Ask for the go-ahead, then
 run with `--apply` and the same options. Then run `doctor.py --remote`: branch protection and CI checks
 should pass.
 
-With merge commits, two generated files still describe squashing and are the user's to edit:
-step 6 of `CONTRIBUTING.md`, and the comment at the top of `.github/workflows/pr-title.yml` (the
-pull request title is no longer the commit message on the default branch; every commit on the
-branch lands there with its own message). Say this before the go-ahead: release-please reads
-those messages, and nothing checks them, so each commit on a branch needs a Conventional Commits
-message for the release notes and the version to come out right.
+With merge commits, step 6 of `CONTRIBUTING.md` still describes squashing and is the user's to
+edit. The `PR title` workflow needs no edit: it reads the merge settings on every pull request
+and judges what will reach the default branch, the title when the repository squashes, each
+commit of the branch otherwise (job `conventional-commits`, with the repository's own commit-msg
+hook). Say this before the go-ahead: release-please reads those messages, so each commit on a
+branch needs a Conventional Commits message.
+
+The run ends with the secrets that are missing. Without `RELEASE_PLEASE_TOKEN` releases are off:
+the `Release` workflow says so and stays green. Storing that key is the user's to do.
 
 ## 3. Agents on GitHub (only with the `github-agents` capability)
 Off by default. Say this plainly before going further: agents picking up issues needs the GitHub

@@ -8,12 +8,13 @@
 Always: one merge method (squash unless --merge-method says otherwise); environments "staging"
 and "production" (production requires a human reviewer); a ruleset on the default branch (pull
 request + required checks; a code owner decides only where .github/CODEOWNERS names one, and
-nobody else has to approve). When governance/autonomy.yaml names a proof (proof.check), that
-check is required too.
+nobody else has to approve). Required: `check`, `secret-scan`, the checks governance/autonomy.yaml
+names under required_checks, and its proof (proof.check) when it names one.
 With agent workflows (--with github-agents at apply time): labels used by agents and the
 autonomy gate, auto-merge, the "gate" required check, and GitHub Actions kept from approving
 pull requests.
-A ruleset this script made earlier is updated in place.
+A ruleset this script made earlier is updated in place. It stops instead of dropping a required
+check the policy does not name; --prune drops it.
 It never prints or sets secret values: it only tells you which secrets are missing.
 """
 
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -28,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autonomy import OWN_CHECKS, proof_check
+from autonomy import OWN_CHECKS, proof_check, required_checks
 from repo_ontology import find_repo_root, load_yaml_file
 
 LABELS = [
@@ -44,12 +46,47 @@ LABELS = [
     ("agent-review:changes", "d93f0b", "Independent agent review requested changes"),
 ]
 AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
+RULESET_CHECKS = (
+    '.rules[] | select(.type == "required_status_checks") '
+    "| .parameters.required_status_checks[].context"
+)
 # The one way pull requests are merged: (title of the step, the setting that allows it).
 MERGE_METHODS = {
     "squash": ("squash-only merges", "allow_squash_merge"),
     "merge": ("merge commits only", "allow_merge_commit"),
 }
 MERGE_SETTINGS = ("allow_squash_merge", "allow_merge_commit", "allow_rebase_merge")
+
+
+def workflow_has(root: Path, pattern: str) -> bool:
+    """A workflow file of this repository has a line that matches the pattern."""
+    found = re.compile(pattern, re.MULTILINE)
+    folder = root / ".github" / "workflows"
+    return any(
+        found.search(path.read_text(encoding="utf-8", errors="replace"))
+        for path in sorted(folder.glob("*.y*ml"))
+    )
+
+
+def uses_release_please(root: Path) -> bool:
+    """A workflow of this repository opens release pull requests, which needs a key of its own."""
+    return workflow_has(root, r"^\s*(-\s*)?uses:\s*googleapis/release-please-action")
+
+
+def has_secret_scan(root: Path) -> bool:
+    """A workflow defines the job `secret-scan`: a required check nobody reports blocks every PR."""
+    return workflow_has(root, r"^  secret-scan:\s*$")
+
+
+def secret_names(repo: str) -> set[str] | None:
+    """Names of the secrets this repository's workflows can read; None when not listable."""
+    ok, out = gh(["secret", "list", "--json", "name", "--jq", ".[].name"])
+    if not ok:
+        return None
+    names = set(out.split())
+    # Secrets an organisation shares with this repository count too.
+    ok, out = gh(["api", f"repos/{repo}/actions/organization-secrets", "--jq", ".secrets[].name"])
+    return names | set(out.split()) if ok else names
 
 
 def has_agents(root: Path) -> bool:
@@ -89,6 +126,8 @@ def plan(
     agents: bool,
     merge_method: str = "squash",
     proof: str = "",
+    extra: tuple[str, ...] | list[str] = (),
+    secret_scan: bool = True,
 ) -> list[dict[str, Any]]:
     merge_title, merge_allowed = MERGE_METHODS[merge_method]
     merge_fields = [
@@ -97,9 +136,12 @@ def plan(
         for arg in ("-F", f"{setting}={'true' if setting == merge_allowed else 'false'}")
     ]
     steps: list[dict[str, Any]] = []
-    required_checks = ["check", "gate"] if agents else ["check"]
+    # The setup's own checks, then the ones the repository names, then the proof.
+    checks = ["check", "gate"] if agents else ["check"]
+    checks += ["secret-scan"] if secret_scan else []
+    checks += [name for name in extra if name not in checks and name != proof]
     if proof and proof not in OWN_CHECKS:
-        required_checks.append(proof)
+        checks.append(proof)
     for name, color, desc in LABELS if agents else []:
         steps.append(
             {
@@ -184,7 +226,7 @@ def plan(
                 "type": "required_status_checks",
                 "parameters": {
                     "strict_required_status_checks_policy": False,
-                    "required_status_checks": [{"context": c} for c in required_checks],
+                    "required_status_checks": [{"context": c} for c in checks],
                 },
             },
         ],
@@ -192,12 +234,48 @@ def plan(
     steps.append(
         {
             "what": f"ruleset on {branch}: PR + code owner where CODEOWNERS names one + checks "
-            f"{', '.join(required_checks)}",
+            f"{', '.join(checks)}",
             "ruleset": ruleset,
             "args": ["api", "-X", "POST", f"repos/{repo}/rulesets", "--input", "-"],
         }
     )
     return steps
+
+
+def existing_ruleset(repo: str, name: str) -> tuple[str, list[str] | None] | None:
+    """(API path, required checks) of the ruleset an earlier run made; None when there is none.
+
+    The checks are None when they could not be read. A list of rulesets that cannot be read
+    raises LookupError: "unknown" must not be taken for "none", or a second ruleset is made.
+    """
+    query = f'.[] | select(.name == "{name}") | .id'
+    found, ids = gh(["api", f"repos/{repo}/rulesets", "--paginate", "--jq", query])
+    if not found:
+        raise LookupError(ids[:200] or "gh could not list the rulesets")
+    if not ids.split():
+        return None
+    target = f"repos/{repo}/rulesets/{ids.split()[0]}"
+    ok, out = gh(["api", target, "--jq", RULESET_CHECKS])
+    return target, ([line for line in out.splitlines() if line.strip()] if ok else None)
+
+
+def dropped_checks(current: list[str] | None, ruleset: dict[str, Any]) -> list[str]:
+    """Required checks the repository has today that the new ruleset would no longer require."""
+    if current is None:
+        return ["(the current required checks could not be read)"]
+    wanted = {
+        check["context"]
+        for rule in ruleset["rules"]
+        if rule["type"] == "required_status_checks"
+        for check in rule["parameters"]["required_status_checks"]
+    }
+    return [name for name in current if name not in wanted]
+
+
+DROP_HELP = (
+    "governance/autonomy.yaml does not name them: add them under required_checks, "
+    "or pass --prune to drop them"
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,6 +295,12 @@ def main(argv: list[str] | None = None) -> int:
         help="the one way pull requests are merged: squash (default) puts one commit per pull "
         "request on the default branch; merge keeps the branch's commits and adds a merge commit",
     )
+    ap.add_argument(
+        "--prune",
+        action="store_true",
+        help="drop required checks that the default branch has today and that "
+        "governance/autonomy.yaml does not name (default: stop and say which)",
+    )
     args = ap.parse_args(argv)
 
     if not shutil.which("gh"):
@@ -235,23 +319,61 @@ def main(argv: list[str] | None = None) -> int:
     reviewer = args.reviewer or (owners[0] if owners else "")
 
     agents = has_agents(root)
-    steps = plan(repo, branch, reviewer, agents, args.merge_method, proof_check(policy))
+    steps = plan(
+        repo,
+        branch,
+        reviewer,
+        agents,
+        args.merge_method,
+        proof_check(policy),
+        required_checks(policy),
+        has_secret_scan(root),
+    )
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     failures = 0
     for step in steps:
+        gone: list[str] = []
+        pruned: list[str] = []
+        unread = ""
+        if "ruleset" in step:
+            # A ruleset from an earlier run is brought up to date, not left as it was. A required
+            # check someone added by hand is never dropped in silence.
+            try:
+                earlier = existing_ruleset(repo, step["ruleset"]["name"])
+            except LookupError as exc:
+                earlier, unread = None, str(exc)
+            if earlier:
+                target, current = earlier
+                step = {**step, "args": ["api", "-X", "PUT", target, "--input", "-"]}
+                gone = dropped_checks(current, step["ruleset"])
+                if args.prune:
+                    gone, pruned = [], gone
         if not args.apply:
             print(f"  - {step['what']}\n      gh {' '.join(step['args'])}")
+            if unread:
+                print(
+                    f"      ! the rulesets could not be read, so --apply will stop here: {unread}"
+                )
+            if gone:
+                print(f"      ! would drop the required check(s) {', '.join(gone)}: {DROP_HELP}")
+            if pruned:
+                print(f"      ! --prune: drops the required check(s) {', '.join(pruned)}")
             continue
         body = None
         if "ruleset" in step:
-            # A ruleset from an earlier run is brought up to date, not left as it was.
-            name = step["ruleset"]["name"]
-            found, ids = gh(
-                ["api", f"repos/{repo}/rulesets", "--jq", f'.[] | select(.name == "{name}") | .id']
-            )
-            if found and ids.split():
-                target = f"repos/{repo}/rulesets/{ids.split()[0]}"
-                step = {**step, "args": ["api", "-X", "PUT", target, "--input", "-"]}
+            if unread:
+                print(f"  ! {step['what']}: not changed, the rulesets could not be read: {unread}")
+                failures += 1
+                continue
+            if pruned:
+                print(f"  ! --prune: dropping the required check(s) {', '.join(pruned)}")
+            if gone:
+                print(
+                    f"  ! {step['what']}: not changed, it would drop the required check(s) "
+                    f"{', '.join(gone)}. {DROP_HELP[0].upper()}{DROP_HELP[1:]}."
+                )
+                failures += 1
+                continue
             body = json.dumps(step["ruleset"])
         if "reviewer" in step:
             entity = reviewer_entity(step["reviewer"]) if step["reviewer"] else None
@@ -264,21 +386,40 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {'+' if ok else '!'} {step['what']}" + ("" if ok else f": {out[:200]}"))
         failures += 0 if ok else 1
 
-    ok, out = gh(["secret", "list", "--json", "name", "--jq", ".[].name"])
-    names = set(out.splitlines()) if ok else set()
-    print("\nSecrets (values are never read):")
-    if not agents:
-        print("  - agent workflows are off (apply.py --with github-agents): no agent secret needed")
-    elif names & {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}:
-        print("  + agent credential present")
-    else:
+    if not has_secret_scan(root):
         print(
-            "  ! missing ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.\n"
-            "    Easiest: in Claude Code run /install-github-app, or `claude setup-token` then\n"
-            "    `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Also install https://github.com/apps/claude"
+            "\n  ! secret-scan is not a required check: no workflow of this repository has a job "
+            "with that name."
         )
-    if "RELEASE_PLEASE_TOKEN" not in names:
-        print("  - optional RELEASE_PLEASE_TOKEN (PAT/App token) so CI runs on release PRs")
+    names = secret_names(repo)
+    print("\nSecrets (values are never read):")
+    if names is None:
+        print("  - the secrets of this repository could not be listed: none was checked")
+    else:
+        if not agents:
+            print(
+                "  - agent workflows are off (apply.py --with github-agents): "
+                "no agent secret needed"
+            )
+        elif names & {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}:
+            print("  + agent credential present")
+        else:
+            print(
+                "  ! missing ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.\n"
+                "    Easiest: in Claude Code run /install-github-app, or `claude setup-token`\n"
+                "    then `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. Also install "
+                "https://github.com/apps/claude"
+            )
+        if uses_release_please(root):
+            if "RELEASE_PLEASE_TOKEN" in names:
+                print("  + release key present")
+            else:
+                print(
+                    "  ! RELEASE_PLEASE_TOKEN is missing: releases are off until it is set.\n"
+                    "    GitHub Actions may not open pull requests with its own token: store a\n"
+                    "    PAT or GitHub App token that may, with "
+                    "`gh secret set RELEASE_PLEASE_TOKEN`."
+                )
     if not args.apply:
         print("\nRun again with --apply to make these changes.")
     return 1 if failures else 0

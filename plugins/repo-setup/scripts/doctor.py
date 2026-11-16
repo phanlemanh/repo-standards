@@ -245,6 +245,26 @@ class Remote:
             return "fail", ", ".join(f"{k}: {v}" for k, v in bad.items())
         return "pass", ", ".join(sorted(latest))
 
+    def release_key(self) -> tuple[str, str]:
+        """release-please opens pull requests, which the Actions token may not do: it needs a key."""
+        step = re.compile(r"(?m)^\s*(-\s*)?uses:\s*googleapis/release-please-action")
+        uses = [
+            path for path in sorted((self.root / ".github" / "workflows").glob("*.y*ml"))
+            if step.search(path.read_text(encoding="utf-8", errors="replace"))
+        ]
+        if not uses:
+            return "skipped", "no workflow uses release-please"
+        ok, out = self._gh(["secret", "list", "--json", "name", "--jq", ".[].name"])
+        if not ok:
+            return "skipped", "cannot list the repository's secrets"
+        assert self.info
+        # Secrets an organisation shares with this repository count too.
+        shared, more = self._gh(["api", f"repos/{self.info['repo']}/actions/organization-secrets",
+                                 "--jq", ".secrets[].name"])
+        if "RELEASE_PLEASE_TOKEN" in (out.split() + (more.split() if shared else [])):
+            return "pass", "RELEASE_PLEASE_TOKEN is set"
+        return "fail", f"{uses[0].name} uses release-please and RELEASE_PLEASE_TOKEN is not set"
+
     def releases_for_tags(self) -> tuple[str, str]:
         """Version tags are published as GitHub Releases (the newest tag is the one checked)."""
         try:

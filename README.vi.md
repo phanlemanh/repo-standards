@@ -28,7 +28,7 @@ Mã nguồn, tên tệp và commit của repo được dựng luôn bằng tiế
 
 ## Nguyên tắc
 
-Người quyết, máy kiểm: setup nào kéo người vào để tăng độ tin cậy thì không phải setup tốt. Xem [docs/nguyen-tac-setup.md](docs/nguyen-tac-setup.md) trước khi sửa thứ plugin sinh ra.
+Người quyết, máy kiểm: setup nào kéo người vào để tăng độ tin cậy thì không phải setup tốt. Xem [docs/setup-principles.md](docs/setup-principles.md) trước khi sửa thứ plugin sinh ra.
 
 ## Chia sẻ cho cả đội
 
