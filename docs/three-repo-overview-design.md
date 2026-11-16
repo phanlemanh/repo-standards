@@ -188,7 +188,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 
 | Mã   | Gói việc                                                                                                                              | Gốc rễ  | Tiêu chí         | Trạng thái                           |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
-| RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); chưa chạy ở kho thật |
+| RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); đã chạy ở kho thử    |
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Chưa thiết kế                        |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Chưa thiết kế                        |
@@ -226,11 +226,59 @@ Ghi chú cho các gói mới và gói đổi:
   điều lần đo tay chưa thấy. Kho có khoảng 300 lượt chạy mỗi ngày, nên lệnh hỏi GitHub theo từng
   ngày (GitHub cắt danh sách ở 1.000 lượt). «Đỏ muộn» đếm cả lượt đã được chạy lại cho xanh, nên
   11 trên 55 (20%) cao hơn con số 2 trên 16 đo tay. Và chỗ nào không đọc được thì lệnh ghi «not
-  read» kèm lý do, không ghi 0. Ba giới hạn còn lại: chưa kiểm nút gộp trên GitHub có theo luật gộp
-  kiểu hợp không (lần gộp ngược trên máy thì có); `onehub-inventory` chưa nhận được dòng mẫu vì tệp
-  `.gitattributes` của nó đã sửa tại chỗ (chờ RS8); và một tuần của kho này là khoảng 2.000 lượt
-  hỏi GitHub, quá hạn mức mỗi giờ của khoá Actions, nên báo cáo hằng tuần trong CI sẽ ghi phần CI
-  là «not read» cho tới khi lệnh đọc rẻ hơn.
+  read» kèm lý do, không ghi 0. Ba giới hạn còn lại: GitHub không theo luật gộp kiểu hợp (xem mục
+  kế tiếp); `onehub-inventory` chưa nhận được dòng mẫu vì tệp `.gitattributes` của nó đã sửa tại
+  chỗ (chờ RS8); và một tuần của kho này là khoảng 2.000 lượt hỏi GitHub, quá hạn mức mỗi giờ của
+  khoá Actions, nên báo cáo hằng tuần trong CI sẽ ghi phần CI là «not read» cho tới khi lệnh đọc
+  rẻ hơn.
+- **Chạy thật ở kho thử (16/11).** Kho riêng `design-ci-probe`, dựng từ bản 0.4.0 như
+  `onehub-inventory`, được nâng lên `main` tại `1446c1e` (37 tệp cập nhật, 4 tệp mới, không tệp
+  nào xung đột), rồi mở bốn PR thử.
+
+  | Phép thử                                                    | Kết quả trên GitHub                                                                                                                               |
+  | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Quét bí mật, nhánh sạch                                     | Xanh                                                                                                                                              |
+  | Quét bí mật, token cấy vào rồi xoá ở commit sau             | Đỏ, chỉ đúng commit và tệp                                                                                                                        |
+  | Một commit sai khuôn, tên PR đúng khuôn, kho cho gộp thường | `conventional-commits` đỏ chỉ đúng commit; `conventional-title` xanh                                                                              |
+  | Commit gộp ngược `main` vào nhánh                           | Bỏ qua đúng (commit hai cha), ô xanh                                                                                                              |
+  | «Release» sau khi gộp, chưa có khoá                         | Xanh, báo «Releases are off»                                                                                                                      |
+  | Hai PR cùng thêm một dòng vào `wiki/log.md`                 | Gộp PR thứ nhất xong, GitHub báo PR thứ hai xung đột; «Update branch» từ chối. Gộp ngược ở máy thì sạch, đẩy lên là gộp được, log giữ đủ hai dòng |
+
+  Ba điều phép thử ở máy không thấy được:
+
+  1. **RS2a chỉ có tác dụng ở máy.** Nút gộp, «Update branch» và tự gộp của GitHub không theo
+     `merge=union`. Ở `onehub-inventory` các lần gộp ngược do phiên làm ở máy, nên con số 65 về 0
+     vẫn đúng cho luồng đang chạy. Nhưng bước gộp nào dựa vào nút của GitHub vẫn kẹt ở
+     `wiki/log.md`: lệnh gộp của delivery-loop phải gộp ngược ở máy, không gọi «Update branch».
+     RS2b (log thành mảnh) không có giới hạn này.
+  2. **Đường nâng cấp bỏ sót một bản sửa và không báo gì (ca đầu tiên cho RS8).** Mẫu đã làm tối
+     `--destructive` trong `src/index.css` để chữ đỏ trên nền nhạt đạt tương phản 4,5:1. `apply.py`
+     coi tệp này là của người dùng nên không cập nhật, kể cả khi chưa ai sửa từ lúc cài, và chỉ nhắc
+     «gộp tay» ở lần cài đầu. Ngay sau khi nâng cấp, 8 bài trình duyệt của màn `/example` đỏ vì
+     `color-contrast`; gộp tay token đó thì xanh. `tests/e2e.sh` luôn cài mới nên không bao giờ đi
+     qua đường này. Cách sửa thuộc RS8: tệp `package.json` cập nhật mà khoá phụ thuộc không đổi
+     thì `npm ci` đỏ, nên «chưa sửa thì cập nhật» không đủ.
+  3. **`codeql` không bao giờ xanh trên kho riêng tư không có GitHub Advanced Security.** Nó đỏ từ
+     lần đẩy đầu tiên ở 0.4.0. Thêm quyền `actions: read` thì qua lỗi quyền, rồi vấp «Code scanning
+     is not enabled for this repository». Đây là tường đỏ vô cớ cùng loại với «Release» trước RS1:
+     nên báo «tắt» rồi kết thúc xanh khi kho không bật code scanning. Luật «mỗi bức tường phải có
+     bài kiểm chiều đỏ» cần thêm vế ngược lại: bức tường cũng phải xanh được.
+
+  Sau đó `tools/github_setup.py --merge-method merge --apply` đặt ruleset trên `main`: PR bắt buộc,
+  ô bắt buộc `check` và `secret-scan`, chủ mã theo `.github/CODEOWNERS`, không cần ai duyệt. PR có
+  `secret-scan` đỏ bị chặn gộp. Thêm hai điều:
+
+  4. **Tường khuôn commit chưa chặn gì lúc gộp.** PR có `conventional-commits` đỏ vẫn gộp được, vì
+     ruleset chỉ bắt buộc `check`, `secret-scan` và các ô kho tự khai. Ô đó đỏ đúng lý do nhưng là
+     tường trên danh nghĩa (gốc rễ 3) cho tới khi nó, hoặc `conventional-title`, vào danh sách bắt
+     buộc theo cách gộp kho chọn. Chủ mã không chặn PR của chính chủ mã, nên ở kho một người chỉ
+     còn ô kiểm là tường.
+  5. **Trên kho riêng tư gói miễn phí, «production cần người duyệt» không dựng được.** GitHub từ chối
+     quy tắc người duyệt của môi trường («billing plan», 422). Lệnh báo `!` và trả mã 1, nhưng môi
+     trường `production` vẫn được tạo, không có quy tắc nào. Job `production` trong `deploy.yml` khi
+     đó chạy mà không ai duyệt. Đây là chỗ duy nhất mà nguyên tắc đặt một người, nên cách thay
+     (ví dụ: chỉ chạy production khi một người tự bấm chạy) là việc chủ kho quyết. Ở
+     `onehub-inventory` khâu triển khai đang tắt, nên hiện chưa có hậu quả.
 - **RS2b rộng hơn bản trước.** Ngoài `wiki/`, kho này còn sinh ra tệp cùng dạng: `src/generated/*`
   (mã sinh từ mô hình, 5 đến 8 trên 30 PR chạm), `ontology/glossary.md` và `ontology/labels.yaml`
   (danh sách chung, 7 đến 8). design-assembly cần cùng cơ chế cho sổ linh kiện và bảng vai × màn ×
