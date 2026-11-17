@@ -26,7 +26,8 @@ derived-untracked: ## Fail when a drawn file is in git
 ledgers-check: ## Fail on a wrong ledger fragment or two sources for one ledger
 	@$(PYTHON) tools/ledgers.py check
 
-# The text goes through the environment so quotes and $ in it reach the tool as typed.
-export LOG_ENTRY = $(m)
+# `$(value m)` hands the text over as typed: make does not expand a `$` in it. It is exported to
+# the one recipe below only, through the environment, so quotes and backticks reach the tool too.
+log: export LOG_ENTRY = $(value m)
 log: ## Add a line to the wiki log: make log m="what changed — link"
 	@$(PYTHON) tools/ledgers.py add-log -- "$$LOG_ENTRY"

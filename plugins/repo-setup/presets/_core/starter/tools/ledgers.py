@@ -228,8 +228,12 @@ def draw_log(root: Path, quiet: bool) -> int | None:
     body = log_body(root)
     current, edited = read_stamped(target)
     if target.is_file() and current is None:
-        print(f"{LOG_FILE} is not a drawn file; move it aside (or `git rm --cached {LOG_FILE}` and delete it) "
-              f"and run make derived again", file=sys.stderr)
+        # An unstamped file at the old path is never overwritten. Alone (a new repository that
+        # has not made its first commit) it is left as it is; beside entries it is two sources.
+        if not log_entries(root):
+            return None
+        print(f"{LOG_FILE} is not a drawn file and {LOG_DIR}/ has entries: two sources for the log; "
+              f"git rm --cached {LOG_FILE} and delete it, or move the entries out", file=sys.stderr)
         return 1
     if edited and current is not None:
         # read_stamped gave the body as written; show what was added by hand

@@ -2326,6 +2326,28 @@ rc=0; out=$(lg_tool draw 2>&1) || rc=$?
 [ "$rc" = 1 ] || miss "log: draw exits $rc, not 1, on a hand-edited wiki/log.md"
 case "$out" in *"typed by hand"*'make log m='*) ;; *) miss "log: draw does not print the added line and the make log command ($out)" ;; esac
 cmp -s "$TMP/log.edit" "$lg/wiki/log.md" || miss "log: draw changed a hand-edited wiki/log.md"
+# 48h. a new repository with nothing committed: the template's wiki/log.md is there, unstamped and
+#      untracked; make derived is green and leaves it alone
+nc="$TMP/nocommit"; mkdir -p "$nc" && git -C "$nc" init -q -b main
+python3 "$S/apply.py" --target "$nc" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+cp "$nc/wiki/log.md" "$TMP/nc.log"
+( cd "$nc" && make derived >/dev/null 2>&1 ) || miss "log: make derived is red in a new repository with no commit yet"
+cmp -s "$TMP/nc.log" "$nc/wiki/log.md" || miss "log: make derived changed an unstamped wiki/log.md"
+# 48i. the text of make log reaches the fragment as typed: $, $(HOME), backticks and quotes
+rm -f "$lg"/wiki/log/*.md
+typed='cost $5 `x` $(HOME) "q" '"'"'s'"'"
+( cd "$lg" && make log m="$typed" >/dev/null 2>&1 ) || miss "log: make log failed on a text with dollar signs, backticks and quotes"
+frag=$(ls "$lg"/wiki/log/*.md 2>/dev/null | head -1 || true)
+[ -n "$frag" ] && [ "$(cat "$frag")" = "$typed" ] || miss "log: make log changed the text: $(cat "$frag" 2>/dev/null || true)"
+# 48j. two sources: a tracked hand-kept wiki/log.md beside an entry is red in check and in make check
+ts="$TMP/twosrc"; mkdir -p "$ts" && git -C "$ts" init -q -b main
+python3 "$S/apply.py" --target "$ts" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+git -C "$ts" add -A && git -C "$ts" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+mkdir -p "$ts/wiki/log" && printf 'x\n' > "$ts/wiki/log/2026-01-01-01-x.md"
+rc=0; out=$(cd "$ts" && python3 tools/ledgers.py check 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "log: check exits $rc, not 1, for two sources"
+case "$out" in *wiki/log.md*) ;; *) miss "log: check does not name wiki/log.md for two sources ($out)" ;; esac
+if ( cd "$ts" && make ledgers-check >/dev/null 2>&1 ); then miss "log: make ledgers-check is green for two sources"; fi
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
