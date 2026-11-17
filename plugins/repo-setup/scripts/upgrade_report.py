@@ -42,7 +42,7 @@ class UpgradeReport:
 def _marker_lines(path: Path) -> list[int]:
     text = path.read_text(encoding="utf-8", errors="replace")
     return [n for n, line in enumerate(text.splitlines(), start=1)
-            if line.startswith(OPENING) or line.startswith(CLOSING)]
+            if line.lstrip(" \t\\").startswith((OPENING, CLOSING))]
 
 
 def report(root: Path, setup: dict) -> UpgradeReport:

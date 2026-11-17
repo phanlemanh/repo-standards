@@ -36,7 +36,8 @@ def markers(root: Path) -> list[tuple[str, int]]:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
-            if line.startswith(OPENING) or line.startswith(CLOSING):
+            # A formatter may indent a marker (a Markdown list goes on): it still counts.
+            if line.lstrip(" \t\\").startswith((OPENING, CLOSING)):
                 found.append((rel, number))
     return found
 

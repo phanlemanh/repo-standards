@@ -383,4 +383,30 @@ up_apply "$S/apply.py" "$up9" --level starter >/dev/null
   || miss "upgrade: a run with a lower --level drops the files of the recorded level"
 [ "$(manifest_get "$up9" '"tools/github_setup.py" in m["files"]')" = True ] || miss "upgrade: a lower --level removed team files from the manifest"
 
+# 47l. found on design-ci-probe: lint (Prettier) failed before the wall and its advice, `--write`,
+# moved the markers where the wall no longer saw them. The wall runs first, `make format` waits for
+# it, and a marker pushed in by a formatter is still seen.
+for preset in python ts-node claude-plugin; do
+  d="$TMP/l-$preset"; mkdir -p "$d"; git -C "$d" init -q -b main
+  python3 "$S/apply.py" --target "$d" --preset "$preset" --level starter \
+    --var project_name=Up --var description=x --var owner=acme >/dev/null
+  first=$(cd "$d" && make -n check 2>/dev/null | head -1)
+  case "$first" in *upgrade_markers.py*) ;; *) miss "upgrade: make check of $preset runs '$first' before the marker check" ;; esac
+done
+if [ -d "$TMP/l-python" ]; then
+  up10="$TMP/up10"; rm -rf "$up10"; cp -R "$TMP/l-python" "$up10"
+  printf '<<<<<<< this repository\nours\n=======\ntheirs\n>>>>>>> repo-setup 9.9.9\n' >> "$up10/AGENTS.md"
+  h=$(shasum "$up10/AGENTS.md")
+  fmt=$(cd "$up10" && make format 2>&1) && miss "upgrade: make format runs while AGENTS.md holds markers"
+  echo "$fmt" | grep -q 'conflict marker' || miss "upgrade: make format does not stop on the markers ($(echo "$fmt" | tail -1))"
+  [ "$(shasum "$up10/AGENTS.md")" = "$h" ] || miss "upgrade: make format changed a file that holds markers"
+  python3 - "$up10/AGENTS.md" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+text = p.read_text().replace("<<<<<<< this repository", "  <<<<<<< this repository")
+p.write_text(text.replace(">>>>>>> repo-setup 9.9.9", "> > > > > > > repo-setup 9.9.9"))
+PY2
+  (cd "$up10" && make upgrade >/dev/null 2>&1) && miss "upgrade: an opening marker indented by a formatter is not seen"
+fi
+
 echo "ok  upgrade path (or misses reported above)"

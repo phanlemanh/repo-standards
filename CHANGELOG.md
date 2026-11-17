@@ -17,7 +17,9 @@ Step C of the plan in `docs/three-repo-overview-design.md` (package RS8). Design
   and is reported as `marked`. A file whose recorded content no release gives is merged two
   ways, against an empty base (`||||||| repo-setup: no matching base`).
 - New `make check` step `upgrade` (`mk/upgrade.mk`, `tools/upgrade_markers.py`): it fails while
-  a file listed in `.repo-setup.json` holds those markers.
+  a file listed in `.repo-setup.json` holds those markers. It runs before the other steps, and
+  `make format` waits for it: Prettier moves the markers of a Markdown file where no check sees
+  them. A marker a formatter indented still counts.
 - New groups in the output of `apply.py`: `edited` (edited here, the template did not change),
   `marked`, `base_unread` (the base could not be read: no network, no git, or git refused the
   merge; the file is left as it is, with the reason in `base_reasons`), `removed` and `dropped`.
