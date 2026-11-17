@@ -150,4 +150,130 @@ for case in apart meet nobase binary; do
   echo "$merge" | grep -qx "$case True" || miss "upgrade: three_way case '$case' is wrong ($(echo "$merge" | tail -1))"
 done
 
+# up_apply <apply.py> <repo> [args...]: the --json result; the exit code goes to <repo>.rc
+up_apply() {
+  local script="$1" repo="$2"; shift 2
+  local rc=0
+  python3 "$script" --target "$repo" --json "$@" > "$repo.json" 2> "$repo.err" || rc=$?
+  echo "$rc" > "$repo.rc"; cat "$repo.json"
+}
+in_group() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if sys.argv[3] in d.get(sys.argv[2], []) else 1)" "$1.json" "$2" "$3"; }
+manifest_get() { python3 -c "import json,sys; m=json.load(open(sys.argv[1]+'/.repo-setup.json')); print(eval(sys.argv[2]))" "$1" "$2"; }
+manifest_set() { python3 -c "
+import json,sys; p=sys.argv[1]+'/.repo-setup.json'; m=json.load(open(p)); exec(sys.argv[2]); open(p,'w').write(json.dumps(m, indent=2)+'\n')" "$1" "$2"; }
+tree_hash() { (cd "$1" && find . -path ./.git -prune -o -type f -print | LC_ALL=C sort | xargs shasum | shasum); }
+NOW=$(python3 -c "import sys; sys.path.insert(0, '$S'); import apply; print(apply.plugin_version())")
+
+# A repository built with 0.0.1, then edited in place: a comment on top of .editorconfig and of
+# pyproject.toml (the template adds a line at their end), the line of CLAUDE.md that 0.0.1 and
+# today read differently is changed a third way, tools/wiki_lint.py gets a line on top, the
+# executable bit and CRLF line ends, and README.md is deleted.
+up="$TMP/up"; up_install "$up" "$old"
+printf '# repo note\n' | cat - "$up/.editorconfig" > "$up/x" && mv "$up/x" "$up/.editorconfig"
+printf '# repo note\n' | cat - "$up/pyproject.toml" > "$up/x" && mv "$up/x" "$up/pyproject.toml"
+subst 's|^- Procedures live in `.claude/skills/`; use them:$|- Our procedures are in `.claude/skills/`:|' "$up/CLAUDE.md"
+python3 - "$up/tools/wiki_lint.py" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_bytes(("# repo line\n" + p.read_text()).replace("\n", "\r\n").encode())
+PY2
+chmod +x "$up/tools/wiki_lint.py"
+rm "$up/README.md"
+
+# 47b. a dry run gives the same groups as the real run, and changes nothing, the manifest included
+before=$(tree_hash "$up")
+up_apply "$S/apply.py" "$up" --base-from "$arch" --dry-run --diff >/dev/null
+cp "$up.json" "$TMP/up-dry.json"
+[ "$(tree_hash "$up")" = "$before" ] || miss "upgrade: a dry run changed files"
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if '<<<<<<< this repository' in d['diffs'].get('CLAUDE.md','') else 1)" "$TMP/up-dry.json" \
+  || miss "upgrade: --diff does not show what a marked file will hold"
+up_apply "$S/apply.py" "$up" --base-from "$arch" >/dev/null
+groups='["merged","marked","base_unread","removed","dropped","edited","updated","created"]'
+same=$(python3 -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); g=json.loads(sys.argv[3]); print(all(sorted(a.get(k,[]))==sorted(b.get(k,[])) for k in g))" "$TMP/up-dry.json" "$up.json" "$groups")
+[ "$same" = True ] || miss "upgrade: the dry run and the real run do not give the same groups"
+
+# 47f. what does not meet is merged: both sides kept, the bit and the line ends too
+for f in .editorconfig tools/wiki_lint.py pyproject.toml; do
+  in_group "$up" merged "$f" || miss "upgrade: $f is not merged"
+done
+grep -q '^# repo note' "$up/.editorconfig" || miss "upgrade: the merge lost the repository's line in .editorconfig"
+[ "$(tail -1 "$up/.editorconfig")" = "$(tail -1 "$PLUGIN/presets/_core/starter/dot.editorconfig")" ] \
+  || miss "upgrade: the merge lost the template's new line in .editorconfig"
+grep -q '^# repo note' "$up/pyproject.toml" || miss "upgrade: the merge lost the repository's line in pyproject.toml"
+[ -x "$up/tools/wiki_lint.py" ] || miss "upgrade: the merge dropped the executable bit"
+python3 - "$up/tools/wiki_lint.py" "$PLUGIN/presets/_core/starter/tools/wiki_lint.py" <<'PY2' || miss "upgrade: the merge broke CRLF line ends or lost a side"
+import sys
+data = open(sys.argv[1], "rb").read()
+last = open(sys.argv[2], "rb").read().splitlines()[-1]
+lines = data.split(b"\r\n")
+assert data.startswith(b"# repo line\r\n"), "repo line"
+assert b"\n" not in data.replace(b"\r\n", b""), "bare LF"
+assert last in lines, "template's last line"
+PY2
+grep -q 'lockfile' "$up.json" || miss "upgrade: a merged pyproject.toml gives no note to update the lockfile"
+
+# 47h. where the sides meet the file is marked; deleted files stay deleted; the run says it is not done
+in_group "$up" marked CLAUDE.md || miss "upgrade: CLAUDE.md is not marked"
+for label in '<<<<<<< this repository' '||||||| repo-setup 0.0.1' '=======' ">>>>>>> repo-setup $NOW"; do
+  grep -qxF -- "$label" "$up/CLAUDE.md" || miss "upgrade: CLAUDE.md lacks the line: $label"
+done
+[ "$(cat "$up.rc")" = 1 ] || miss "upgrade: apply ends well although a file is marked"
+in_group "$up" removed README.md || miss "upgrade: a deleted README.md is not reported as removed"
+[ ! -e "$up/README.md" ] || miss "upgrade: a file the repository deleted was created again"
+[ "$(manifest_get "$up" 'm["file_versions"][".editorconfig"]')" = "$NOW" ] || miss "upgrade: a merged file does not record the version it now follows"
+[ "$(manifest_get "$up" 'm["file_versions"]["README.md"]')" = 0.0.1 ] || miss "upgrade: a removed file does not keep its version"
+manifest_get "$up" 'm["vars"]["today"]' | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || miss "upgrade: the manifest does not record today"
+# resolve: keep this repository's side
+python3 - "$up/CLAUDE.md" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); out, side = [], None
+for line in p.read_text().splitlines(True):
+    if line.startswith("<<<<<<< "): side = "ours"; continue
+    if line.startswith("||||||| ") or line.startswith("=======") and side: side = "skip"; continue
+    if line.startswith(">>>>>>> "): side = None; continue
+    if side in (None, "ours"): out.append(line)
+p.write_text("".join(out))
+PY2
+up_apply "$S/apply.py" "$up" --base-from "$arch" >/dev/null
+[ "$(cat "$up.rc")" = 0 ] || miss "upgrade: the run after resolving is not clean ($(cat "$up.err" | tail -1))"
+in_group "$up" marked CLAUDE.md && miss "upgrade: a resolved CLAUDE.md is marked again"
+in_group "$up" edited CLAUDE.md || miss "upgrade: a resolved CLAUDE.md is not reported as edited"
+# no matching base: a recorded hash no release has gives a two-way merge with markers
+cp "$up/.gitattributes" "$TMP/gitattributes.template"
+echo "local-only" >> "$up/.gitattributes"
+manifest_set "$up" 'm["files"][".gitattributes"] = "0" * 64'
+up_apply "$S/apply.py" "$up" --base-from "$arch" >/dev/null
+in_group "$up" marked .gitattributes || miss "upgrade: a file with no matching base is not marked"
+grep -qxF '||||||| repo-setup: no matching base' "$up/.gitattributes" || miss "upgrade: a two-way merge is not labelled as having no base"
+# unread base: no release to read leaves the file as it is, with the reason, and fails
+{ cat "$TMP/gitattributes.template"; echo "local-only"; } > "$up/.gitattributes"
+h=$(shasum -a 256 "$TMP/gitattributes.template" | cut -d' ' -f1)
+manifest_set "$up" "m['files']['.gitattributes'] = '$h'; m['file_versions']['.gitattributes'] = '0.0.1'"
+before=$(shasum < "$up/.gitattributes")
+up_apply "$S/apply.py" "$up" --base-from "$TMP/arch-empty" >/dev/null
+in_group "$up" base_unread .gitattributes || miss "upgrade: a file whose base cannot be read is not base_unread"
+[ "$(shasum < "$up/.gitattributes")" = "$before" ] || miss "upgrade: a file whose base cannot be read was changed"
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get('base_reasons',{}).get('.gitattributes') else 1)" "$up.json" || miss "upgrade: base_unread gives no reason"
+[ "$(cat "$up.rc")" = 1 ] || miss "upgrade: apply ends well although a base could not be read"
+# a manifest from before file_versions: the version of the whole repository is used
+up3="$TMP/up3"; up_install "$up3" "$old"
+manifest_set "$up3" 'm.pop("file_versions", None)'
+printf '# repo note\n' | cat - "$up3/.editorconfig" > "$up3/x" && mv "$up3/x" "$up3/.editorconfig"
+up_apply "$S/apply.py" "$up3" --base-from "$arch" >/dev/null
+in_group "$up3" merged .editorconfig || miss "upgrade: a manifest without file_versions does not merge ($(tail -1 "$up3.err"))"
+# a file the templates no longer give is dropped: left on disk, out of the manifest
+drop="$TMP/arch-drop/repo-setup-v0.0.3"; mkdir -p "$TMP/arch-drop"; cp -R "$arch/repo-setup-v0.0.2" "$drop"
+subst 's/"version": "0.0.2"/"version": "0.0.3"/' "$drop/.claude-plugin/plugin.json"
+python3 - "$drop/presets/python/preset.toml" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(t.replace('user_owned = ["pyproject.toml"]\n', 'user_owned = ["pyproject.toml"]\nexclude = [".editorconfig"]\n', 1))
+PY2
+up2="$TMP/up2"; up_install "$up2" "$old"
+up_apply "$drop/scripts/apply.py" "$up2" --base-from "$arch" >/dev/null
+in_group "$up2" dropped .editorconfig || miss "upgrade: a file the templates no longer give is not dropped"
+[ -f "$up2/.editorconfig" ] || miss "upgrade: a dropped file was deleted"
+[ "$(manifest_get "$up2" '".editorconfig" in m["files"] or ".editorconfig" in m.get("file_versions", {})')" = False ] \
+  || miss "upgrade: a dropped file stays in the manifest"
+
 echo "ok  upgrade path (or misses reported above)"

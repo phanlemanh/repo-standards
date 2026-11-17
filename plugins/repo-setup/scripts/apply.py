@@ -15,8 +15,14 @@ Conventions inside preset folders:
     (e.g. [license=MIT]/LICENSE.tmpl -> LICENSE).
 
 Safety rules:
-  * Never overwrites an existing file that differs from what we would write.
-    Such files are reported as "conflict" and left untouched (use --diff to see why).
+  * A file the plugin wrote before and the repository edited since is merged with the new
+    template, three ways, against what the plugin wrote last time (rebuilt from that release's
+    templates, see upgrade_base.py). Where the two meet, the file gets conflict markers
+    ("marked") and `make check` stays red until they are gone. Without a base to read, the file
+    is left as it is ("base_unread"). Either ends the run with exit code 1.
+  * A file the repository had before repo-setup wrote it is never overwritten: it is reported as
+    "conflict" (or "kept" for files the repository owns) and left untouched (--diff shows why).
+  * A file the plugin wrote and the repository deleted is not created again ("removed").
   * Running again is safe: identical files are reported as "unchanged".
   * A manifest (.repo-setup.json) records preset, level, vars and file hashes so a
     later run (e.g. upgrading starter -> team) knows what it created.
@@ -52,17 +58,22 @@ import hashlib
 import json
 import re
 import stat
+import tempfile
 import tomllib
 import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import blueprint  # noqa: E402
+import upgrade_base  # noqa: E402
+import upgrade_merge  # noqa: E402
 from doctor import Repo, glob_to_regex  # noqa: E402
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 PRESETS_DIR = PLUGIN_ROOT / "presets"
 MANIFEST_NAME = ".repo-setup.json"
+# Files with a lockfile beside them: after the plugin changes one, the lockfile must follow.
+LOCK_SOURCES = {"package.json": "npm install", "pyproject.toml": "uv lock"}
 LEVELS = ["starter", "team"]
 PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 CONDITION = re.compile(r"^\[([a-zA-Z_][a-zA-Z0-9_]*)=([^\]]+)\]$")
@@ -237,8 +248,9 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
     if pkg[0].isdigit():
         pkg = "app_" + pkg
     v.setdefault("package_name", pkg)
-    v.setdefault("year", str(_dt.date.today().year))
+    # The manifest records `today`, so a later run renders the same files again.
     v.setdefault("today", _dt.date.today().isoformat())
+    v.setdefault("year", v["today"][:4])
     v.setdefault("owner_handle", v.get("owner", "").lstrip("@"))
     # Registry/org namespace: the org part of "org/team", lowercase (container registries).
     v.setdefault("owner_org", v["owner_handle"].split("/")[0].lower())
@@ -532,6 +544,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="Show the plan, write nothing")
     ap.add_argument("--diff", action="store_true", help="Print unified diffs for conflicts")
     ap.add_argument("--json", action="store_true", help="Machine-readable output")
+    ap.add_argument("--base-from", metavar="DIR", default=None,
+                    help="Folder with repo-setup-v<version>/ or repo-setup-v<version>.tar.gz of "
+                         "earlier releases, instead of downloading them (offline, tests)")
     ap.add_argument("--list-presets", action="store_true")
     ap.add_argument("--list-options", action="store_true",
                     help="List stacks, archetypes and deploy targets with descriptions")
@@ -611,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
     missing = [k for k in REQUIRED_VARS if not raw_vars.get(k)]
     if missing:
         ap.error("Missing required --var: " + ", ".join(missing))
+    raw_vars.setdefault("today", _dt.date.today().isoformat())
     try:
         variables = derive_vars(raw_vars)
     except ValueError as exc:
@@ -660,49 +676,92 @@ def main(argv: list[str] | None = None) -> int:
     existing = Repo(target).files if adopt else []
 
     prev_hashes: dict[str, str] = previous.get("files", {})
+    prev_versions: dict[str, str] = previous.get("file_versions", {})
+    prev_version = str(previous.get("version", plugin_version()))
+    now = plugin_version()
     results: dict[str, list[str]] = {
         "created": [],
         "updated": [],
         "merged": [],
+        "edited": [],
+        "marked": [],
+        "base_unread": [],
+        "removed": [],
+        "dropped": [],
         "unchanged": [],
         "kept": [],
         "skipped": [],
         "conflict": [],
     }
     reasons: dict[str, str] = {}
+    base_reasons: dict[str, str] = {}
     diffs: dict[str, str] = {}
     new_hashes: dict[str, str] = {}
+    new_versions: dict[str, str] = {}
+    workdir = tempfile.TemporaryDirectory(prefix="repo-setup-base-")
+    finder: upgrade_base.BaseFinder | None = None
+
+    def base_of(key: str) -> upgrade_base.Base:
+        nonlocal finder
+        if finder is None:
+            old = choices_from_manifest(previous)
+            old_vars = dict(previous.get("vars", {}))
+
+            def render(root: Path) -> dict[str, bytes]:
+                files = planned_files(old, render_variables(old_vars, old, root), root)
+                return {k: v["content"] for k, v in files.items()}
+
+            finder = upgrade_base.BaseFinder(
+                render, PLUGIN_ROOT, now, Path(args.base_from) if args.base_from else None,
+                Path(workdir.name),
+            )
+        return finder.find(key, prev_hashes[key], prev_versions.get(key, prev_version))
 
     for rel, item in sorted(plan.items(), key=lambda kv: str(kv[0])):
         dest = target / rel
         content: bytes = item["content"]
         key = rel.as_posix()
         write: bytes | None = content
+        record = True  # the file now follows this release's template
 
         if dest.exists():
             current = dest.read_bytes()
             if current == content:
                 results["unchanged"].append(key)
-                new_hashes[key] = sha(content)
+                new_hashes[key], new_versions[key] = sha(content), now
                 continue
-            if matches(key, meta["user_owned"]):
+            if key in prev_hashes and prev_hashes[key] == sha(current):
+                results["updated"].append(key)
+            elif key in prev_hashes:
+                base = base_of(key)
+                if base.status == "unread":
+                    results["base_unread"].append(key)
+                    base_reasons[key] = base.reason
+                    continue
+                group, write, why = upgrade_merge.reconcile(
+                    current, content, base.content, base.version, now)
+                results[group].append(key)
+                if group == "base_unread":
+                    base_reasons[key] = why
+                    continue
+                if group == "marked" and args.diff and write is not None:
+                    diffs[key] = write.decode("utf-8", "replace")
+            elif matches(key, meta["user_owned"]):
                 results["kept"].append(key)
-                if key not in prev_hashes:
-                    what = meta["hand_merge"].get(key, "what the preset puts in it")
-                    notes.append(f"kept your own {key}: merge {what} into it by hand "
-                                 "(--diff shows the preset's version)")
+                what = meta["hand_merge"].get(key, "what the preset puts in it")
+                notes.append(f"kept your own {key}: merge {what} into it by hand "
+                             "(--diff shows the preset's version)")
                 if args.diff:
                     diffs[key] = unified_diff(key, current, content)
                 continue
-            if prev_hashes.get(key) == sha(current):
-                results["updated"].append(key)
             elif adopt and key in merge_set:
                 write = merge_lines(current, content)
                 if write is None:
                     results["unchanged"].append(key)
                     continue
                 results["merged"].append(key)
-            elif adopt and key not in prev_hashes and matches(key, meta["sample"]):
+                record = False
+            elif adopt and matches(key, meta["sample"]):
                 # The repo's own file sits where a sample would go: nothing to reconcile.
                 results["skipped"].append(key)
                 reasons[key] = "sample code (adopt mode)"
@@ -712,8 +771,15 @@ def main(argv: list[str] | None = None) -> int:
                 if args.diff:
                     diffs[key] = unified_diff(key, current, content)
                 continue
+            if key in results["updated"] + results["merged"] and key in LOCK_SOURCES and record:
+                notes.append(f"{key} changed: run the install command again to update the "
+                             f"lockfile ({LOCK_SOURCES[key]})")
         else:
-            if adopt and key not in prev_hashes:
+            if key in prev_hashes:
+                # The repository deleted a file the plugin wrote: that is its choice.
+                results["removed"].append(key)
+                continue
+            if adopt:
                 if matches(key, meta["sample"]):
                     results["skipped"].append(key)
                     reasons[key] = "sample code (adopt mode)"
@@ -734,20 +800,27 @@ def main(argv: list[str] | None = None) -> int:
                     continue
             results["created"].append(key)
 
-        if key not in results["merged"]:
-            new_hashes[key] = sha(content)
+        if record:
+            new_hashes[key], new_versions[key] = sha(content), now
         if not args.dry_run and write is not None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(write)
             if item["executable"]:
                 dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    workdir.cleanup()
+
+    # Files the plugin wrote before that this release no longer gives: they are the repo's now.
+    results["dropped"] = sorted(k for k in prev_hashes if k not in {r.as_posix() for r in plan})
+    files = {k: v for k, v in {**prev_hashes, **new_hashes}.items() if k not in results["dropped"]}
+    versions = {k: new_versions.get(k, prev_versions.get(k, prev_version)) for k in files}
+    exit_code = 1 if results["marked"] or results["base_unread"] else 0
 
     if not args.dry_run:
         prev_level = previous.get("level", "starter")
         manifest = {
-            **{k: v for k, v in previous.items() if k not in ("files",)},
+            **{k: v for k, v in previous.items() if k not in ("files", "file_versions")},
             "tool": "repo-setup",
-            "version": plugin_version(),
+            "version": now,
             "preset": preset,
             "level": level if LEVELS.index(level) >= LEVELS.index(prev_level) else prev_level,
             "adopt": adopt,
@@ -755,7 +828,8 @@ def main(argv: list[str] | None = None) -> int:
             "deploy": deploy,
             "capabilities": caps,
             "vars": raw_vars,
-            "files": {**prev_hashes, **new_hashes},
+            "files": files,
+            "file_versions": versions,
         }
         (target / MANIFEST_NAME).write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
@@ -777,6 +851,8 @@ def main(argv: list[str] | None = None) -> int:
         "notes": notes,
         "next_commands": {"install": meta["install"], "verify": meta["verify"]},
         "diffs": diffs,
+        "base_reasons": base_reasons,
+        "exit_code": exit_code,
     }
     if args.json:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
@@ -799,6 +875,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {na['what']}  — {na['reason']}")
         for k, d in diffs.items():
             print(f"\n--- diff for {k} ---\n{d}")
+        for k, why in base_reasons.items():
+            print(f"\nNo base for {k}: {why}")
+        if results["marked"]:
+            print("\nRemove the conflict markers, then run make check.")
+        if results["base_unread"]:
+            print("Run again with network access, or pass --base-from.")
         if meta["install"]:
             print("\nNext: install commands")
             for c in meta["install"]:
@@ -807,7 +889,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Then verify:")
             for c in meta["verify"]:
                 print(f"  $ {c}")
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

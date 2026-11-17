@@ -50,3 +50,37 @@ def three_way(
         detail = proc.stderr.decode("utf-8", "replace").strip()
         raise MergeUnavailable(f"git merge-file failed: {detail or proc.returncode}")
     return proc.stdout, proc.returncode == 0
+
+
+def _is_crlf(data: bytes) -> bool:
+    return b"\r\n" in data and data.count(b"\n") == data.count(b"\r\n")
+
+
+def _crlf(data: bytes) -> bytes:
+    return data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+
+
+def reconcile(
+    current: bytes, new: bytes, base: bytes | None, base_version: str | None, new_version: str
+) -> tuple[str, bytes | None, str]:
+    """What to do with a file the repository edited in place, now that the template is `new`.
+
+    `base` is what the plugin wrote last time (None when no release gives it: the merge is then
+    two-way). Returns (group, content to write or None, reason): `edited` (nothing to do),
+    `merged`, `marked` (written with conflict markers) or `base_unread` (git could not merge).
+    A repository whose file ends its lines with CRLF keeps them."""
+    if base is not None and base == new:
+        return "edited", None, ""
+    base_bytes = base if base is not None else b""
+    base_label = release_label(base_version) if base is not None and base_version else NO_BASE_LABEL
+    if _is_crlf(current):
+        base_bytes, new = _crlf(base_bytes), _crlf(new)
+    try:
+        merged, clean = three_way(current, base_bytes, new, base_label, release_label(new_version))
+    except MergeUnavailable as exc:
+        return "base_unread", None, str(exc)
+    if not clean:
+        return "marked", merged, ""
+    if merged == current:
+        return "edited", None, ""
+    return "merged", merged, ""
