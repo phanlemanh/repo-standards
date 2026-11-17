@@ -15,6 +15,7 @@ Only the Python standard library is used (Python 3.11+).
 from __future__ import annotations
 
 import hashlib
+import http.client
 import re
 import shutil
 import subprocess
@@ -38,6 +39,10 @@ ENTRY = re.compile(r"^" + re.escape(TAG_PREFIX) + r"(\d+\.\d+\.\d+)(\.tar\.gz)?$
 
 class BaseUnreadable(Exception):
     """A release's templates could not be read; the message says why."""
+
+
+class ReleaseMissing(BaseUnreadable):
+    """There is no such release: not a failure to read one."""
 
 
 @dataclass(frozen=True)
@@ -116,7 +121,11 @@ def _download(version: str, archive: Path) -> None:
     try:
         with urllib.request.urlopen(url, timeout=FETCH_TIMEOUT) as resp:  # noqa: S310 (fixed https URL)
             archive.write_bytes(resp.read())
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise ReleaseMissing(f"no release {version} at {url}") from exc
+        raise BaseUnreadable(f"cannot download {url}: {exc}") from exc
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as exc:
         raise BaseUnreadable(f"cannot download {url}: {exc}") from exc
 
 
@@ -130,7 +139,7 @@ def plugin_root_for(version: str, base_from: Path | None, workdir: Path) -> Path
         if base_from is not None:
             archive = base_from / f"{name}.tar.gz"
             if not archive.is_file():
-                raise BaseUnreadable(f"{base_from} has no {name} (folder or .tar.gz)")
+                raise ReleaseMissing(f"{base_from} has no {name} (folder or .tar.gz)")
         else:
             workdir.mkdir(parents=True, exist_ok=True)
             archive = workdir / f"{name}.tar.gz"
@@ -160,18 +169,22 @@ class BaseFinder:
         self._current_version = current_version
         self._base_from = base_from
         self._workdir = workdir
-        self._files: dict[str, dict[str, bytes] | str] = {}
+        # Rendered files of a source, or (why not, whether that is a failure to read).
+        self._files: dict[str, dict[str, bytes] | tuple[str, bool]] = {}
         self._released: list[str] | str | None = None
 
-    def _files_of(self, key: str, root: Callable[[], Path]) -> dict[str, bytes] | str:
-        """The rendered files of one source, or why they could not be had."""
+    def _files_of(self, key: str, root: Callable[[], Path]) -> dict[str, bytes] | tuple[str, bool]:
+        """The rendered files of one source, or (why they could not be had, whether that is a
+        failure: a release that does not exist is not one)."""
         if key not in self._files:
             try:
                 self._files[key] = self._render(root())
+            except ReleaseMissing as exc:
+                self._files[key] = (str(exc), False)
             except BaseUnreadable as exc:
-                self._files[key] = str(exc)
-            except (KeyError, OSError, ValueError) as exc:
-                self._files[key] = f"cannot render the templates of {key}: {exc}"
+                self._files[key] = (str(exc), True)
+            except Exception as exc:  # an old release's templates are data we do not control
+                self._files[key] = (f"cannot render the templates of {key}: {exc!r}", True)
         return self._files[key]
 
     def _older(self, version: str) -> Iterator[str]:
@@ -197,19 +210,24 @@ class BaseFinder:
             yield v, v, lambda v=v: plugin_root_for(v, self._base_from, self._workdir)
 
     def find(self, path: str, recorded_hash: str, recorded_version: str) -> Base:
-        reasons: list[str] = []
+        """`found`; `no_match` only when every release could be read and none matches;
+        `unread` when nothing could be read, or when a release that might hold the base could
+        not be (running again with network access may find it)."""
+        failures: list[str] = []
+        missing: list[str] = []
         read_any = False
         for key, version, root in self._candidates(recorded_version):
             files = self._files_of(key, root)
-            if isinstance(files, str):
-                reasons.append(files)
+            if isinstance(files, tuple):
+                (failures if files[1] else missing).append(files[0])
                 continue
             read_any = True
             content = files.get(path)
             if content is not None and hashlib.sha256(content).hexdigest() == recorded_hash:
                 return Base("found", content, version)
-        if read_any:
-            return Base("no_match", reason="no release gives the content recorded for it")
         if isinstance(self._released, str):
-            reasons.append(self._released)
+            failures.append(self._released)
+        if read_any and not failures:
+            return Base("no_match", reason="no release gives the content recorded for it")
+        reasons = failures or missing
         return Base("unread", reason=reasons[0] if reasons else "no release to read")

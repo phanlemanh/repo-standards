@@ -698,6 +698,7 @@ def main(argv: list[str] | None = None) -> int:
     diffs: dict[str, str] = {}
     new_hashes: dict[str, str] = {}
     new_versions: dict[str, str] = {}
+    pending: list[tuple[Path, bytes, bool]] = []
     workdir = tempfile.TemporaryDirectory(prefix="repo-setup-base-")
     finder: upgrade_base.BaseFinder | None = None
 
@@ -724,6 +725,14 @@ def main(argv: list[str] | None = None) -> int:
         write: bytes | None = content
         record = True  # the file now follows this release's template
 
+        if dest.is_symlink():
+            # The repository points this path elsewhere: never write through the link.
+            same = dest.exists() and dest.read_bytes() == content
+            results["unchanged" if same else "conflict"].append(key)
+            if not same:
+                reasons[key] = "a symbolic link: repo-setup does not write through it"
+            new_hashes[key], new_versions[key] = sha(content), now
+            continue
         if dest.exists():
             current = dest.read_bytes()
             if current == content:
@@ -802,15 +811,26 @@ def main(argv: list[str] | None = None) -> int:
 
         if record:
             new_hashes[key], new_versions[key] = sha(content), now
-        if not args.dry_run and write is not None:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(write)
-            if item["executable"]:
-                dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        if write is not None:
+            pending.append((dest, write, bool(item["executable"])))
     workdir.cleanup()
 
+    # Every file's outcome is known before anything is written: a failure above leaves the
+    # repository and its manifest as they were.
+    if not args.dry_run:
+        for dest, data, executable in pending:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            if executable:
+                dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
     # Files the plugin wrote before that this release no longer gives: they are the repo's now.
-    results["dropped"] = sorted(k for k in prev_hashes if k not in {r.as_posix() for r in plan})
+    given = {r.as_posix() for r in plan}
+    if LEVELS.index(level) < LEVELS.index(previous.get("level", "starter")):
+        # A lower --level than recorded leaves the recorded level's files alone: still ours.
+        recorded = Choices(preset, previous["level"], archetype, deploy, tuple(caps))
+        given |= set(planned_files(recorded, variables))
+    results["dropped"] = sorted(k for k in prev_hashes if k not in given)
     files = {k: v for k, v in {**prev_hashes, **new_hashes}.items() if k not in results["dropped"]}
     versions = {k: new_versions.get(k, prev_versions.get(k, prev_version)) for k in files}
     exit_code = 1 if results["marked"] or results["base_unread"] else 0

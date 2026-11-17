@@ -327,4 +327,60 @@ rm "$up5/mk/upgrade.mk"
 doc "$up5"
 failed "$up5" upgrade_wall || miss "upgrade: doctor passes upgrade_wall without the marker check in make check"
 
+# 47k. review findings of the whole branch
+# (1) one release read and one not: the file is base_unread, never marked against an empty base
+mixed="$TMP/arch-mixed"; mkdir -p "$mixed"; cp -R "$arch/repo-setup-v0.0.2" "$mixed/"
+printf 'not an archive' > "$mixed/repo-setup-v0.0.1.tar.gz"
+up6="$TMP/up6"; up_install "$up6" "$old"
+manifest_set "$up6" 'm["version"] = "0.0.2"; m.pop("file_versions", None)'
+printf '# repo note\n' | cat - "$up6/.editorconfig" > "$up6/x" && mv "$up6/x" "$up6/.editorconfig"
+up_apply "$S/apply.py" "$up6" --base-from "$mixed" >/dev/null
+in_group "$up6" base_unread .editorconfig || miss "upgrade: a release that could not be read gives a two-way merge instead of base_unread"
+in_group "$up6" marked .editorconfig && miss "upgrade: a file is marked because one release could not be read"
+# (2) a symbolic link at a setup path is not written through
+up7="$TMP/up7"; up_install "$up7" "$old"; outside="$TMP/outside-ec"
+cp "$up7/.editorconfig" "$outside"; printf '# outside note\n' >> "$outside"
+rm "$up7/.editorconfig"; ln -s "$outside" "$up7/.editorconfig"
+before=$(shasum < "$outside")
+up_apply "$S/apply.py" "$up7" --base-from "$arch" >/dev/null
+[ "$(shasum < "$outside")" = "$before" ] || miss "upgrade: apply wrote through a symbolic link to a file outside the repository"
+[ -L "$up7/.editorconfig" ] || miss "upgrade: apply replaced a symbolic link"
+in_group "$up7" conflict .editorconfig || miss "upgrade: a symbolic link at a setup path is not reported as conflict"
+# (3) a base that crashes while rendering stops the run before any file or the manifest is written
+broken="$TMP/arch-broken"; mkdir -p "$broken"; cp -R "$old" "$broken/repo-setup-v0.0.1"
+printf 'user_owned = 7\n' > "$broken/repo-setup-v0.0.1/presets/python/preset.toml"
+up8="$TMP/up8"; up_install "$up8" "$old"
+printf '# repo note\n' | cat - "$up8/.editorconfig" > "$up8/x" && mv "$up8/x" "$up8/.editorconfig"
+printf '# repo note\n' | cat - "$up8/CLAUDE.md" > "$up8/x" && mv "$up8/x" "$up8/CLAUDE.md"
+before=$(tree_hash "$up8")
+up_apply "$S/apply.py" "$up8" --base-from "$broken" >/dev/null
+if [ "$(tree_hash "$up8")" != "$before" ] && ! in_group "$up8" base_unread .editorconfig; then
+  miss "upgrade: a base that fails to render left the repository half written"
+fi
+grep -q Traceback "$up8.err" && miss "upgrade: a base that fails to render crashes apply ($(tail -1 "$up8.err"))"
+# (3b) a download cut short is unreadable, not a crash
+cutdl=$(python3 - "$S" "$TMP" <<'PY2' 2>&1 || true
+import http.client, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import upgrade_base
+def cut(*a, **k):
+    raise http.client.IncompleteRead(b"partial")
+upgrade_base.urllib.request.urlopen = cut
+try:
+    upgrade_base.plugin_root_for("0.0.9", None, Path(sys.argv[2]) / "dl")
+    print("read")
+except upgrade_base.BaseUnreadable:
+    print("unreadable")
+PY2
+)
+[ "$cutdl" = unreadable ] || miss "upgrade: a download cut short is not unreadable ($(echo "$cutdl" | tail -1))"
+# (4) a run with a lower --level than recorded keeps the files of the recorded level
+up9="$TMP/up9"; mkdir -p "$up9"; git -C "$up9" init -q -b main
+python3 "$S/apply.py" --target "$up9" --preset python --level team --var project_name=Up --var description=x --var owner=acme >/dev/null
+up_apply "$S/apply.py" "$up9" --level starter >/dev/null
+[ "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['dropped'])" "$up9.json")" = "[]" ] \
+  || miss "upgrade: a run with a lower --level drops the files of the recorded level"
+[ "$(manifest_get "$up9" '"tools/github_setup.py" in m["files"]')" = True ] || miss "upgrade: a lower --level removed team files from the manifest"
+
 echo "ok  upgrade path (or misses reported above)"

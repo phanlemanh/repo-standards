@@ -133,7 +133,9 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
     grep -q 'Test scenario' coverage/floor/assets/*.js || { echo "FAIL: the browser checks' build lost the test hook"; exit 1; }
     if grep -q 'Test scenario' dist/assets/*.js; then echo "FAIL: the test hook ships in npm run build"; exit 1; fi
     echo "/* kept */" >> src/index.css
-    python3 "$S/apply.py" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["conflict"], d["conflict"]; assert "src/index.css" in d["kept"]'
+    # An edit to a file the plugin wrote, whose template did not change: nothing to merge.
+    python3 "$S/apply.py" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert not d["conflict"], d["conflict"]; assert "src/index.css" in d["edited"], d["edited"]'
+    grep -qF '/* kept */' src/index.css || { echo "FAIL: re-apply lost an edit in src/index.css"; exit 1; }
     grep -q 'kept' src/index.css || { echo "FAIL: index.css overwritten"; exit 1; }
     make check >/dev/null || { echo "FAIL: make check after re-apply"; exit 1; }
     git checkout -q -- src/index.css 2>/dev/null || true
