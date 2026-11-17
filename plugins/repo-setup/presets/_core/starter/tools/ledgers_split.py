@@ -26,6 +26,7 @@ import collections
 import difflib
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -141,18 +142,22 @@ def manifest_hash(root: Path, rel: str) -> str | None:
 
 
 def parse_log(text: str) -> tuple[list[tuple[str, str]], str, list[str], list[str]]:
-    """(entries as (date, text) top to bottom, head, notes, problems)."""
+    """(entries as (date, text) top to bottom, head, notes, problems). The text is in the form
+    add-log writes and the drawer draws: every run of whitespace one space."""
     lines = text.splitlines()
-    entries, kept, problems = [], [], []
+    entries, kept, problems, collapsed = [], [], [], []
     for number, (line, in_comment) in enumerate(zip(lines, comment_flags(lines)), start=1):
         match = None if in_comment else LOG_ENTRY_RE.match(line)
         if match:
-            entries.append((match.group("date"), match.group("text")))
+            flat = L.one_line(match.group("text"))
+            entries.append((match.group("date"), flat))
+            if flat != match.group("text"):
+                collapsed.append(f"whitespace collapsed: {match.group('date')} — {flat}")
         elif not in_comment and LOG_LIKE_RE.match(line):
             problems.append(f"line {number} looks like a log entry but is not '- YYYY-MM-DD — <text>': {line}")
         kept.append(match is None)
     head, raised = assemble_head(lines, kept)
-    notes = [f"moved to {L.LOG_HEAD}, above the entries: {first}" for first in raised]
+    notes = collapsed + [f"moved to {L.LOG_HEAD}, above the entries: {first}" for first in raised]
     return entries, head, notes, problems
 
 
@@ -203,11 +208,20 @@ def find_table(lines: list[str]) -> int | None:
     return None
 
 
-def row_entry(cells: list[str]) -> tuple[str, str, str, str]:
+def row_entry(cells: list[str]) -> tuple[tuple[str, str, str, str], list[str]]:
+    """A row in the form add-term writes: every run of whitespace in a cell one space, the display
+    name the term when the cell is empty. Also a notice for each such change."""
     term = cells[0]
     if len(term) >= 2 and term.startswith("`") and term.endswith("`"):
         term = term[1:-1].strip()
-    return term, cells[1], cells[2], cells[3]
+    definition, not_confused_with, display = (L.one_line(cell) for cell in cells[1:])
+    notes = []
+    if (definition, not_confused_with, display) != tuple(cells[1:]):
+        notes.append(f"whitespace collapsed: {entry_text((term, definition, not_confused_with, display or term))}")
+    if not display and term:
+        display = term
+        notes.append(f"display set to term: {term}")
+    return (term, definition, not_confused_with, display), notes
 
 
 def entry_text(entry: tuple[str, str, str, str]) -> str:
@@ -234,7 +248,9 @@ def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, lis
                 elif cells[0].startswith(EXAMPLE_MARK):
                     notes.append(f"dropped the template's example row ({EXAMPLE_MARK}): {line.strip()}")
                 else:
-                    rows.append(row_entry(cells))
+                    row, row_notes = row_entry(cells)
+                    rows.append(row)
+                    notes += row_notes
         elif line.lstrip().startswith("|"):
             problems.append(f"line {i + 1} is a table row outside the glossary table "
                             f"(| {' | '.join(L.GLOSSARY_COLUMNS)} |): {line}")
@@ -248,10 +264,10 @@ def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, lis
 
 def term_problems(rows: list[tuple[str, str, str, str]]) -> list[str]:
     problems, seen = [], {}
-    for term, definition, _, display in rows:
+    for term, definition, _, _ in rows:
         bad = L.bad_term_character(term) if term else None
         if not term:
-            problems.append(f"a row has no term: {entry_text((term, definition, _, display))}")
+            problems.append(f"a row has no term (definition: {definition})")
         elif bad is not None:
             problems.append(f"the term '{term}' cannot be a file name ({'a leading dot' if bad == '.' else repr(bad)}); rename it in the table")
         elif term.casefold() in seen:
@@ -260,8 +276,6 @@ def term_problems(rows: list[tuple[str, str, str, str]]) -> list[str]:
             seen[term.casefold()] = term
         if term and not definition:
             problems.append(f"the term '{term}' has no definition; a fragment needs one")
-        if term and not display:
-            problems.append(f"the term '{term}' has no display name; a fragment needs one (add-term uses the term)")
     return problems
 
 
@@ -321,7 +335,7 @@ def parse_index(root: Path, text: str, pages: dict[str, L.Page], strict: bool) -
     page any more is still an entry (it is lost), as the comparison needs."""
     lines = text.splitlines()
     headings = drawn_headings(root, pages)
-    links, kept, problems = [], [], []
+    links, kept, problems, collapsed = [], [], [], []
     for number, (line, in_comment) in enumerate(zip(lines, comment_flags(lines)), start=1):
         keep = True
         heading = None if in_comment else HEADING_RE.match(line)
@@ -336,11 +350,14 @@ def parse_index(root: Path, text: str, pages: dict[str, L.Page], strict: bool) -
             if match.group("indent") or match.group("bullet") != "-" or not (rest.strip() in ("", "—") or rest.startswith(" — ")):
                 problems.append(f"line {number} links the page {rel} but is not '- [title]({match.group('target')}) — <description>'; "
                                 f"write it so, then split: {line}")
-            description = rest[3:].strip() if rest.startswith(" — ") else ""
+            raw = rest[3:].strip() if rest.startswith(" — ") else ""
+            description = L.one_line(raw)
+            if description != raw:
+                collapsed.append(f"whitespace collapsed: wiki/{rel} — {description}")
             links.append(Link(rel, match.group("title"), description, number))
         kept.append(keep)
     head, raised = assemble_head(lines, kept)
-    notes = [f"kept in {L.INDEX_HEAD}, above the sections: {first}" for first in raised]
+    notes = collapsed + [f"kept in {L.INDEX_HEAD}, above the sections: {first}" for first in raised]
     return links, head, notes, problems
 
 
@@ -505,20 +522,89 @@ def refuse(ledger: str, problems: list[str], what: str = "refused, nothing was w
     return 1
 
 
-def leave_git(root: Path, rel: str) -> str | None:
-    """`git rm --cached` of `rel` when git tracks it. The error text, or None."""
+def leave_git(root: Path, rel: str) -> tuple[bool, str | None]:
+    """`git rm --cached` of `rel` when git tracks it: (whether it left git, the error text or None)."""
     if not (L.in_git_repository(root) and L.is_tracked(root, rel)):
-        return None
+        return False, None
     done = subprocess.run(["git", "-C", str(root), "rm", "--cached", "-q", "--", rel], capture_output=True, text=True, check=False)
-    return None if done.returncode == 0 else (done.stderr.strip() or f"git rm --cached {rel} failed")
+    if done.returncode == 0:
+        return True, None
+    return False, done.stderr.strip() or f"git rm --cached {rel} failed"
 
 
-def ignore(root: Path, rel: str) -> None:
+def ignored_text(root: Path, rel: str) -> str | None:
+    """The new text of .gitignore with a line for `rel`, or None when it has the line already."""
     path = root / ".gitignore"
-    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
     if {rel, "/" + rel} & {line.strip() for line in text.splitlines()}:
-        return
-    path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + rel + "\n", encoding="utf-8")
+        return None
+    return text + ("" if not text or text.endswith("\n") else "\n") + rel + "\n"
+
+
+def target_problem(root: Path, rel: str) -> str | None:
+    """Why `rel` cannot be written, or None."""
+    path = root / rel
+    if path.exists():
+        if not path.is_file():
+            return f"{rel} is there and is not a file"
+        return None if os.access(path, os.W_OK) else f"{rel} cannot be written (no write permission)"
+    parent = path.parent
+    while not parent.exists():
+        parent = parent.parent
+    if not parent.is_dir() or not os.access(parent, os.W_OK | os.X_OK):
+        return f"{rel} cannot be created ({parent.relative_to(root).as_posix() or '.'} cannot be written)"
+    return None
+
+
+def prepare(root: Path, old: str, writes: dict[str, str], drawn: str) -> tuple[dict[str, str], list[str]]:
+    """Every file the split writes, with its whole new text (the fragments, the head, the pages,
+    .gitignore, and last the drawn file at the old path), and why any of them cannot be written."""
+    files = dict(writes)
+    try:
+        gitignore = ignored_text(root, old)
+    except (OSError, UnicodeDecodeError) as error:
+        return files, [f".gitignore cannot be read: {error}"]
+    if gitignore is not None:
+        files[".gitignore"] = gitignore
+    files[old] = drawn
+    return files, [problem for rel in files if (problem := target_problem(root, rel))]
+
+
+def write_file(path: Path, text: str, created: list[Path]) -> None:
+    """Write `path`, noting in `created` each folder made for it, so that undo can remove them."""
+    missing = []
+    parent = path.parent
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    for folder in reversed(missing):
+        folder.mkdir()
+        created.append(folder)
+    path.write_text(text, encoding="utf-8")
+
+
+def undo(root: Path, old: str, left_git: bool, originals: dict[str, bytes | None], created: list[Path]) -> list[str]:
+    """Put back every file as it was before `finish`, and the old file in git. What could not be put back."""
+    failed = []
+    for rel, data in originals.items():
+        path = root / rel
+        try:
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(data)
+        except OSError as error:
+            failed.append(f"{rel}: {error}")
+    for folder in reversed(created):
+        try:
+            folder.rmdir()
+        except OSError as error:
+            failed.append(f"{folder.relative_to(root).as_posix()}: {error}")
+    if left_git:
+        done = subprocess.run(["git", "-C", str(root), "reset", "-q", "--", old], capture_output=True, text=True, check=False)
+        if done.returncode != 0:
+            failed.append(f"git reset -q -- {old}: {done.stderr.strip()}")
+    return failed
 
 
 def reminder(ledger: str, old: str) -> None:
@@ -526,17 +612,24 @@ def reminder(ledger: str, old: str) -> None:
           f"deleted here, modified there. To fix it, {FIX_HINTS[ledger]}.")
 
 
-def finish(root: Path, ledger: str, old: str, writes: dict[str, str], drawn: str) -> int:
-    """The only step that writes: git first (the step most likely to fail), then the files."""
-    error = leave_git(root, old)
+def finish(root: Path, ledger: str, old: str, files: dict[str, str]) -> int:
+    """The only step that writes: git first, then the files, in the order of `files`. Any error
+    puts everything back as it was, the old file in git included."""
+    originals = {rel: (root / rel).read_bytes() if (root / rel).is_file() else None for rel in files}
+    left_git, error = leave_git(root, old)
     if error:
         return refuse(ledger, [error])
-    for rel, text in writes.items():
-        (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        (root / rel).write_text(text, encoding="utf-8")
-    ignore(root, old)
-    (root / old).parent.mkdir(parents=True, exist_ok=True)
-    (root / old).write_text(drawn, encoding="utf-8")
+    created: list[Path] = []
+    try:
+        for rel, text in files.items():
+            write_file(root / rel, text, created)
+    except OSError as error:
+        failed = undo(root, old, left_git, originals, created)
+        problems = [f"writing failed: {error}"]
+        if failed:
+            return refuse(ledger, problems + ["and these could not be put back, fix them by hand:"] + failed,
+                          "stopped half way")
+        return refuse(ledger, problems + ["every file and the git index are back as they were"])
     print(f"split {ledger}: done. Commit it in a pull request of its own.")
     reminder(ledger, old)
     return 0
@@ -563,9 +656,10 @@ def split_markdown(root: Path, ledger: str, dry: bool) -> int:
     if problems:
         return refuse(ledger, problems)
     print_comparison(len(plan.entries), plan.notes + notes, moved_entries)
-    if dry:
-        return 0
-    return finish(root, ledger, old, plan.writes, L.stamp(drawn, SOURCES[ledger]))
+    files, problems = prepare(root, old, plan.writes, L.stamp(drawn, SOURCES[ledger]))
+    if problems:
+        return refuse(ledger, problems)
+    return 0 if dry else finish(root, ledger, old, files)
 
 
 def split_gen(root: Path, gen_out: str, lang: str, dry: bool) -> int:
@@ -579,9 +673,10 @@ def split_gen(root: Path, gen_out: str, lang: str, dry: bool) -> int:
     print(f"split gen: {gen_out} is the generated code{' (dry run: nothing is written)' if dry else ''}")
     print(f"  {would}remove {gen_out} from git (git rm --cached), add {gen_out} to .gitignore, and draw it stamped")
     print("compare: the drawn file is the committed one, byte for byte, under a stamped first line")
-    if dry:
-        return 0
-    return finish(root, "gen", gen_out, {}, L.stamp_generated(code))
+    files, problems = prepare(root, gen_out, {}, L.stamp_generated(code))
+    if problems:
+        return refuse("gen", problems)
+    return 0 if dry else finish(root, "gen", gen_out, files)
 
 
 def verify(root: Path, ledger: str, against: Path, gen_out: str | None, lang: str | None) -> int:

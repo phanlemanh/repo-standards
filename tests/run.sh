@@ -2608,7 +2608,7 @@ sp_snap() { # <dir>: one hash of every file outside .git and of the git index
   python3 - "$1" <<'PY'
 import hashlib, pathlib, subprocess, sys
 root = pathlib.Path(sys.argv[1]); h = hashlib.sha256()
-for p in sorted(q for q in root.rglob("*") if q.is_file() and ".git" not in q.relative_to(root).parts):
+for p in sorted(q for q in root.rglob("*") if q.is_file() and not {".git", "__pycache__"} & set(q.relative_to(root).parts)):
     h.update(p.relative_to(root).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
 h.update(subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True).stdout)
 print(h.hexdigest())
@@ -2748,6 +2748,63 @@ sb_git checkout -q -- wiki/log.head.md
 rc=0; out=$(sb_tool split log 2>&1) || rc=$?
 [ "$rc" = 0 ] || miss "split: a head file as repo-setup wrote it is refused ($out)"
 grep -qF 'Newest first.' "$sb/wiki/log.head.md" || miss "split: a head file as repo-setup wrote it was not overwritten"
+# 48x (fix round 1, plan 48o). whitespace inside an entry is collapsed, as add-log and add-term write it,
+#      and said; an empty display name becomes the term, as add-term makes it
+sc="$TMP/split-c"; mkdir -p "$sc"; sp_new "$sc"
+sc_tool() { ( cd "$sc" && python3 tools/ledgers.py "$@" ); }
+python3 - "$sc" <<'PY'
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+def edit(rel, old, new):
+    path = root / rel; text = path.read_text(encoding="utf-8"); assert old in text, (rel, old)
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+edit("wiki/log.md", "Dock 3 opens for returns", "Dock 3  opens\tfor returns")
+edit("ontology/glossary.md", "One change of place of one lot.", "One change  of place\tof one lot.")
+edit("ontology/glossary.md", "| Lot code     |", "|              |")
+edit("wiki/index.md", "goods in, counted twice", "goods in,  counted\ttwice")
+PY
+git -C "$sc" add -A && git -C "$sc" -c user.name=t -c user.email=t@example.com commit -q -m "docs: whitespace"
+for L in log glossary index; do
+  rc=0; out=$(sc_tool split $L 2>&1) || rc=$?
+  [ "$rc" = 0 ] || miss "split: split $L exits $rc for an entry with a double space and a tab ($out)"
+  case "$out" in *"whitespace collapsed"*) ;; *) miss "split: split $L does not say it collapsed the whitespace of an entry ($out)" ;; esac
+  printf '%s\n' "$out" > "$TMP/split.ws.$L"
+done
+grep -qxF -- '- 2026-06-02 — Dock 3 opens for returns' "$sc/wiki/log.md" || miss "split: the log entry with a double space and a tab is not drawn as one line"
+[ "$(cat "$sc"/wiki/log/2026-06-02-*-dock-3-opens-for-returns.md 2>/dev/null)" = "Dock 3 opens for returns" ] || miss "split: the log fragment is not in the form add-log writes"
+grep -qxF 'One change of place of one lot.' "$sc/ontology/glossary/Stock move.md" || miss "split: the glossary definition is not in the form add-term writes"
+grep -qx 'display: Lot.Code' "$sc/ontology/glossary/Lot.Code.md" || miss "split: an empty display name did not become the term"
+case "$(cat "$TMP/split.ws.glossary")" in *"display set to term: Lot.Code"*) ;; *) miss "split: split glossary does not say the display name was set to the term" ;; esac
+grep -qx 'summary: goods in, counted twice' "$sc/wiki/flows/receiving.md" || miss "split: the index description is not in one-line form in the summary"
+sc_tool check >/dev/null 2>&1 || miss "split: ledgers.py check is red after a split that collapsed whitespace ($(sc_tool check 2>&1))"
+# 48y (fix round 1). an error while writing leaves nothing half done: git and every file as before
+if [ "$(id -u)" != 0 ]; then
+  chmod 444 "$sb/.gitignore"; st=$(sb_git status --porcelain)
+  sb_refused "a read-only .gitignore" glossary; case "$out" in *.gitignore*) ;; *) miss "split: a read-only .gitignore is not named ($out)" ;; esac
+  [ "$(sb_git status --porcelain)" = "$st" ] || miss "split: a read-only .gitignore changed git status ($(sb_git status --porcelain | tr '\n' ';'))"
+  chmod 644 "$sb/.gitignore"
+else
+  echo "skip  split: read-only .gitignore (running as root)"
+fi
+before=$(sp_snap "$sb"); st=$(sb_git status --porcelain)
+rc=0; out=$( cd "$sb" && python3 - 2>&1 <<'PY'
+import sys
+sys.path.insert(0, "tools")
+import ledgers, ledgers_split
+real, calls = ledgers_split.write_file, []
+def failing(path, text, created):  # the third file fails: two are written, one folder is made
+    calls.append(path)
+    if len(calls) == 3:
+        raise OSError("disk full (test)")
+    real(path, text, created)
+ledgers_split.write_file = failing
+sys.exit(ledgers.main(["split", "glossary"]))
+PY
+) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"disk full"*"back as they were"*) true ;; *) false ;; esac || miss "split: a write that fails half way exits $rc, or does not say it put everything back ($out)"
+[ "$(sp_snap "$sb")" = "$before" ] || miss "split: a write that fails half way left a file behind or changed one"
+[ "$(sb_git status --porcelain)" = "$st" ] || miss "split: a write that fails half way left git changed ($(sb_git status --porcelain | tr '\n' ';'))"
+[ "$(sb_tool shape glossary)" = one-file ] || miss "split: after a write that failed half way the glossary is not one-file again"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

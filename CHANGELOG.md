@@ -57,10 +57,13 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   also `make split L=<ledger> [DRY=1]`): the one command an existing repository runs, in a pull
   request of its own, to move a one-file ledger into fragments. It works everything out in memory,
   draws the ledger with the real drawer in a scratch copy, and compares by entry, not by text: every
-  entry before is there after, word for word; entries whose place changed are printed. A lost or extra
-  entry, two sources, a term that cannot be a file name, more than 99 log lines on one day, a page the
-  index links that has no `type` or `title`, or a `.head.md` changed since repo-setup wrote it (its
-  sha256 differs from `.repo-setup.json`) makes it exit 1 and write nothing. Then it writes the
+  entry before is there after, word for word; entries whose place changed are printed. Whitespace
+  inside an entry is collapsed to one space, as `make log` and `add-term` write it, and printed
+  (`whitespace collapsed: …`); an empty display name becomes the term (`display set to term: …`). A
+  lost or extra entry, two sources, a term that cannot be a file name, more than 99 log lines on one
+  day, a page the index links that has no `type` or `title`, a `.head.md` changed since repo-setup
+  wrote it (its sha256 differs from `.repo-setup.json`), or a file it cannot write makes it exit 1 and
+  write nothing. A write that fails part way puts every file and the git index back as they were. Then it writes the
   fragments (the same files `make log` and `add-term` write) and the head file, moves each index
   description to the `summary` of its page, runs `git rm --cached` on the old file, adds its path to
   `.gitignore` and puts the drawn file in its place. The glossary's `_Example:_` row and closing
