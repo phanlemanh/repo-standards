@@ -17,8 +17,10 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   and a repository without `tools/ledgers.py` gets nothing. An upgrade creates no fragment and
   leaves a one-file repository green; what breaks on upgrade: nothing, the split is the owner's
   call, one pull request per ledger.
-- python preset: `pyproject.toml` excludes `tools/` (vendored by repo-setup) from ruff, so `make lint`
-  does not read the ledger tools. What breaks on upgrade: nothing; `pyproject.toml` merges as before.
+- The ledger tools (`ledgers.py`, `ledgers_split.py`, the new `ledgers_ontology.py` for add-term and
+  the generated code, `wiki_lint.py`) pass a python repository's own `ruff check` and
+  `ruff format --check`, so `make lint` keeps reading `tools/`. `claude-plugin` does not receive
+  `ledgers_ontology.py`. What breaks on upgrade: nothing.
 - `tools/ledgers.py shape <ledger>` prints `one-file` or `fragments`.
 - What breaks on upgrade: nothing. A repository that keeps `wiki/log.md`, `wiki/index.md` and
   `ontology/glossary.md` in git and edits them by hand has no stamp, so they stay `one-file` and

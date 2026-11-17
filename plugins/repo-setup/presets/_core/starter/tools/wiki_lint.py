@@ -169,8 +169,11 @@ def check_ontology(root: Path, rep: Report) -> dict[str, dict[str, Any]]:
 def is_fragment_file(wiki: Path, page: Path) -> bool:
     """A file of the wiki that is no page: a head file, an entry of wiki/log/, a hidden file."""
     parts = page.relative_to(wiki).parts
-    return (page.name.endswith(".head.md") or parts[0] == "log"
-            or any(part.startswith(".") for part in parts))
+    return (
+        page.name.endswith(".head.md")
+        or parts[0] == "log"
+        or any(part.startswith(".") for part in parts)
+    )
 
 
 def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> None:

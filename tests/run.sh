@@ -3113,6 +3113,13 @@ fr_json=$(python3 "$S/doctor.py" --target "$fr" --level starter --json)
 # an install from before tools/ledgers.py: no notice, no error
 ol="$TMP/oldshape-noledgers"; cp -R "$ou" "$ol"; rm -f "$ol/tools/ledgers.py"
 [ "$(python3 "$S/doctor.py" --target "$ol" --level starter --json | json 'd["ledgers_split"]')" = "[]" ] || miss "doctor: a repository without tools/ledgers.py gets a notice or an error"
+# 48zi. the tools a python repository receives pass its own ruff config (check and format), as every vendored tool did
+#      before the ledger tools. Skipped without ruff on the PATH or in uv's cache (it never goes to the network).
+if command -v ruff >/dev/null 2>&1; then ruff_cmd="ruff"; elif command -v uvx >/dev/null 2>&1 && uvx --offline ruff --version >/dev/null 2>&1; then ruff_cmd="uvx --offline ruff"; else ruff_cmd=""; fi
+if [ -n "$ruff_cmd" ]; then
+  ( cd "$TMP/newrepo-python" && $ruff_cmd check . >/dev/null 2>&1 ) || miss "python repo: ruff check is red on the vendored tools ($(cd "$TMP/newrepo-python" && $ruff_cmd check . --output-format concise 2>&1 | head -3))"
+  ( cd "$TMP/newrepo-python" && $ruff_cmd format --check . >/dev/null 2>&1 ) || miss "python repo: ruff format --check is red on the vendored tools"
+fi
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

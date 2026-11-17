@@ -11,8 +11,8 @@ place.
 
   log       an entry is a line `- YYYY-MM-DD — <text>`; the rest goes to wiki/log.head.md
   glossary  an entry is a row of the four-column table; the rest goes to ontology/glossary.head.md
-  index     an entry is a line `- [title](page)` (plus ` — <description>`) that points to a page; the
-            description moves to the `summary` key of that page, the rest to wiki/index.head.md
+  index     an entry is a line `- [title](page)` (plus ` — <description>`) that points to a page;
+            the description moves to the `summary` key of that page, the rest to wiki/index.head.md
   gen       no fragments: the generated file leaves git and is drawn, stamped
 
 A head file that is already there is overwritten only while it is as repo-setup wrote it (its
@@ -33,26 +33,30 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
-import ledgers as L
+import ledgers as led
+import ledgers_ontology as ont
 
 MANIFEST = ".repo-setup.json"
 LOG_ENTRY_RE = re.compile(r"^- (?P<date>\d{4}-\d{2}-\d{2}) — (?P<text>.*\S)\s*$")
 LOG_LIKE_RE = re.compile(r"^\s*[-*+] \d{4}-\d{2}-\d{2}\b")
-LINK_RE = re.compile(r"^(?P<indent>\s*)(?P<bullet>[-*+]) \[(?P<title>[^\]]*)\]\((?P<target>[^)\s]+)\)(?P<rest>.*)$")
+LINK_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<bullet>[-*+]) \[(?P<title>[^\]]*)\]\((?P<target>[^)\s]+)\)(?P<rest>.*)$"
+)
 HEADING_RE = re.compile(r"^## (?P<name>.+?)\s*$")
 SEPARATOR_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
 EXAMPLE_MARK = "_Example:_"
-LOG_SENTENCE = L.INDEX_LOG_SECTION.splitlines()[-1]
+LOG_SENTENCE = led.INDEX_LOG_SECTION.splitlines()[-1]
 MAX_PER_DAY = 99
 FIX_HINTS = {
     "log": 'run make log m="<text>" again on that branch',
     "glossary": "run python3 tools/ledgers.py add-term again on that branch",
-    "index": "take the deletion on that branch: a new page needs only a type and a title (and a summary) to be listed",
+    "index": "take the deletion on that branch: a new page needs only a type and a title (and a "
+    "summary) to be listed",
     "gen": "take the deletion on that branch (git rm --cached the file); make derived draws it",
 }
 
@@ -99,7 +103,7 @@ def assemble_head(lines: list[str], kept: list[bool]) -> tuple[str, list[str]]:
     while head and not head[-1].strip():
         head.pop()
     blocks, block = [], []
-    for line, keep in zip(lines[first_gone:], kept[first_gone:]):
+    for line, keep in zip(lines[first_gone:], kept[first_gone:], strict=False):
         if keep and line.strip():
             block.append(line)
         elif block:
@@ -166,40 +170,51 @@ def parse_log(text: str) -> tuple[list[tuple[str, str]], str, list[str], list[st
     add-log writes and the drawer draws: every run of whitespace one space."""
     lines = text.splitlines()
     entries, kept, problems, collapsed = [], [], [], []
-    for number, (line, in_comment) in enumerate(zip(lines, comment_flags(lines)), start=1):
+    for number, (line, in_comment) in enumerate(
+        zip(lines, comment_flags(lines), strict=True), start=1
+    ):
         match = None if in_comment else LOG_ENTRY_RE.match(line)
         if match:
-            flat = L.one_line(match.group("text"))
+            flat = led.one_line(match.group("text"))
             entries.append((match.group("date"), flat))
             if flat != match.group("text"):
                 collapsed.append(f"whitespace collapsed: {match.group('date')} — {flat}")
         elif not in_comment and LOG_LIKE_RE.match(line):
-            problems.append(f"line {number} looks like a log entry but is not '- YYYY-MM-DD — <text>': {line}")
+            problems.append(
+                f"line {number} looks like a log entry but is not '- YYYY-MM-DD — <text>': {line}"
+            )
         kept.append(match is None)
     head, raised = assemble_head(lines, kept)
-    notes = collapsed + [f"moved to {L.LOG_HEAD}, above the entries: {first}" for first in raised]
+    notes = collapsed + [f"moved to {led.LOG_HEAD}, above the entries: {first}" for first in raised]
     return entries, head, notes, problems
 
 
 def plan_log(root: Path, text: str) -> Plan:
-    plan = Plan("log", L.LOG_FILE)
-    if L.log_entries(root):
-        plan.problems.append(f"{L.LOG_FILE} is kept by hand and {L.LOG_DIR}/ has entries: two sources for the log; "
-                             "move the entries into one of them by hand, then split")
+    plan = Plan("log", led.LOG_FILE)
+    if led.log_entries(root):
+        plan.problems.append(
+            f"{led.LOG_FILE} is kept by hand and {led.LOG_DIR}/ has entries: two sources for the "
+            "log; move the entries into one of them by hand, then split"
+        )
     entries, plan.head, plan.notes, problems = parse_log(text)
     plan.problems += problems
     per_day = collections.Counter(date for date, _ in entries)
     for date, count in sorted(per_day.items()):
         if count > MAX_PER_DAY:
-            plan.problems.append(f"{date} has {count} entries; a fragment name holds at most {MAX_PER_DAY} a day (NN is two digits)")
+            plan.problems.append(
+                f"{date} has {count} entries; a fragment name holds at most {MAX_PER_DAY} a day "
+                "(NN is two digits)"
+            )
     seen: collections.Counter[str] = collections.Counter()
     for date, entry in entries:
         seen[date] += 1
-        number = per_day[date] - seen[date] + 1  # the top line of a day is its newest: the highest NN
-        name = f"{date}-{number:02d}-{L.slugify(entry)}.md"
-        plan.writes[f"{L.LOG_DIR}/{name}"] = entry + "\n"
+        number = (
+            per_day[date] - seen[date] + 1
+        )  # the top line of a day is its newest: the highest NN
+        name = f"{date}-{number:02d}-{led.slugify(entry)}.md"
+        plan.writes[f"{led.LOG_DIR}/{name}"] = entry + "\n"
         plan.entries.append(f"{date} — {entry}")
-    plan.writes[L.LOG_HEAD] = plan.head
+    plan.writes[led.LOG_HEAD] = plan.head
     return plan
 
 
@@ -222,9 +237,11 @@ def split_cells(line: str) -> list[str]:
 def find_table(lines: list[str]) -> int | None:
     """The index of the header row of the glossary table, or None."""
     for i, line in enumerate(lines):
-        if line.lstrip().startswith("|") and tuple(split_cells(line)) == L.GLOSSARY_COLUMNS:
-            if i + 1 < len(lines) and SEPARATOR_RE.match(lines[i + 1].strip()):
-                return i
+        is_header = (
+            line.lstrip().startswith("|") and tuple(split_cells(line)) == led.GLOSSARY_COLUMNS
+        )
+        if is_header and i + 1 < len(lines) and SEPARATOR_RE.match(lines[i + 1].strip()):
+            return i
     return None
 
 
@@ -234,10 +251,13 @@ def row_entry(cells: list[str]) -> tuple[tuple[str, str, str, str], list[str]]:
     term = cells[0]
     if len(term) >= 2 and term.startswith("`") and term.endswith("`"):
         term = term[1:-1].strip()
-    definition, not_confused_with, display = (L.one_line(cell) for cell in cells[1:])
+    definition, not_confused_with, display = (led.one_line(cell) for cell in cells[1:])
     notes = []
     if (definition, not_confused_with, display) != tuple(cells[1:]):
-        notes.append(f"whitespace collapsed: {entry_text((term, definition, not_confused_with, display or term))}")
+        notes.append(
+            "whitespace collapsed: "
+            f"{entry_text((term, definition, not_confused_with, display or term))}"
+        )
     if not display and term:
         display = term
         notes.append(f"display set to term: {term}")
@@ -246,7 +266,7 @@ def row_entry(cells: list[str]) -> tuple[tuple[str, str, str, str], list[str]]:
 
 def entry_text(entry: tuple[str, str, str, str]) -> str:
     """A row as one line, a pipe inside a cell escaped as the table writes it."""
-    return "`{}` | {} | {} | {}".format(*(L.escape_cell(cell) for cell in entry))
+    return "`{}` | {} | {} | {}".format(*(led.escape_cell(cell) for cell in entry))
 
 
 def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, list[str], list[str]]:
@@ -263,35 +283,48 @@ def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, lis
             kept[i] = False
             if i >= start + 2:
                 cells = split_cells(line)
-                if len(cells) != len(L.GLOSSARY_COLUMNS):
-                    problems.append(f"line {i + 1} is a row of {len(cells)} cells, not {len(L.GLOSSARY_COLUMNS)}: {line}")
+                if len(cells) != len(led.GLOSSARY_COLUMNS):
+                    problems.append(
+                        f"line {i + 1} is a row of {len(cells)} cells, not "
+                        f"{len(led.GLOSSARY_COLUMNS)}: {line}"
+                    )
                 elif cells[0].startswith(EXAMPLE_MARK):
-                    notes.append(f"dropped the template's example row ({EXAMPLE_MARK}): {line.strip()}")
+                    notes.append(
+                        f"dropped the template's example row ({EXAMPLE_MARK}): {line.strip()}"
+                    )
                 else:
                     row, row_notes = row_entry(cells)
                     rows.append(row)
                     notes += row_notes
         elif line.lstrip().startswith("|"):
-            problems.append(f"line {i + 1} is a table row outside the glossary table "
-                            f"(| {' | '.join(L.GLOSSARY_COLUMNS)} |): {line}")
-        elif line.startswith(L.GLOSSARY_COMMENT):
+            problems.append(
+                f"line {i + 1} is a table row outside the glossary table "
+                f"(| {' | '.join(led.GLOSSARY_COLUMNS)} |): {line}"
+            )
+        elif line.startswith(led.GLOSSARY_COMMENT):
             kept[i] = False
             notes.append(f"dropped the template's comment: {line.strip()}")
     head, raised = assemble_head(lines, kept)
-    notes += [f"moved to {L.GLOSSARY_HEAD}, above the table: {first}" for first in raised]
+    notes += [f"moved to {led.GLOSSARY_HEAD}, above the table: {first}" for first in raised]
     return rows, head, notes, problems
 
 
 def term_problems(rows: list[tuple[str, str, str, str]]) -> list[str]:
     problems, seen = [], {}
     for term, definition, _, _ in rows:
-        bad = L.bad_term_character(term) if term else None
+        bad = ont.bad_term_character(term) if term else None
         if not term:
             problems.append(f"a row has no term (definition: {definition})")
         elif bad is not None:
-            problems.append(f"the term '{term}' cannot be a file name ({'a leading dot' if bad == '.' else repr(bad)}); rename it in the table")
+            problems.append(
+                f"the term '{term}' cannot be a file name "
+                f"({'a leading dot' if bad == '.' else repr(bad)}); rename it in the table"
+            )
         elif term.casefold() in seen:
-            problems.append(f"the terms '{seen[term.casefold()]}' and '{term}' would be one file name ({term}.md)")
+            problems.append(
+                f"the terms '{seen[term.casefold()]}' and '{term}' would be one file name "
+                f"({term}.md)"
+            )
         else:
             seen[term.casefold()] = term
         if term and not definition:
@@ -300,18 +333,27 @@ def term_problems(rows: list[tuple[str, str, str, str]]) -> list[str]:
 
 
 def plan_glossary(root: Path, text: str) -> Plan:
-    plan = Plan("glossary", L.GLOSSARY_FILE)
-    if L.glossary_files(root):
-        plan.problems.append(f"{L.GLOSSARY_FILE} is kept by hand and {L.GLOSSARY_DIR}/ has terms: two sources for the "
-                             "glossary; move the terms into one of them by hand, then split")
+    plan = Plan("glossary", led.GLOSSARY_FILE)
+    if led.glossary_files(root):
+        plan.problems.append(
+            f"{led.GLOSSARY_FILE} is kept by hand and {led.GLOSSARY_DIR}/ has terms: two sources "
+            "for the "
+            "glossary; move the terms into one of them by hand, then split"
+        )
     rows, plan.head, plan.notes, problems = parse_glossary(text)
     plan.problems += problems + term_problems(rows)
     if find_table(text.splitlines()) is None and not rows:
-        plan.notes.append(f"{L.GLOSSARY_FILE} has no table with the header | {' | '.join(L.GLOSSARY_COLUMNS)} |: no term to move")
+        plan.notes.append(
+            f"{led.GLOSSARY_FILE} has no table with the header "
+            f"| {' | '.join(led.GLOSSARY_COLUMNS)} |: "
+            "no term to move"
+        )
     for term, definition, not_confused_with, display in rows:
-        plan.writes[f"{L.GLOSSARY_DIR}/{term}.md"] = L.term_fragment(term, display, not_confused_with, definition)
+        plan.writes[f"{led.GLOSSARY_DIR}/{term}.md"] = ont.term_fragment(
+            term, display, not_confused_with, definition
+        )
         plan.entries.append(entry_text((term, definition, not_confused_with, display)))
-    plan.writes[L.GLOSSARY_HEAD] = plan.head
+    plan.writes[led.GLOSSARY_HEAD] = plan.head
     return plan
 
 
@@ -344,40 +386,55 @@ def page_rel(root: Path, target: str) -> str | None:
         return None
 
 
-def drawn_headings(root: Path, pages: dict[str, L.Page]) -> set[str]:
+def drawn_headings(root: Path, pages: dict[str, led.Page]) -> set[str]:
     """The `## ` headings the drawn index has, or will have once a page of that type exists."""
-    types = set(L.page_type_names(root)) | {p.type for p in pages.values() if p.type}
-    return {L.pluralise(t) for t in types} | {"Log"}
+    types = set(led.page_type_names(root)) | {p.type for p in pages.values() if p.type}
+    return {led.pluralise(t) for t in types} | {"Log"}
 
 
-def parse_index(root: Path, text: str, pages: dict[str, L.Page], strict: bool) -> tuple[list[Link], str, list[str], list[str]]:
+def parse_index(
+    root: Path, text: str, pages: dict[str, led.Page], strict: bool
+) -> tuple[list[Link], str, list[str], list[str]]:
     """(links to pages, head, notes, problems). With `strict`, a link to a wiki .md file that is no
     page any more is still an entry (it is lost), as the comparison needs."""
     lines = text.splitlines()
     headings = drawn_headings(root, pages)
     links, kept, problems, collapsed = [], [], [], []
-    for number, (line, in_comment) in enumerate(zip(lines, comment_flags(lines)), start=1):
+    for number, (line, in_comment) in enumerate(
+        zip(lines, comment_flags(lines), strict=True), start=1
+    ):
         keep = True
         heading = None if in_comment else HEADING_RE.match(line)
         match = None if in_comment else LINK_RE.match(line)
         rel = page_rel(root, match.group("target")) if match else None
-        is_page = rel is not None and (rel in pages or (strict and rel.endswith(".md") and rel not in ("index.md", "log.md")))
-        if heading and heading.group("name") in headings or line.strip() == LOG_SENTENCE:
+        is_page = rel is not None and (
+            rel in pages or (strict and rel.endswith(".md") and rel not in ("index.md", "log.md"))
+        )
+        if (heading and heading.group("name") in headings) or line.strip() == LOG_SENTENCE:
             keep = False
         elif match and is_page:
             keep = False
             rest = match.group("rest")
-            if match.group("indent") or match.group("bullet") != "-" or not (rest.strip() in ("", "—") or rest.startswith(" — ")):
-                problems.append(f"line {number} links the page {rel} but is not '- [title]({match.group('target')}) — <description>'; "
-                                f"write it so, then split: {line}")
+            if (
+                match.group("indent")
+                or match.group("bullet") != "-"
+                or not (rest.strip() in ("", "—") or rest.startswith(" — "))
+            ):
+                problems.append(
+                    f"line {number} links the page {rel} but is not '- "
+                    f"[title]({match.group('target')}) — <description>'; "
+                    f"write it so, then split: {line}"
+                )
             raw = rest[3:].strip() if rest.startswith(" — ") else ""
-            description = L.one_line(raw)
+            description = led.one_line(raw)
             if description != raw:
                 collapsed.append(f"whitespace collapsed: wiki/{rel} — {description}")
             links.append(Link(rel, match.group("title"), description, number))
         kept.append(keep)
     head, raised = assemble_head(lines, kept)
-    notes = collapsed + [f"kept in {L.INDEX_HEAD}, above the sections: {first}" for first in raised]
+    notes = collapsed + [
+        f"kept in {led.INDEX_HEAD}, above the sections: {first}" for first in raised
+    ]
     return links, head, notes, problems
 
 
@@ -390,16 +447,22 @@ def merge_links(links: list[Link]) -> tuple[dict[str, Link], list[str], list[str
         if first is None:
             by_rel[link.rel] = link
             continue
-        notes.append(f"wiki/{link.rel} is linked again on line {link.line}; the drawn index lists it once")
+        notes.append(
+            f"wiki/{link.rel} is linked again on line {link.line}; the drawn index lists it once"
+        )
         if link.description and first.description and link.description != first.description:
-            problems.append(f"wiki/{link.rel} is linked on lines {first.line} and {link.line} with two descriptions; keep one, then split")
+            problems.append(
+                f"wiki/{link.rel} is linked on lines {first.line} and {link.line} with two "
+                "descriptions; keep one, then split"
+            )
         elif link.description and not first.description:
             by_rel[link.rel] = link
     return by_rel, notes, problems
 
 
 def summary_value(text: str) -> str:
-    """The text as a front matter value that reads back the same (ledgers.py strips one pair of quotes)."""
+    """The text as a front matter value that reads back the same (ledgers.py strips one pair
+    of quotes)."""
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
         quote = "'" if text[0] == '"' else '"'
         return f"{quote}{text}{quote}"
@@ -412,16 +475,20 @@ def with_summary(text: str, summary: str) -> str:
     end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
     newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
     new = f"summary: {summary_value(summary)}{newline}"
-    found = [i for i in range(1, end) if ":" in lines[i] and lines[i].partition(":")[0].strip() == "summary"]
+    found = [
+        i
+        for i in range(1, end)
+        if ":" in lines[i] and lines[i].partition(":")[0].strip() == "summary"
+    ]
     if not found:
-        return "".join(lines[:end] + [new] + lines[end:])
+        return "".join([*lines[:end], new, *lines[end:]])
     lines[found[0]] = new
     return "".join(line for i, line in enumerate(lines) if i not in found[1:])
 
 
 def plan_index(root: Path, text: str) -> Plan:
-    plan = Plan("index", L.INDEX_FILE)
-    pages = {page.rel: page for page in L.wiki_pages(root)}
+    plan = Plan("index", led.INDEX_FILE)
+    pages = {page.rel: page for page in led.wiki_pages(root)}
     links, plan.head, plan.notes, plan.problems = parse_index(root, text, pages, strict=False)
     by_rel, notes, problems = merge_links(links)
     plan.notes += notes
@@ -429,30 +496,45 @@ def plan_index(root: Path, text: str) -> Plan:
     for rel, link in by_rel.items():
         page = pages[rel]
         if page.problem:
-            plan.problems.append(f"{page.problem}: the index links it, and the drawn index would leave it out")
+            plan.problems.append(
+                f"{page.problem}: the index links it, and the drawn index would leave it out"
+            )
             continue
         if link.title != page.title:
-            plan.notes.append(f"wiki/{rel}: the drawn line shows the page title '{page.title}', not '{link.title}'")
+            plan.notes.append(
+                f"wiki/{rel}: the drawn line shows the page title '{page.title}', not "
+                f"'{link.title}'"
+            )
         if link.description and link.description != page.summary:
             path = root / "wiki" / rel
-            plan.writes[f"wiki/{rel}"] = with_summary(path.read_text(encoding="utf-8"), link.description)
+            plan.writes[f"wiki/{rel}"] = with_summary(
+                path.read_text(encoding="utf-8"), link.description
+            )
             plan.edited_pages.append(f"wiki/{rel}")
             if page.summary:
-                plan.notes.append(f"wiki/{rel}: summary '{page.summary}' replaced by the description of the index")
+                plan.notes.append(
+                    f"wiki/{rel}: summary '{page.summary}' replaced by the description of the index"
+                )
     for rel, page in sorted(pages.items()):
         if rel not in by_rel and page.problem is None:
-            plan.notes.append(f"added: wiki/{rel} (no line of the old index linked it; the drawn index lists every page)")
+            plan.notes.append(
+                f"added: wiki/{rel} (no line of the old index linked it; the drawn index lists "
+                "every page)"
+            )
     plan.entries = [f"{rel} — {link.description}" for rel, link in by_rel.items()]
-    plan.writes[L.INDEX_HEAD] = plan.head
+    plan.writes[led.INDEX_HEAD] = plan.head
     return plan
 
 
-def compare_index(root: Path, before_text: str, drawn: str, scratch: Path, strict: bool) -> tuple[list[str], list[str], list[str]]:
+def compare_index(
+    root: Path, before_text: str, drawn: str, scratch: Path, strict: bool
+) -> tuple[list[str], list[str], list[str]]:
     """(notes, problems, moved) for the index: every page linked before is linked after, with the
     same description. Pages the old index did not link may be added. With `strict` (a check after
-    the split) a link to a wiki .md file that is no page any more counts as an entry, and is lost."""
-    old_pages = {page.rel: page for page in L.wiki_pages(root)}
-    new_pages = {page.rel: page for page in L.wiki_pages(scratch)}
+    the split) a link to a wiki .md file that is no page any more counts as an entry, and is
+    lost."""
+    old_pages = {page.rel: page for page in led.wiki_pages(root)}
+    new_pages = {page.rel: page for page in led.wiki_pages(scratch)}
     before, _, _, _ = parse_index(root, before_text, old_pages, strict=strict)
     after, _, _, _ = parse_index(scratch, drawn, new_pages, strict=False)
     old, _, _ = merge_links(before)
@@ -460,11 +542,19 @@ def compare_index(root: Path, before_text: str, drawn: str, scratch: Path, stric
     notes, problems = [], []
     for rel, link in old.items():
         if rel not in new:
-            problems.append(f"lost: - [{link.title}]({rel}){' — ' + link.description if link.description else ''}")
+            problems.append(
+                "lost: - "
+                f"[{link.title}]({rel}){' — ' + link.description if link.description else ''}"
+            )
         elif link.description and new[rel].description != link.description:
-            problems.append(f"changed: wiki/{rel}: '{link.description}' is drawn as '{new[rel].description}'")
+            problems.append(
+                f"changed: wiki/{rel}: '{link.description}' is drawn as '{new[rel].description}'"
+            )
         elif not link.description and new[rel].description:
-            notes.append(f"wiki/{rel}: the drawn line shows the summary the page already had: {new[rel].description}")
+            notes.append(
+                f"wiki/{rel}: the drawn line shows the summary the page already had: "
+                f"{new[rel].description}"
+            )
     order_after = [link.rel for link in after if link.rel in old]
     return notes, problems, [f"wiki/{rel}" for rel in moved(list(old), order_after)]
 
@@ -473,10 +563,21 @@ def compare_index(root: Path, before_text: str, drawn: str, scratch: Path, stric
 # Drawing in a scratch copy, and the comparison
 # ---------------------------------------------------------------------------------------------
 
-BODIES: dict[str, Callable[[Path], str]] = {"log": L.log_body, "index": L.index_body, "glossary": L.glossary_body}
-SOURCES = {"log": L.LOG_SOURCE, "index": L.INDEX_SOURCE, "glossary": L.GLOSSARY_SOURCE}
-PLANNERS: dict[str, Callable[[Path, str], Plan]] = {"log": plan_log, "index": plan_index, "glossary": plan_glossary}
-DRAWN_ENTRIES: dict[str, Callable[[str], list[str]]] = {"log": drawn_log_entries, "glossary": drawn_glossary_entries}
+BODIES: dict[str, Callable[[Path], str]] = {
+    "log": led.log_body,
+    "index": led.index_body,
+    "glossary": led.glossary_body,
+}
+SOURCES = {"log": led.LOG_SOURCE, "index": led.INDEX_SOURCE, "glossary": led.GLOSSARY_SOURCE}
+PLANNERS: dict[str, Callable[[Path, str], Plan]] = {
+    "log": plan_log,
+    "index": plan_index,
+    "glossary": plan_glossary,
+}
+DRAWN_ENTRIES: dict[str, Callable[[str], list[str]]] = {
+    "log": drawn_log_entries,
+    "glossary": drawn_glossary_entries,
+}
 
 
 def draw_in_scratch(root: Path, writes: dict[str, str], scratch: Path) -> None:
@@ -489,14 +590,18 @@ def draw_in_scratch(root: Path, writes: dict[str, str], scratch: Path) -> None:
         (scratch / rel).write_text(text, encoding="utf-8")
 
 
-def compare(ledger: str, root: Path, before_text: str, before: list[str], drawn: str, scratch: Path) -> tuple[list[str], list[str], list[str]]:
+def compare(
+    ledger: str, root: Path, before_text: str, before: list[str], drawn: str, scratch: Path
+) -> tuple[list[str], list[str], list[str]]:
     """(notes, problems, moved) of the entries `before` against the ones read back from `drawn`."""
     if ledger == "index":
         return compare_index(root, before_text, drawn, scratch, strict=False)
     after = DRAWN_ENTRIES[ledger](drawn)
     lost = collections.Counter(before) - collections.Counter(after)
     extra = collections.Counter(after) - collections.Counter(before)
-    problems = [f"lost: {entry}" for entry in lost.elements()] + [f"extra: {entry}" for entry in extra.elements()]
+    problems = [f"lost: {entry}" for entry in lost.elements()] + [
+        f"extra: {entry}" for entry in extra.elements()
+    ]
     return [], problems, moved(before, after)
 
 
@@ -509,8 +614,12 @@ def check_heads(root: Path, plan: Plan) -> list[str]:
     if manifest_hash(root, rel) == sha256_file(path):
         plan.notes.append(f"{rel} is as repo-setup wrote it: it is overwritten")
         return []
-    return [f"{rel} is there and was changed since repo-setup wrote it (or repo-setup did not write it); "
-            f"split would overwrite it. Put what it says into the head of {plan.old}, delete {rel}, then split"]
+    return [
+        f"{rel} is there and was changed since repo-setup wrote it (or repo-setup did not write "
+        "it); "
+        f"split would overwrite it. Put what it says into the head of {plan.old}, delete {rel}, "
+        "then split"
+    ]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -520,11 +629,17 @@ def check_heads(root: Path, plan: Plan) -> list[str]:
 
 def print_plan(plan: Plan, dry: bool) -> None:
     would = "would " if dry else ""
-    print(f"split {plan.ledger}: {plan.old} has {entries_word(len(plan.entries))}{' (dry run: nothing is written)' if dry else ''}")
+    print(
+        f"split {plan.ledger}: {plan.old} has "
+        f"{entries_word(len(plan.entries))}{' (dry run: nothing is written)' if dry else ''}"
+    )
     for rel in sorted(plan.writes):
         what = "edit" if rel in plan.edited_pages else "write"
         print(f"  {would}{what} {rel}{' (summary)' if what == 'edit' else ''}")
-    print(f"  {would}remove {plan.old} from git (git rm --cached), add {plan.old} to .gitignore, and draw it")
+    print(
+        f"  {would}remove {plan.old} from git (git rm --cached), add {plan.old} to .gitignore, and "
+        "draw it"
+    )
 
 
 def print_comparison(count: int, notes: list[str], moved_entries: list[str]) -> None:
@@ -543,10 +658,15 @@ def refuse(ledger: str, problems: list[str], what: str = "refused, nothing was w
 
 
 def leave_git(root: Path, rel: str) -> tuple[bool, str | None]:
-    """`git rm --cached` of `rel` when git tracks it: (whether it left git, the error text or None)."""
-    if not (L.in_git_repository(root) and L.is_tracked(root, rel)):
+    """`git rm --cached` of `rel` when git tracks it: (whether it left git, the error or None)."""
+    if not (led.in_git_repository(root) and led.is_tracked(root, rel)):
         return False, None
-    done = subprocess.run(["git", "-C", str(root), "rm", "--cached", "-q", "--", rel], capture_output=True, text=True, check=False)
+    done = subprocess.run(  # noqa: S603
+        ["git", "-C", str(root), "rm", "--cached", "-q", "--", rel],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if done.returncode == 0:
         return True, None
     return False, done.stderr.strip() or f"git rm --cached {rel} failed"
@@ -567,16 +687,21 @@ def target_problem(root: Path, rel: str) -> str | None:
     if path.exists():
         if not path.is_file():
             return f"{rel} is there and is not a file"
-        return None if os.access(path, os.W_OK) else f"{rel} cannot be written (no write permission)"
+        return (
+            None if os.access(path, os.W_OK) else f"{rel} cannot be written (no write permission)"
+        )
     parent = path.parent
     while not parent.exists():
         parent = parent.parent
     if not parent.is_dir() or not os.access(parent, os.W_OK | os.X_OK):
-        return f"{rel} cannot be created ({parent.relative_to(root).as_posix() or '.'} cannot be written)"
+        where = parent.relative_to(root).as_posix() or "."
+        return f"{rel} cannot be created ({where} cannot be written)"
     return None
 
 
-def prepare(root: Path, old: str, writes: dict[str, str], drawn: str) -> tuple[dict[str, str], list[str]]:
+def prepare(
+    root: Path, old: str, writes: dict[str, str], drawn: str
+) -> tuple[dict[str, str], list[str]]:
     """Every file the split writes, with its whole new text (the fragments, the head, the pages,
     .gitignore, and last the drawn file at the old path), and why any of them cannot be written."""
     files = dict(writes)
@@ -606,8 +731,11 @@ def write_file(path: Path, text: str, created: list[Path]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def undo(root: Path, old: str, left_git: bool, originals: dict[str, bytes | None], created: list[Path]) -> list[str]:
-    """Put back every file as it was before `finish`, and the old file in git. What could not be put back."""
+def undo(
+    root: Path, old: str, left_git: bool, originals: dict[str, bytes | None], created: list[Path]
+) -> list[str]:
+    """Put back every file as it was before `finish`, and the old file in git. What could not
+    be put back."""
     failed = []
     for rel, data in originals.items():
         path = root / rel
@@ -624,21 +752,30 @@ def undo(root: Path, old: str, left_git: bool, originals: dict[str, bytes | None
         except OSError as error:
             failed.append(f"{folder.relative_to(root).as_posix()}: {error}")
     if left_git:
-        done = subprocess.run(["git", "-C", str(root), "reset", "-q", "--", old], capture_output=True, text=True, check=False)
+        done = subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), "reset", "-q", "--", old],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if done.returncode != 0:
             failed.append(f"git reset -q -- {old}: {done.stderr.strip()}")
     return failed
 
 
 def reminder(ledger: str, old: str) -> None:
-    print(f"Open pull requests that changed {old} get one conflict when they merge main back in: "
-          f"deleted here, modified there. To fix it, {FIX_HINTS[ledger]}.")
+    print(
+        f"Open pull requests that changed {old} get one conflict when they merge main back in: "
+        f"deleted here, modified there. To fix it, {FIX_HINTS[ledger]}."
+    )
 
 
 def finish(root: Path, ledger: str, old: str, files: dict[str, str]) -> int:
     """The only step that writes: git first, then the files, in the order of `files`. Any error
     puts everything back as it was, the old file in git included."""
-    originals = {rel: (root / rel).read_bytes() if (root / rel).is_file() else None for rel in files}
+    originals = {
+        rel: (root / rel).read_bytes() if (root / rel).is_file() else None for rel in files
+    }
     left_git, error = leave_git(root, old)
     if error:
         return refuse(ledger, [error])
@@ -650,9 +787,12 @@ def finish(root: Path, ledger: str, old: str, files: dict[str, str]) -> int:
         failed = undo(root, old, left_git, originals, created)
         problems = [f"writing failed: {error}"]
         if failed:
-            return refuse(ledger, problems + ["and these could not be put back, fix them by hand:"] + failed,
-                          "stopped half way")
-        return refuse(ledger, problems + ["every file and the git index are back as they were"])
+            return refuse(
+                ledger,
+                [*problems, "and these could not be put back, fix them by hand:", *failed],
+                "stopped half way",
+            )
+        return refuse(ledger, [*problems, "every file and the git index are back as they were"])
     print(f"split {ledger}: done. Commit it in a pull request of its own.")
     reminder(ledger, old)
     return 0
@@ -664,7 +804,7 @@ def finish(root: Path, ledger: str, old: str, files: dict[str, str]) -> int:
 
 
 def split_markdown(root: Path, ledger: str, dry: bool) -> int:
-    old = L.OLD_PATHS[ledger]
+    old = led.OLD_PATHS[ledger]
     before_text = (root / old).read_text(encoding="utf-8")
     plan = PLANNERS[ledger](root, before_text)
     plan.problems += check_heads(root, plan)
@@ -674,29 +814,43 @@ def split_markdown(root: Path, ledger: str, dry: bool) -> int:
         scratch = Path(tmp)
         draw_in_scratch(root, plan.writes, scratch)
         drawn = BODIES[ledger](scratch)
-        notes, problems, moved_entries = compare(ledger, root, before_text, plan.entries, drawn, scratch)
+        notes, problems, moved_entries = compare(
+            ledger, root, before_text, plan.entries, drawn, scratch
+        )
     print_plan(plan, dry)
     if problems:
         return refuse(ledger, problems)
     print_comparison(len(plan.entries), plan.notes + notes, moved_entries)
-    files, problems = prepare(root, old, plan.writes, L.stamp(drawn, SOURCES[ledger]))
+    files, problems = prepare(root, old, plan.writes, led.stamp(drawn, SOURCES[ledger]))
     if problems:
         return refuse(ledger, problems)
     return 0 if dry else finish(root, ledger, old, files)
 
 
 def split_gen(root: Path, gen_out: str, lang: str, dry: bool) -> int:
-    code = L.run_codegen(root, lang)
+    code = ont.run_codegen(root, lang)
     if code is None:
         return refuse("gen", ["tools/ontology_codegen.py failed; fix ontology/ first"])
     if (root / gen_out).read_text(encoding="utf-8") != code:
-        return refuse("gen", [f"{gen_out} is not what tools/ontology_codegen.py writes now (edited by hand, or ontology/ "
-                              "changed since): run make gen, commit it, then split"])
+        return refuse(
+            "gen",
+            [
+                f"{gen_out} is not what tools/ontology_codegen.py writes now (edited by hand, or "
+                "ontology/ "
+                "changed since): run make gen, commit it, then split"
+            ],
+        )
     would = "would " if dry else ""
-    print(f"split gen: {gen_out} is the generated code{' (dry run: nothing is written)' if dry else ''}")
-    print(f"  {would}remove {gen_out} from git (git rm --cached), add {gen_out} to .gitignore, and draw it stamped")
+    print(
+        f"split gen: {gen_out} is the generated "
+        f"code{' (dry run: nothing is written)' if dry else ''}"
+    )
+    print(
+        f"  {would}remove {gen_out} from git (git rm --cached), add {gen_out} to .gitignore, and "
+        "draw it stamped"
+    )
     print("compare: the drawn file is the committed one, byte for byte, under a stamped first line")
-    files, problems = prepare(root, gen_out, {}, L.stamp_generated(code))
+    files, problems = prepare(root, gen_out, {}, ont.stamp_generated(code))
     if problems:
         return refuse("gen", problems)
     return 0 if dry else finish(root, "gen", gen_out, files)
@@ -707,18 +861,29 @@ def verify(root: Path, ledger: str, against: Path, gen_out: str | None, lang: st
     sources on disk draw today. Writes nothing."""
     before_text = against.read_text(encoding="utf-8")
     if ledger == "gen":
-        code = L.run_codegen(root, lang or "")
+        code = ont.run_codegen(root, lang or "")
         if code is None or code != before_text:
-            return refuse("gen", [f"{gen_out}: what ontology/ draws today is not {against}"], "the comparison fails")
+            return refuse(
+                "gen",
+                [f"{gen_out}: what ontology/ draws today is not {against}"],
+                "the comparison fails",
+            )
         print(f"compare: {against} is what ontology/ draws today")
         return 0
     if ledger == "index":
-        notes, problems, moved_entries = compare_index(root, before_text, L.index_body(root), root, strict=True)
+        notes, problems, moved_entries = compare_index(
+            root, before_text, led.index_body(root), root, strict=True
+        )
         count = len(merge_links(parse_index(root, before_text, {}, strict=True)[0])[0])
     else:
-        entries = [f"{d} — {t}" for d, t in parse_log(before_text)[0]] if ledger == "log" else \
-            [entry_text(row) for row in parse_glossary(before_text)[0]]
-        notes, problems, moved_entries = compare(ledger, root, before_text, entries, BODIES[ledger](root), root)
+        entries = (
+            [f"{d} — {t}" for d, t in parse_log(before_text)[0]]
+            if ledger == "log"
+            else [entry_text(row) for row in parse_glossary(before_text)[0]]
+        )
+        notes, problems, moved_entries = compare(
+            ledger, root, before_text, entries, BODIES[ledger](root), root
+        )
         count = len(entries)
     if problems:
         return refuse(ledger, problems, f"the comparison with {against} fails")
@@ -730,12 +895,16 @@ def run(args: argparse.Namespace) -> int:
     root = Path(args.root)
     ledger = args.ledger
     if ledger == "gen" and not (args.gen_out and args.gen_lang):
-        print("ledgers.py: split gen needs --gen-out PATH and --gen-lang <ts|python> (make split L=gen passes them)", file=sys.stderr)
+        print(
+            "ledgers.py: split gen needs --gen-out PATH and --gen-lang <ts|python> (make split "
+            "L=gen passes them)",
+            file=sys.stderr,
+        )
         return 2
     if args.verify_against:
         return verify(root, ledger, Path(args.verify_against), args.gen_out, args.gen_lang)
-    old = args.gen_out if ledger == "gen" else L.OLD_PATHS[ledger]
-    if L.shape_of(root, ledger, args.gen_out) == L.FRAGMENTS:
+    old = args.gen_out if ledger == "gen" else led.OLD_PATHS[ledger]
+    if led.shape_of(root, ledger, args.gen_out) == led.FRAGMENTS:
         print(f"{old}: the {ledger} ledger is already split (fragments shape); nothing to do")
         return 0
     if ledger == "gen":
