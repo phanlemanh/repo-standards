@@ -48,7 +48,7 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `.devcontainer/` | A ready-made dev environment (VS Code / Codespaces), handy on Windows |
 | `ontology/` | The dictionary + map of business concepts (one meaning for everyone) |
 | `wiki/` | Why things are the way they are: decisions, incidents, notes |
-| `.repo-setup.json` | Remembers how the repo was set up, so upgrades are safe |
+| `.repo-setup.json` | Remembers how the repo was set up and which release wrote each file, so an upgrade can merge its fixes into files you edited |
 | `governance/autonomy.yaml` | Who decides that a change may merge: the checks alone (low), a person (medium), a code owner (high). `proof.check` names the check that proves a change, so a person need not |
 | `risk:low/medium/high` label | The tier the PR pipeline computed for this PR from the files it changes |
 | A pull request waits although CI is green | Its tier is medium or high. The `risk:` label and the summary of the `gate` job name the file behind it |

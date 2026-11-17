@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade path
+Step C of the plan in `docs/three-repo-overview-design.md` (package RS8). Design:
+`docs/superpowers/specs/2026-11-17-upgrade-path-design.md`.
+
+- Running `apply.py` again brings template fixes into files the repository edited in place. It
+  rebuilds what the plugin wrote last time from the templates of the release that wrote it (the
+  running plugin when the version is the same, otherwise that release's tag, downloaded from
+  GitHub, or a folder given with `--base-from`), checks it against the hash in
+  `.repo-setup.json`, and merges three ways with `git merge-file`. Nothing downloaded is run:
+  only its templates are read.
+- Where the template and the repository changed the same lines, the file gets conflict markers
+  (`<<<<<<< this repository`, `||||||| repo-setup <release>`, `>>>>>>> repo-setup <release>`)
+  and is reported as `marked`. A file whose recorded content no release gives is merged two
+  ways, against an empty base (`||||||| repo-setup: no matching base`).
+- New `make check` step `upgrade` (`mk/upgrade.mk`, `tools/upgrade_markers.py`): it fails while
+  a file listed in `.repo-setup.json` holds those markers. It runs before the other steps, and
+  `make format` waits for it: Prettier moves the markers of a Markdown file where no check sees
+  them. A marker a formatter indented still counts.
+- New groups in the output of `apply.py`: `edited` (edited here, the template did not change),
+  `marked`, `base_unread` (the base could not be read: no network, no git, or git refused the
+  merge; the file is left as it is, with the reason in `base_reasons`), `removed` and `dropped`.
+  `conflict` keeps its meaning: a file the repository had before repo-setup wrote it.
+- `.repo-setup.json` records, per file, the release its content follows (`file_versions`), and
+  `today` under `vars`, so a later run renders the same files. `year` now comes from `today`.
+- `doctor` prints an "Upgrade" block (files marked, behind the last release with both versions,
+  edited in place, deleted here) and gains two checks: `setup_in_sync` (no markers, no file
+  behind) and `upgrade_wall` (`make check` runs the marker check).
+
+What changes on upgrade:
+- `apply.py` now writes into files the repository edited: a merge, or conflict markers to
+  resolve. Before, it left them as they were. `--dry-run --diff` shows what it would write.
+- It ends with exit code 1 while a file is `marked` or `base_unread`; it used to end with 0.
+- A file the plugin wrote and the repository deleted is no longer created again.
+- A file the repository owns (`package.json`, `pyproject.toml`, `src/index.css`, the manifests
+  and `CHANGELOG.md` of a plugin marketplace) is updated when nobody edited it, and merged when
+  someone did. After `package.json` or `pyproject.toml` changes, run the install command to
+  update the lockfile; the note says so.
+- A repository built before this release has no `today` recorded, so its `wiki/log.md` is
+  merged two ways once.
+- The upgrade needs network access to GitHub for files written by an earlier release, unless
+  `--base-from` points at a copy of it.
+
+### Verified
+
+- Run on GitHub, on the private probe repository: upgraded to tag `repo-setup-v0.6.0`, two setup
+  files edited in place, then upgraded with this code from a stand-in release with two template
+  fixes (the base rebuilt from the real tag). `.editorconfig` and `package.json` were merged,
+  `AGENTS.md` (same line on both sides) and `wiki/log.md` (no `today` in the 0.6.0 manifest) were
+  marked; `check` stayed red at the `upgrade` step, naming the files and lines, until the markers
+  were merged by hand, then green. The first push showed the wall hidden behind `lint` and Prettier
+  removing it, fixed above.
+
 ## 0.6.0 — 2026-11-17
 
 ### Parallel work

@@ -30,6 +30,9 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import upgrade_report  # noqa: E402
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CHECKLIST = PLUGIN_ROOT / "checklists" / "top-tier.toml"
 PRESETS_DIR = PLUGIN_ROOT / "presets"
@@ -376,6 +379,31 @@ def run_check(
         res["status"] = "pass" if proc.returncode == 0 else "fail"
         res["evidence"] = (proc.stdout + proc.stderr).strip().splitlines()[-5:]
         return res
+    if ctype == "setup":
+        setup_file = repo.root / ".repo-setup.json"
+        if not setup_file.is_file():
+            res["status"], res["detail"] = "skipped", "no .repo-setup.json"
+            return res
+        try:
+            setup = json.loads(setup_file.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            res["status"], res["detail"] = "fail", f".repo-setup.json cannot be read: {exc}"
+            return res
+        if check.get("probe") == "wall":
+            ok = upgrade_report.wall_present(repo.root)
+            res["status"] = "pass" if ok else "fail"
+            if not ok:
+                res["detail"] = "make check does not run tools/upgrade_markers.py (mk/upgrade.mk)"
+            return res
+        drift = upgrade_report.report(repo.root, setup)
+        problems = [f"{p}:{n} has a conflict marker" for p, n in drift.marked]
+        problems += [f"{p} follows {v}, the plugin ran at {drift.plugin_version}"
+                     for p, v in drift.behind]
+        res["status"] = "fail" if problems else "pass"
+        if problems:
+            res["detail"] = summarise(problems)
+            res["evidence"] = problems[:10]
+        return res
     if ctype == "not_committed":
         if not repo.is_git():
             res["status"] = "skipped"
@@ -497,6 +525,7 @@ def main(argv: list[str] | None = None) -> int:
         # Checks that do not fit this kind of repository: listed with the reason, never scored.
         "not_applicable": set_aside,
         **blueprint_report(root, setup),
+        "upgrade": upgrade_report.report(root, setup).as_dict() if setup.get("files") else None,
     }
 
     if args.json:
@@ -531,6 +560,18 @@ def main(argv: list[str] | None = None) -> int:
             print("\nManual steps from setup-blueprint.yaml (not scored):")
             for line in report["manual_steps"]:
                 print(f"  [ ] {line}")
+        drift = report["upgrade"]
+        if drift and (drift["edited"] or drift["behind"] or drift["removed"] or drift["marked"]):
+            print("\nUpgrade (files repo-setup wrote):")
+            if drift["marked"]:
+                where = ", ".join(f"{p}:{n}" for p, n in drift["marked"])
+                print(f"  conflict markers to resolve: {where}")
+            for p, v in drift["behind"]:
+                print(f"  behind: {p}  {v} → {drift['plugin_version']}")
+            if drift["edited"]:
+                print(f"  edited in place ({len(drift['edited'])}): {', '.join(drift['edited'])}")
+            if drift["removed"]:
+                print(f"  deleted here ({len(drift['removed'])}): {', '.join(drift['removed'])}")
         if set_aside:
             print(f"\nNot applicable to a {preset} repository (not scored):")
             for item in set_aside:

@@ -46,10 +46,10 @@ PY
     again=$(python3 "$S/apply.py" --target "$d" --json | json 'len(d["created"])+len(d["updated"])+len(d["conflict"])')
     [ "$again" -eq 0 ] || fail "$preset/$level: second run changed $again files"
 
-    # 5. user edits are never overwritten
+    # 5. user edits are never overwritten: the template did not change, so there is nothing to merge
     echo "my note" >> "$d/README.md"
-    conflict=$(python3 "$S/apply.py" --target "$d" --json | json '"README.md" in d["conflict"]')
-    [ "$conflict" = "True" ] || fail "$preset/$level: edited README not reported as conflict"
+    edited=$(python3 "$S/apply.py" --target "$d" --json | json '"README.md" in d["edited"]')
+    [ "$edited" = "True" ] || fail "$preset/$level: edited README not reported as edited"
     grep -q "my note" "$d/README.md" || fail "$preset/$level: README was overwritten"
 
     # 6. doctor: everything except the lockfile (needs an install) passes;
@@ -955,7 +955,8 @@ grep -q '"version": "0.2.0"' "$k/.claude-plugin/marketplace.json" && grep -q '"v
 grep -q '^## 0\.2\.0 — ' "$k/CHANGELOG.md" && grep -q '^## Unreleased$' "$k/CHANGELOG.md" || miss "claude-plugin: bump did not date the changelog"
 [ "$(cd "$k" && python3 tools/bump_version.py --notes 0.2.0)" = "- Repository skeleton with one sample plugin." ] || miss "claude-plugin: --notes does not print the section"
 ( cd "$k" && make check >/dev/null 2>&1 ) || miss "claude-plugin: make check fails after a bump"
-again=$(python3 "$S/apply.py" --target "$k" --json | json 'str(len(d["conflict"])+len(d["updated"])+len(d["created"]))+" "+str(sorted(d["kept"]))')
+# The bump edited files the plugin wrote; their templates did not change, so nothing is merged.
+again=$(python3 "$S/apply.py" --target "$k" --json | json 'str(len(d["conflict"])+len(d["updated"])+len(d["created"])+len(d["merged"])+len(d["marked"]))+" "+str(sorted(d["edited"]))')
 [ "$again" = "0 ['.claude-plugin/marketplace.json', 'CHANGELOG.md', 'plugins/sample-kit/.claude-plugin/plugin.json']" ] || miss "claude-plugin: re-apply after a bump: $again"
 git -C "$k" add -A
 verdict=$(python3 "$S/doctor.py" --target "$k" --json | json 'str(d["score"])+" "+d["preset"]+" "+",".join(r["id"] for r in d["failed"])')
@@ -1002,7 +1003,7 @@ out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starte
   --var project_name=Sample --var description=x --var owner=acme --json)
 [ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
-padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'tools/plugin_lint.py']"
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/upgrade.mk', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
 padopt "d['merged'] == ['.gitignore']"
 padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
 padopt "d['conflict'] == ['LICENSE', 'README.md']"
@@ -2205,6 +2206,9 @@ import sys; sys.path.insert(0, 'tools'); import sdlc_metrics as s
 print(s.capped({'merged': [0] * s.PR_LIMIT, 'open': [0]}))" 2>/dev/null || true)
 [ "$partial" = "['merged']" ] || miss "flow: a list of pull requests cut at the limit is taken for the whole list"
 echo "ok  flow (or misses reported above)"
+
+# shellcheck source=tests/upgrade.sh
+. "$ROOT/tests/upgrade.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
