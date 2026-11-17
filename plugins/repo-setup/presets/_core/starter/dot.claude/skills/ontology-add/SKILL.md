@@ -26,8 +26,8 @@ changes what the whole system means, so do it completely and make it easy to rev
 
 ## 2. Write the files
 
-1. The glossary: `python3 tools/ledgers.py add-term <Name> --definition "..." --display "..."
-   --not-confused-with "..."` (the last two are optional). It writes one file,
+1. The glossary: `python3 tools/ledgers.py add-term <Name> --definition "..."`, plus
+   `--display "..."` and `--not-confused-with "..."` (both optional). It writes one file,
    `ontology/glossary/<Name>.md`; `ontology/glossary.md` is drawn from those files by
    `make derived`, so never edit it. The code name is English. The display name and definition
    follow the repo's `docs_language`. If `ontology/glossary.md` is still in git (this repository

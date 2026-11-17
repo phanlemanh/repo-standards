@@ -492,3 +492,41 @@ def compare_index(
             )
     order_after = [link.rel for link in after if link.rel in old]
     return notes, problems, [f"wiki/{rel}" for rel in moved(list(old), order_after)]
+
+
+# ---------------------------------------------------------------------------------------------
+# What a hand-kept file holds that no fragment does (tools/ledgers.py names it before a deletion)
+# ---------------------------------------------------------------------------------------------
+
+
+def unmoved(root: Path, ledger: str, text: str) -> list[str]:
+    """The entries of a hand-kept log or glossary (`text`) that no fragment holds word for word,
+    each as the drawn file shows it."""
+    if ledger == "log":
+        held = {line for line in map(led.log_line, led.log_entries(root)) if line}
+        lines = (f"- {date} — {entry}" for date, entry in parse_log(text)[0])
+        return [line for line in lines if line not in held]
+    terms = (t for t in map(led.Term, led.glossary_files(root)) if t.term)
+    held = {entry_text((t.term, t.definition, t.not_confused_with, t.display)) for t in terms}
+    return [f"| {e} |" for e in map(entry_text, parse_glossary(text)[0]) if e not in held]
+
+
+def unmoved_in(root: Path, ledger: str, rel: str) -> list[str]:
+    """unmoved() of the file at `rel`; [] when it cannot be read."""
+    try:
+        return unmoved(root, ledger, (root / rel).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return []
+
+
+def two_sources_way(root: Path, ledger: str, rel: str, folder: str, how: str) -> str:
+    """The way out of a tracked hand-kept file beside fragments, losing nothing: the entries of the
+    file that no fragment holds are listed first. `how` writes into the hand-kept file while it is
+    in git, so the deletion comes first."""
+    lines = unmoved_in(root, ledger, rel)
+    if not lines:
+        return f"Every entry of {rel} is in {folder}/, so it is safe to delete: git rm {rel}."
+    return (
+        f"These entries of {rel} are in no fragment yet:{led.listed(lines)}\n"
+        f"Copy them, git rm {rel}, then add each one: {how}; then make derived."
+    )

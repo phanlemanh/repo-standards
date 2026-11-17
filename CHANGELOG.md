@@ -5,7 +5,7 @@
 ### Ledgers as fragments (RS2b)
 Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`. Two pull requests that each
 add a log line, a glossary term or a wiki page no longer touch the same file, so the second one
-merges without "Update branch".
+should merge without "Update branch" (not yet measured on the probe repository).
 
 **What is new**
 
@@ -23,9 +23,18 @@ merges without "Update branch".
   case (the file absent, untracked, ignored, or tracked but stamped) it is `fragments`. Outside a
   git repository, an unstamped file that is there reads `one-file`.
 - A drawn markdown file opens with `<!-- Drawn by tools/ledgers.py from <source>. Edit the source,
-  not this file. sha256:<hex> -->`, `<hex>` being the hash of the rest of the file. A hand edit makes
-  `draw` exit 1 and print the added lines. The generated code is stamped the same way, with
-  ` sha256:<hex>` at the end of its first comment line.
+  not this file. sha256:<hex> -->`, `<hex>` being the hash of the rest of the file. A hand edit that
+  adds a line no source holds makes `draw` exit 1, write nothing, list those lines and end with the
+  way back: put each line in its source (`make log m="..."`, `add-term`, a page), then delete the
+  file and run `make derived`. Once every added line is in a source, or when the edit only removed
+  lines, nothing would be lost and the file is drawn over. The generated code is stamped the same
+  way, with ` sha256:<hex>` at the end of its first comment line.
+- In the `fragments` shape a file at a drawn path that carries no stamp and that git does not track
+  is never drawn over and never left alone in silence: `draw` exits 1, names it, lists its log
+  lines or glossary rows that no fragment holds, and says to move it aside or delete it, then run
+  `make derived`. The one exception is generated code whose first line is the header of
+  `ontology_codegen.py` (someone ran the generator by hand): it is drawn over, stamped, so it
+  follows `ontology/`. A tracked unstamped file is the `one-file` shape and is not affected.
 - New `make check` steps: `derived-untracked` is red when a file of `DERIVED_FILES` is in git and
   opens with the stamp (it names the path and says `git rm --cached <path>`); `ledgers-check` is red
   for a log fragment with a wrong name, for a glossary fragment whose `term` is not its file name
@@ -34,21 +43,27 @@ merges without "Update branch".
   the top of `wiki/log.md`; in the `fragments` shape it writes `wiki/log/YYYY-MM-DD-NN-<slug>.md`.
   `make derived` draws `wiki/log.md`: stamp, `wiki/log.head.md`, one line per entry, newest first.
   A hand-kept `wiki/log.md` beside entries in `wiki/log/` is "two sources": `draw` exits 1 and
-  `ledgers-check` is red.
+  `ledgers-check` is red. The message lists the lines of the hand-kept file that no entry holds and
+  says to copy them, `git rm wiki/log.md`, then add each with `make log m="..."` (while the file is
+  in git, `make log` writes into it); with no such line it says the file is safe to delete.
 - **Glossary.** `python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>]
   [--not-confused-with <s>]`: in the `one-file` shape it adds a row to the table of
   `ontology/glossary.md`; in the `fragments` shape it writes `ontology/glossary/<Term>.md` (front
-  matter `term`, `display`, `not_confused_with`, body one sentence) and touches nothing else. `make
+  matter `term`, `display`, `not_confused_with`, a blank line, body one sentence; an empty key is
+  written `key:` with no trailing space, so a `trailing-whitespace` or `end-of-file-fixer` hook
+  leaves it as it is; the older form is still read) and touches nothing else. `make
   derived` draws `ontology/glossary.md` (stamp, `ontology/glossary.head.md` or a built-in head, a
   four-column table sorted by term, `|` escaped), even with no term, so `wiki_lint.py` still reads
-  it. A hand-kept `ontology/glossary.md` beside fragments is two sources.
+  it. A hand-kept `ontology/glossary.md` beside fragments is two sources, with the same message as
+  the log (the rows no fragment holds, then `git rm ontology/glossary.md`, then `add-term`).
 - **Index.** `make derived` draws `wiki/index.md` in the `fragments` shape: stamp,
   `wiki/index.head.md` (or a built-in head), one `## <Types>` section per page type of
   `ontology/page-types.yaml` in file order (types it does not know last), a line
   `- [<title>](<path>)` (plus ` — <summary>`) for each page, and the link to `log.md`. A page with no
   `type` or `title` is left out, named by `draw` (exit 0), by `ledgers-check` (red) and by
   `wiki_lint.py` ("page has no type or title"). The index has no fragment folder, so it is never "two
-  sources": an unstamped `wiki/index.md` is left alone. In the `fragments` shape `wiki_lint.py` no
+  sources": a tracked unstamped `wiki/index.md` is a one-file index; an untracked one is refused as
+  above, so a new page never goes missing from the index unseen. In the `fragments` shape `wiki_lint.py` no
   longer warns "not linked from wiki/index.md", treats the drawn `wiki/index.md` and `wiki/log.md`
   and the entries of `wiki/log/` as no page, and `sdlc_metrics.py --write` no longer edits
   `wiki/index.md`. Hidden files (`.DS_Store`) in `wiki/log/` and `ontology/glossary/` are no
@@ -56,7 +71,8 @@ merges without "Update branch".
   clone), so `/repo-setup:doctor` does not report a missing glossary or index before `make derived`.
 - **Generated code** (`src/generated/ontology.ts`, `src/<pkg>/ontology_types.py`): in the `fragments`
   shape `make derived` draws it (`gen-derived`, `ledgers.py draw-gen`), only when the text changes,
-  never over a hand edit (exit 1, names the file, says to edit `ontology/` and run `make derived`).
+  never over a hand edit that adds a line (exit 1, names the file and the lines, says to put what
+  they say in `ontology/`, delete the file and run `make derived`).
   `make ontology` keeps `ontology_codegen.py --check` in the `one-file` shape and skips it in
   `fragments`; `make gen` draws in `fragments`. The two Node presets get `"prepare": "command -v
   make >/dev/null 2>&1 && make -s derived || true"`; `image`, `up` and `deploy` of the `container`
@@ -64,6 +80,13 @@ merges without "Update branch".
 - `.claude/settings.json` gets a `SessionStart` hook that runs `make -s derived` (always exit 0; the
   error of a failed draw is printed for the agent; nothing happens when `make` or the Makefile is
   missing), so a session starts with the drawn files present.
+- `github-agents`: the `review` job of `pr-pipeline.yml` checks the pull request out as data and runs
+  none of its code, so its `claude_args` gain `--settings '{"disableAllHooks": true}'`: the hook
+  above (and any hook a pull request adds to `.claude/settings.json`) does not run `make` from the
+  pull request with that job's `pull-requests: write` and `id-token: write`. Claude Code's hooks
+  documentation says this setting takes precedence over project and local settings. That
+  `claude-code-action` hands `claude_args` to Claude Code unchanged is not yet checked on the probe
+  repository.
 - New `python3 tools/ledgers.py split <log|index|glossary|gen> [--dry-run]` (`tools/ledgers_split.py`
   with the parsers in `tools/ledgers_split_read.py`; also `make split L=<ledger> [DRY=1]`): the one
   command an existing repository runs, in a pull request of its own, to move a one-file ledger into
@@ -127,18 +150,27 @@ split notice. The following breaks, and only for what it names:
   the markers).
 - **A pull request open when a ledger is split** gets one "deleted here, modified there" conflict on
   the old file (`wiki/log.md`, `wiki/index.md`, `ontology/glossary.md`, or the generated code), because
-  the split removes it from git. Take the deletion on that branch and rerun `make log m="..."` or
-  `python3 tools/ledgers.py add-term ...` there; for the index, a new page needs only a `type` and a
-  `title`; for the generated code, `make derived` draws it. Split in a pull request of its own, one
+  the split removes it from git. Take the deletion first on that branch (`git rm wiki/log.md`,
+  resp. `git rm ontology/glossary.md`; `git diff MERGE_HEAD...HEAD -- <file>` shows what the branch
+  added), then add the branch's own lines with `make log m="..."` or terms with
+  `python3 tools/ledgers.py add-term ...`. The other order (`make log` first) writes into the
+  conflicted file, which is still in git, and the line ends up twice. For the index, a new page
+  needs only a `type` and a `title`; for the generated code, `make derived` draws it. Split in a pull request of its own, one
   ledger at a time.
 - **A build that goes through neither `make` nor `npm ci` / `npm install`** lacks the drawn files
   once a ledger is split (and in a new repository): `src/generated/ontology.ts` or
   `src/<pkg>/ontology_types.py` is not in git, so `tsc`, `vitest`, `mypy` or `pytest` run by hand on a
   clean clone fail on the missing module, and a `docker build` that copies a clean clone has no
   generated file. Run `make derived` first (the `Makefile` targets and the Node `prepare` script do).
-- **Prettier does not touch the drawn files.** The Node `.prettierignore` lists `wiki/log.md`,
-  `wiki/index.md` and `ontology/glossary.md`; a drawn file that any formatter rewrites is a hand edit
-  and makes `draw` exit 1. A repository with its own formatter setup lists the drawn files there.
+- **Prettier does not touch the drawn files or the fragments.** The Node `.prettierignore` lists
+  `wiki/log.md`, `wiki/index.md` and `ontology/glossary.md` (a drawn file that any formatter rewrites
+  is a hand edit and makes `draw` exit 1), and `wiki/log/` and `ontology/glossary/` (the fragments are
+  machine-written; Prettier would rewrite a log line with `*x*` and cannot read a glossary front
+  matter whose value starts with a backtick). A repository with its own formatter setup lists them
+  there.
+- In the `fragments` shape, an unstamped `wiki/log.md`, `wiki/index.md` or `ontology/glossary.md`
+  that git does not track now makes `make derived` red (it used to be left alone); move it aside or
+  delete it, then run `make derived`. A repository set up by this release has none.
 - A hand edit of a drawn file, or a drawn file put back in git (for example `git add -f`), is red: `draw` exits 1, `derived-untracked` is red.
 
 ## 0.7.0 — 2026-11-17

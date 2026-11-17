@@ -55,8 +55,13 @@ from ledgers_split_read import (
 MANIFEST = ".repo-setup.json"
 
 FIX_HINTS = {
-    "log": 'run make log m="<text>" again on that branch',
-    "glossary": "run python3 tools/ledgers.py add-term again on that branch",
+    "log": "take the deletion first on that branch: git rm wiki/log.md (git diff "
+    "MERGE_HEAD...HEAD -- wiki/log.md shows the lines it added); then add each of them: "
+    'make log m="<text>"',
+    "glossary": "take the deletion first on that branch: git rm ontology/glossary.md (git diff "
+    "MERGE_HEAD...HEAD -- ontology/glossary.md shows the rows it added or changed); then add "
+    'each of them: python3 tools/ledgers.py add-term <Term> --definition "<text>" (a changed '
+    "term: edit ontology/glossary/<Term>.md)",
     "index": "take the deletion on that branch: a new page needs only a type and a title (and a "
     "summary) to be listed",
     "gen": "take the deletion on that branch (git rm --cached the file); make derived draws it",

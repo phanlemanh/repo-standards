@@ -17,11 +17,13 @@ import ledgers as led
 
 
 def term_fragment(term: str, display: str, not_confused_with: str, definition: str) -> str:
-    """The text of ontology/glossary/<term>.md, as add-term and split write it."""
-    return (
-        f"---\nterm: {term}\ndisplay: {display}\nnot_confused_with: {not_confused_with}\n"
-        f"---\n{definition}\n"
-    )
+    """The text of ontology/glossary/<term>.md, as add-term and split write it: no trailing space
+    (an empty key is `key:`), a blank line after the front matter, one newline at the end, so the
+    format checks of a repository (trailing-whitespace, end-of-file) leave it as it is. The reader
+    also takes the older form (`key: ` and no blank line)."""
+    fields = (("term", term), ("display", display), ("not_confused_with", not_confused_with))
+    front = "".join(f"{key}: {value}\n" if value else f"{key}:\n" for key, value in fields)
+    return f"---\n{front}---\n\n{definition}\n"
 
 
 def bad_term_character(term: str) -> str | None:
@@ -91,7 +93,9 @@ def cmd_add_term(args: argparse.Namespace) -> int:
 
 
 GEN_HASH_RE = re.compile(r" sha256:(?P<hex>[0-9a-f]{64})")
-GEN_HINT = "Edit ontology/ and run: make derived"
+# The opening of HEADER in tools/ontology_codegen.py: a first line with it is generator output.
+CODEGEN_MARK = "Generated from ontology/ by tools/ontology_codegen.py."
+GEN_HOW = "put what it says in ontology/"
 
 
 def stamp_generated(code: str) -> str:
@@ -138,28 +142,32 @@ def run_codegen(root: Path, lang: str) -> str | None:
 
 def draw_generated(root: Path, rel: str, lang: str, quiet: bool) -> int | None:
     """Draw the generated code at `rel`. None when it is kept as one file (nothing is drawn: the
-    repository commits it and `make ontology` compares it), 0 done, 1 refused."""
+    repository commits it and `make ontology` compares it), 0 done, 1 refused.
+
+    In the fragments shape a file at `rel` that git does not know and that carries no stamp is
+    drawn over when the generator wrote it (its first line is the generator's header: someone ran
+    ontology_codegen.py by hand), so it never goes stale unseen; any other such file is refused. A
+    drawn file edited by hand is drawn over when the edit only removed lines; otherwise refused."""
     if led.shape_of(root, "gen", rel) != led.FRAGMENTS:
         return None
     target = root / rel
     current, edited = read_generated(target)
-    if target.is_file() and current is None:
-        return 0  # a file this tool did not draw, and git does not know it: leave it alone
+    if target.is_file() and current is None and CODEGEN_MARK not in led._first_line(target):
+        print(
+            f"{rel} carries no stamp, the generator did not write it and git does not track it: "
+            f"move {rel} aside, or delete {rel}, then run make derived.",
+            file=sys.stderr,
+        )
+        return 1
     code = run_codegen(root, lang)
     if code is None:
         return 1
     text = stamp_generated(code)
     if edited and current is not None:
-        expected = set(text.partition("\n")[2].splitlines())
-        added = [ln for ln in current.splitlines() if ln and ln not in expected]
-        print(
-            f"{rel} was edited by hand; it is drawn from ontology/ and a hand edit is lost.",
-            file=sys.stderr,
-        )
-        for ln in added:
-            print(f"  + {ln}", file=sys.stderr)
-        print(GEN_HINT, file=sys.stderr)
-        return 1
+        added = led.lines_not_in(current, text.partition("\n")[2])
+        if added:
+            print(led.hand_edit_refusal(rel, "ontology/", added, GEN_HOW), file=sys.stderr)
+            return 1
     if target.is_file() and target.read_text(encoding="utf-8") == text:
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)

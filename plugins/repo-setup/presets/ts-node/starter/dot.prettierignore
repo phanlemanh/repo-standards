@@ -11,3 +11,6 @@ contracts/openapi.json
 wiki/log.md
 wiki/index.md
 ontology/glossary.md
+# Written by tools/ledgers.py, one entry each; never formatted
+wiki/log/
+ontology/glossary/

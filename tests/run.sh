@@ -2403,14 +2403,19 @@ rc=0; out=$(lg_tool draw 2>&1) || rc=$?
 [ "$rc" = 1 ] || miss "log: draw exits $rc, not 1, on a hand-edited wiki/log.md"
 case "$out" in *"typed by hand"*'make log m='*) ;; *) miss "log: draw does not print the added line and the make log command ($out)" ;; esac
 cmp -s "$TMP/log.edit" "$lg/wiki/log.md" || miss "log: draw changed a hand-edited wiki/log.md"
-# 48h. a new repository with nothing committed: the template's wiki/log.md is there, unstamped and
-#      untracked; make derived is green and leaves it alone
+# 48h. a new repository with nothing committed: the template gives no wiki/log.md, so make derived is
+#      green and draws it; a hand-written wiki/log.md that git does not know is refused, named and kept
 nc="$TMP/nocommit"; mkdir -p "$nc" && git -C "$nc" init -q -b main
 python3 "$S/apply.py" --target "$nc" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
-onefile_ledgers "$nc"   # a hand-kept wiki/log.md that git does not know yet
-cp "$nc/wiki/log.md" "$TMP/nc.log"
 ( cd "$nc" && make derived >/dev/null 2>&1 ) || miss "log: make derived is red in a new repository with no commit yet"
-cmp -s "$TMP/nc.log" "$nc/wiki/log.md" || miss "log: make derived changed an unstamped wiki/log.md"
+head -1 "$nc/wiki/log.md" | grep -q '^<!-- Drawn by' || miss "log: make derived did not draw wiki/log.md in a new repository with no commit yet"
+rm -f "$nc/wiki/log.md" "$nc/wiki/index.md" "$nc/ontology/glossary.md"
+onefile_ledgers "$nc"   # a hand-kept wiki/log.md that git does not know
+cp "$nc/wiki/log.md" "$TMP/nc.log"
+rc=0; out=$(cd "$nc" && python3 tools/ledgers.py draw 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "log: draw exits $rc, not 1, for an unstamped wiki/log.md that git does not know"
+case "$out" in *wiki/log.md*"delete wiki/log.md"*"Repository created with repo-setup (test)."*'make log m='*) ;; *) miss "log: the refusal of an unstamped untracked wiki/log.md does not name it, list its line and say how to move it ($out)" ;; esac
+cmp -s "$TMP/nc.log" "$nc/wiki/log.md" || miss "log: draw changed an unstamped wiki/log.md"
 # 48i. the text of make log reaches the fragment as typed: $, $(HOME), backticks and quotes
 rm -f "$lg"/wiki/log/*.md
 typed='cost $5 `x` $(HOME) "q" '"'"'s'"'"
@@ -2576,8 +2581,10 @@ ix0="$TMP/indexrepo0"; mkdir -p "$ix0" && git -C "$ix0" init -q -b main
 python3 "$S/apply.py" --target "$ix0" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
 onefile_ledgers "$ix0"
 printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n' > "$ix0/wiki/index.head.md"; cp "$ix0/wiki/index.md" "$TMP/ix0.before"
+# untracked and unstamped: refused and named (new pages would never show up), kept, but not two sources
 rc=0; out=$( cd "$ix0" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
-[ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, for an untracked wiki/index.md beside wiki/index.head.md before the first commit ($out)"
+[ "$rc" = 1 ] || miss "index: draw exits $rc, not 1, for an untracked unstamped wiki/index.md ($out)"
+case "$out" in *wiki/index.md*"delete wiki/index.md"*"make derived"*) ;; *) miss "index: the refusal of an untracked unstamped wiki/index.md does not say to delete it and run make derived ($out)" ;; esac
 cmp -s "$TMP/ix0.before" "$ix0/wiki/index.md" || miss "index: draw changed an untracked unstamped wiki/index.md"
 case "$out" in *"two sources"*) miss "index: draw says two sources for the index ($out)" ;; esac
 # 48s (plan 48m). the code generated from ontology/ is drawn, stamped, and never committed in the fragments shape;
@@ -2638,9 +2645,10 @@ rc=0; out=$(gn_make "$gn" derived) || rc=$?
 [ "$rc" != 0 ] || miss "gen: make derived is green for a hand-edited $gn_out"
 case "$out" in *"$gn_out"*"ontology/"*"make derived"*) ;; *) miss "gen: the refusal does not name $gn_out and say to edit ontology/ and run make derived ($out)" ;; esac
 cmp -s "$TMP/gn.edited" "$gn/$gn_out" || miss "gen: a hand-edited $gn_out was overwritten"
-# an unstamped file that git does not know: left alone, exit 0
+# an unstamped file that git does not know and the generator did not write: refused, named, kept
 printf '// mine\n' > "$gn/$gn_out"
-gn_make "$gn" derived >/dev/null || miss "gen: make derived is red for an untracked unstamped $gn_out"
+rc=0; out=$(gn_make "$gn" derived) || rc=$?
+[ "$rc" != 0 ] && case "$out" in *"$gn_out"*"make derived"*) true ;; *) false ;; esac || miss "gen: make derived exits $rc or does not name an untracked unstamped $gn_out that the generator did not write ($out)"
 [ "$(cat "$gn/$gn_out")" = "// mine" ] || miss "gen: an untracked unstamped $gn_out was overwritten"
 # a drawn file that is in git is red
 rm -f "$gn/$gn_out"; gn_make "$gn" derived >/dev/null; gn_git add -f "$gn_out"
@@ -3121,6 +3129,121 @@ if [ -n "$ruff_cmd" ]; then
   ( cd "$TMP/newrepo-python" && $ruff_cmd check . >/dev/null 2>&1 ) || miss "python repo: ruff check is red on the vendored tools ($(cd "$TMP/newrepo-python" && $ruff_cmd check . --output-format concise 2>&1 | head -3))"
   ( cd "$TMP/newrepo-python" && $ruff_cmd format --check . >/dev/null 2>&1 ) || miss "python repo: ruff format --check is red on the vendored tools"
 fi
+# 48zj. a hand edit of a drawn file: once every line it added is in a source, make derived draws again; a line in
+#       no source is refused with the lines and the way back; an edit that only removes lines is drawn over
+he="$TMP/handedit"; mkdir -p "$he" && git -C "$he" init -q -b main
+python3 "$S/apply.py" --target "$he" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+git -C "$he" add -A && git -C "$he" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+he_make() { ( cd "$he" && make -s PYTHON=python3 "$@" 2>&1 ); }
+he_tool() { ( cd "$he" && python3 tools/ledgers.py "$@" ); }
+he_gen=src/generated/ontology.ts
+he_make derived >/dev/null || miss "hand edit: make derived is red on a new repository ($(he_make derived))"
+he_day=$(date +%Y-%m-%d)
+printf -- '- %s — typed by hand\n' "$he_day" >> "$he/wiki/log.md"; cp "$he/wiki/log.md" "$TMP/he.log"
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" != 0 ] || miss "hand edit: make derived is green with a line typed into the drawn wiki/log.md"
+case "$out" in *"+ - $he_day — typed by hand"*'make log m='*"delete wiki/log.md"*"make derived"*) ;; *) miss "hand edit: the refusal does not list the line and end with the way back ($out)" ;; esac
+case "$out" in *"is lost"*) miss "hand edit: the refusal says the hand edit is lost, though nothing was written ($out)" ;; esac
+cmp -s "$TMP/he.log" "$he/wiki/log.md" || miss "hand edit: make derived changed a wiki/log.md with a line in no entry"
+( cd "$he" && make -s log m="typed by hand" >/dev/null 2>&1 ) || miss "hand edit: make log failed"
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" = 0 ] || miss "hand edit: make derived stays red once the typed line is an entry ($out)"
+[ "$(grep -cxF -- "- $he_day — typed by hand" "$he/wiki/log.md")" = 1 ] || miss "hand edit: the moved line is not in the drawn log exactly once"
+( cd "$he" && python3 -c "
+import pathlib, sys; sys.path.insert(0, 'tools'); import ledgers
+body, edited = ledgers.read_stamped(pathlib.Path('wiki/log.md')); assert body is not None and not edited" ) || miss "hand edit: the redrawn wiki/log.md does not carry a stamp that matches"
+grep -vF 'Newest first.' "$he/wiki/log.md" > "$TMP/he.cut"; cp "$TMP/he.cut" "$he/wiki/log.md"
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" = 0 ] && grep -qF 'Newest first.' "$he/wiki/log.md" || miss "hand edit: an edit that only removed a line of wiki/log.md is not drawn over ($out)"
+printf '| `Basket` | Goods not yet bought. |  | Basket |\n' >> "$he/ontology/glossary.md"
+if he_make derived >/dev/null; then miss "hand edit: make derived is green with a row typed into the drawn glossary"; fi
+he_tool add-term Basket --definition "Goods not yet bought." >/dev/null || miss "hand edit: add-term failed"
+he_make derived >/dev/null || miss "hand edit: make derived stays red once the typed row is a fragment ($(he_make derived))"
+[ "$(grep -c '^| `Basket` |' "$he/ontology/glossary.md")" = 1 ] || miss "hand edit: the row is not in the drawn glossary exactly once"
+cp "$he/$he_gen" "$TMP/he.gen"; sed '$d' "$TMP/he.gen" > "$he/$he_gen"
+he_make derived >/dev/null && cmp -s "$TMP/he.gen" "$he/$he_gen" || miss "hand edit: an edit that only removed a line of $he_gen is not drawn over"
+printf '// by hand\n' >> "$he/$he_gen"
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" != 0 ] && case "$out" in *"+ // by hand"*"delete $he_gen"*"make derived"*) true ;; *) false ;; esac || miss "hand edit: a line typed into $he_gen is not refused with the line and the way back ($out)"
+rm -f "$he/$he_gen"; he_make derived >/dev/null || miss "hand edit: make derived is red after the way back for $he_gen"
+# 48zk. a file at a drawn path with no stamp that git does not know, in the fragments shape: what the generator
+#       wrote is drawn over, stamped, so it follows ontology/; an index is refused and named, never left stale
+( cd "$he" && python3 tools/ontology_codegen.py --lang ts --out $he_gen >/dev/null )
+python3 "$ROOT/tests/apply_fixture.py" coffee "$he" >/dev/null
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" = 0 ] || miss "unstamped: make derived is red for an unstamped $he_gen the generator wrote ($out)"
+head -1 "$he/$he_gen" | grep -q ' sha256:[0-9a-f]\{64\}$' || miss "unstamped: an unstamped $he_gen the generator wrote is not drawn over, stamped"
+grep -q 'isVIPCustomer' "$he/$he_gen" || miss "unstamped: the drawn $he_gen does not follow ontology/"
+tail -n +2 "$he/wiki/index.md" > "$TMP/he.ix"; cp "$TMP/he.ix" "$he/wiki/index.md"
+printf -- '---\ntype: entity\ntitle: Basket\n---\n# Basket\n' > "$he/wiki/entities/basket.md"
+rc=0; out=$(he_make derived) || rc=$?
+[ "$rc" != 0 ] || miss "unstamped: make derived is green with an unstamped wiki/index.md that git does not know"
+case "$out" in *wiki/index.md*"delete wiki/index.md"*"make derived"*) ;; *) miss "unstamped: the refusal does not name wiki/index.md and say to delete it and run make derived ($out)" ;; esac
+cmp -s "$TMP/he.ix" "$he/wiki/index.md" || miss "unstamped: make derived changed an unstamped wiki/index.md"
+rm -f "$he/wiki/index.md"; he_make derived >/dev/null || miss "unstamped: make derived is red after wiki/index.md is deleted"
+grep -qF -- '- [Basket](entities/basket.md)' "$he/wiki/index.md" || miss "unstamped: a new page is not in the index drawn after the delete"
+# 48zl. an open pull request that added a log line, after split on main: the way the reminder gives keeps the
+#       line once and loses nothing; keeping the hand-kept file is two sources, and check lists what to move
+cf="$TMP/conflict"; mkdir -p "$cf" && git -C "$cf" init -q -b main
+python3 "$S/apply.py" --target "$cf" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$cf" track
+cf_git() { git -C "$cf" -c user.name=t -c user.email=t@example.com "$@"; }
+cf_tool() { ( cd "$cf" && python3 tools/ledgers.py "$@" ); }
+cf_git add -A && cf_git commit -q -m "chore: base"
+cf_git checkout -q -b pr
+( cd "$cf" && make -s log m="from the pr" >/dev/null 2>&1 ) || miss "conflict: make log failed on the open branch"
+cf_git commit -q -am "docs: a line on the open branch"
+cf_git checkout -q main
+rc=0; out=$(cf_tool split log 2>&1) || rc=$?
+[ "$rc" = 0 ] || miss "conflict: split log exits $rc ($out)"
+case "$out" in *"git rm wiki/log.md"*'make log m='*) ;; *) miss "conflict: the reminder does not say git rm wiki/log.md first, then make log ($out)" ;; esac
+cf_git add -A && cf_git commit -q -m "docs: split the log"
+cf_git checkout -q pr
+if cf_git merge -q --no-edit main >/dev/null 2>&1; then miss "conflict: merging main into the open branch did not conflict on wiki/log.md"; fi
+cp "$cf/wiki/log.md" "$TMP/cf.pr"
+cf_git add wiki/log.md   # keep the hand-kept file: two sources
+rc=0; out=$(cf_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"two sources"*"from the pr"*"git rm wiki/log.md"*'make log m='*) true ;; *) false ;; esac || miss "conflict: check exits $rc, or does not list the line in no entry and the way to move it ($out)"
+case "$out" in *"Repository created with repo-setup"*) miss "conflict: check lists a line that is already an entry ($out)" ;; esac
+grep -vF 'from the pr' "$TMP/cf.pr" > "$cf/wiki/log.md"
+rc=0; out=$(cf_tool check 2>&1) || rc=$?
+case "$out" in *"safe to delete"*) ;; *) miss "conflict: check does not say a hand-kept file whose lines are all entries is safe to delete ($out)" ;; esac
+cp "$TMP/cf.pr" "$cf/wiki/log.md"
+cf_git rm -q -f wiki/log.md
+( cd "$cf" && make -s log m="from the pr" >/dev/null 2>&1 ) || miss "conflict: make log failed after git rm"
+cf_git add -A && cf_git commit -q --no-edit
+( cd "$cf" && make -s PYTHON=python3 derived >/dev/null 2>&1 && python3 tools/ledgers.py check >/dev/null 2>&1 ) || miss "conflict: derived or check is red after the reminder's way ($(cd "$cf" && make -s PYTHON=python3 derived 2>&1; python3 tools/ledgers.py check 2>&1))"
+[ "$(grep -cF -- '— from the pr' "$cf/wiki/log.md")" = 1 ] || miss "conflict: the line of the open branch is not in the drawn log exactly once"
+grep -qF -- '— Repository created with repo-setup (test).' "$cf/wiki/log.md" || miss "conflict: a line of main was lost"
+[ -z "$(cf_git ls-files -- wiki/log.md)" ] || miss "conflict: wiki/log.md is in git after the reminder's way"
+cf_git checkout -q main
+out=$(cf_tool split glossary 2>&1) || true
+case "$out" in *"git rm ontology/glossary.md"*"add-term"*) ;; *) miss "conflict: the glossary reminder does not say git rm ontology/glossary.md first, then add-term ($out)" ;; esac
+# 48zm. a fragment is in the form the format checks keep: no trailing whitespace, a blank line after the front
+#       matter, one newline at the end; the Node presets keep the two fragment folders out of Prettier
+fm="$TMP/fragform"; mkdir -p "$fm" && git -C "$fm" init -q -b main
+python3 "$S/apply.py" --target "$fm" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+( cd "$fm" && python3 tools/ledgers.py add-term Order --definition "A confirmed purchase." >/dev/null && python3 tools/ledgers.py add-log "a *starred* __word__" >/dev/null ) || miss "fragment form: add-term or add-log failed"
+printf -- '---\nterm: Order\ndisplay: Order\nnot_confused_with:\n---\n\nA confirmed purchase.\n' > "$TMP/fm.want"
+cmp -s "$TMP/fm.want" "$fm/ontology/glossary/Order.md" || miss "fragment form: add-term does not write the canonical fragment ($(cat -e "$fm/ontology/glossary/Order.md"))"
+fm_bad=$(python3 - "$fm/wiki/log" "$fm/ontology/glossary" "$sp/wiki/log" "$sp/ontology/glossary" <<'PY'
+import pathlib, sys
+for folder in sys.argv[1:]:
+    for p in sorted(pathlib.Path(folder).iterdir()):
+        if p.name.startswith("."):
+            continue
+        text = p.read_text(encoding="utf-8")
+        if any(line != line.rstrip() for line in text.split("\n")) or not text.endswith("\n") or text.endswith("\n\n"):
+            print(p)
+PY
+)
+[ -z "$fm_bad" ] || miss "fragment form: a fragment written by add-term, add-log or split has trailing whitespace or a wrong end ($fm_bad)"
+for fm_line in 'wiki/log/' 'ontology/glossary/'; do
+  grep -qxF "$fm_line" "$fm/.prettierignore" || miss "fragment form: .prettierignore of a Node preset does not leave out $fm_line"
+done
+printf -- '---\nterm: Old\ndisplay: Old\nnot_confused_with: \n---\nOld form.\n' > "$fm/ontology/glossary/Old.md"
+( cd "$fm" && python3 tools/ledgers.py draw >/dev/null && python3 tools/ledgers.py check >/dev/null ) || miss "fragment form: a fragment in the old form is no longer read"
+grep -qxF '| `Old` | Old form. |  | Old |' "$fm/ontology/glossary.md" && grep -qxF '| `Order` | A confirmed purchase. |  | Order |' "$fm/ontology/glossary.md" || miss "fragment form: the old and the new form do not draw the same kind of row"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

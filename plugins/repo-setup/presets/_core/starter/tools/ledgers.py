@@ -35,9 +35,11 @@ from __future__ import annotations
 import argparse
 import datetime
 import hashlib
+import importlib
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 LEDGERS = ("log", "index", "glossary", "gen")
@@ -186,6 +188,7 @@ LOG_NAME_RE = re.compile(
 )
 SLUG_MAX = 40
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+LOG_HOW = 'make log m="<text>"'
 DEFAULT_LOG_HEAD = """---
 type: log
 title: Change log of the wiki and notable code changes
@@ -248,38 +251,74 @@ def log_body(root: Path) -> str:
     return head.rstrip("\n") + "\n\n" + "".join(f"{ln}\n" for ln in lines)
 
 
-def draw_ledger(
-    root: Path, rel: str, source: str, has_entries: bool, body: str, hint: str, quiet: bool
-) -> int:
-    """Draw one markdown ledger at `rel` from `body`. 0 done, 1 refused.
+def lines_not_in(current: str, body: str) -> list[str]:
+    """The lines of `current` that `body` does not have (whitespace runs read as one space)."""
+    expected = {one_line(line) for line in body.splitlines()}
+    return [
+        line for line in current.splitlines() if line.strip() and one_line(line) not in expected
+    ]
 
-    An unstamped file at the old path is never overwritten: alone (a new repository that has not
-    made its first commit) it is left as it is; beside entries it is two sources. A drawn file
-    edited by hand is refused, with the lines that were added and the command to use instead.
-    """
+
+def _sibling(name: str) -> types.ModuleType | None:
+    """tools/<name>.py, which imports this module by name; None where the repository has none."""
+    sys.modules.setdefault("ledgers", sys.modules[__name__])
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        return None
+
+
+def listed(lines: list[str]) -> str:
+    return "".join(f"\n  + {line}" for line in lines)
+
+
+def hand_edit_refusal(rel: str, source: str, added: list[str], how: str) -> str:
+    return (
+        f"{rel} was edited by hand; it is drawn from {source}, so nothing was written. "
+        f"These lines are in no source yet:{listed(added)}\n"
+        f"Move each one: {how} (a changed line: edit its file in {source}); then delete {rel} "
+        "and run make derived."
+    )
+
+
+def unstamped_refusal(
+    root: Path, rel: str, source: str, ledger: str | None, has_entries: bool, how: str
+) -> str:
+    """Why an unstamped file that git does not track at a drawn path is not drawn over."""
+    both = f" and {source} has entries: two sources for the ledger" if has_entries else ""
+    text = (
+        f"{rel} is not a drawn file, git does not track it{both}: move {rel} aside, or delete "
+        f"{rel} once nothing in it is missing from {source}, then run make derived."
+    )
+    read = _sibling("ledgers_split_read") if ledger else None
+    if read is None:
+        return text
+    lines = read.unmoved_in(root, ledger, rel)
+    if lines:
+        text += f"\nThese lines of {rel} are in no source yet:{listed(lines)}"
+    return f"{text}\nA line goes into {source} with: {how}."
+
+
+def draw_ledger(
+    root: Path, rel: str, source: str, ledger: str | None, body: str, how: str, quiet: bool
+) -> int:
+    """Draw one markdown ledger at `rel` from `body`. 0 done, 1 refused. An unstamped file there
+    (git does not know it) is refused, never overwritten. A drawn file edited by hand is drawn over
+    when every line the edit added is in `body`; otherwise refused, with those lines and the way
+    back. `how` puts a line in the source; `ledger` (log, glossary) names fragments to compare."""
     target = root / rel
     current, edited = read_stamped(target)
     if target.is_file() and current is None:
-        if not has_entries:
-            return 0
-        print(
-            f"{rel} is not a drawn file and {source} has entries: two sources for the ledger; move "
-            f"{rel} "
-            f"aside, or delete it once its lines are copied. {hint}",
-            file=sys.stderr,
-        )
+        has_entries = bool(ledger and (log_entries if ledger == "log" else glossary_files)(root))
+        print(unstamped_refusal(root, rel, source, ledger, has_entries, how), file=sys.stderr)
         return 1
     if edited and current is not None:
-        expected = set(body.splitlines())
-        added = [ln for ln in current.splitlines() if ln and ln not in expected]
-        print(
-            f"{rel} was edited by hand; it is drawn from {source} and a hand edit is lost.",
-            file=sys.stderr,
-        )
-        for ln in added:
-            print(f"  + {ln}", file=sys.stderr)
-        print(hint, file=sys.stderr)
-        return 1
+        added = lines_not_in(current, body)
+        if added:
+            print(hand_edit_refusal(rel, source, added, how), file=sys.stderr)
+            return 1
+        if not quiet:
+            print(f"{rel} was edited by hand; every line the edit added is in {source}: drawn over")
     text = stamp(body, source)
     if not target.is_file() or target.read_text(encoding="utf-8") != text:
         target.write_text(text, encoding="utf-8")
@@ -292,24 +331,12 @@ def draw_log(root: Path, quiet: bool) -> int | None:
     """Draw wiki/log.md. None when the log is not kept as fragments (nothing was drawn)."""
     if not (root / "wiki").is_dir() or shape_of(root, "log") != FRAGMENTS:
         return None
-    return draw_ledger(
-        root,
-        LOG_FILE,
-        LOG_SOURCE,
-        bool(log_entries(root)),
-        log_body(root),
-        'Put it in an entry instead: make log m="<text>"',
-        quiet,
-    )
+    return draw_ledger(root, LOG_FILE, LOG_SOURCE, "log", log_body(root), LOG_HOW, quiet)
 
 
 def cmd_draw(args: argparse.Namespace) -> int:
     root = Path(args.root)
-    results = [
-        draw_log(root, args.quiet),
-        draw_index(root, args.quiet),
-        draw_glossary(root, args.quiet),
-    ]
+    results = [draw(root, args.quiet) for draw in (draw_log, draw_index, draw_glossary)]
     drawn = [r for r in results if r is not None]
     if not drawn and not args.quiet:
         print("nothing to draw")
@@ -324,10 +351,18 @@ def check_log(root: Path) -> list[str]:
             problems.append(f"{LOG_DIR}/{path.name}: the name is not YYYY-MM-DD-NN-<slug>.md")
     if entries and shape_of(root, "log") == ONE_FILE:
         problems.append(
-            f"{LOG_FILE} is kept by hand and {LOG_DIR}/ has entries: two sources for the log; "
-            f"git rm --cached {LOG_FILE} and delete it, or move the entries out"
+            f"{LOG_FILE} is kept by hand and {LOG_DIR}/ has entries: two sources for the log. "
+            + two_sources_way(root, "log", LOG_FILE, LOG_DIR, LOG_HOW)
         )
     return problems
+
+
+def two_sources_way(root: Path, ledger: str, rel: str, folder: str, how: str) -> str:
+    """The way out of a tracked hand-kept file beside fragments (tools/ledgers_split_read.py)."""
+    read = _sibling("ledgers_split_read")
+    if read is None:
+        return f"Once every entry of {rel} is in {folder}/: git rm {rel}, then make derived."
+    return read.two_sources_way(root, ledger, rel, folder, how)
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -504,9 +539,10 @@ def draw_index(root: Path, quiet: bool) -> int | None:
         root,
         INDEX_FILE,
         INDEX_SOURCE,
-        False,
+        None,
         index_body(root),
-        f"Put it in a page, or in {INDEX_HEAD} for the part above the sections",
+        f"put it in a page (type, title, summary), or in {INDEX_HEAD} for the part above the "
+        "sections",
         quiet,
     )
 
@@ -533,9 +569,7 @@ DEFAULT_GLOSSARY_HEAD = """# Glossary
 One line per business term. If two people could understand a word differently,
 it belongs here. Code, docs and agents must use these exact names.
 """
-ADD_TERM_HINT = (
-    'Put it in a fragment instead: python3 tools/ledgers.py add-term <Term> --definition "<text>"'
-)
+ADD_TERM_HOW = 'python3 tools/ledgers.py add-term <Term> --definition "<text>"'
 
 
 class Term:
@@ -624,9 +658,9 @@ def draw_glossary(root: Path, quiet: bool) -> int | None:
         root,
         GLOSSARY_FILE,
         GLOSSARY_SOURCE,
-        bool(glossary_files(root)),
+        "glossary",
         glossary_body(root),
-        ADD_TERM_HINT,
+        ADD_TERM_HOW,
         quiet,
     )
 
@@ -644,8 +678,8 @@ def check_glossary(root: Path) -> list[str]:
     if files and shape_of(root, "glossary") == ONE_FILE:
         problems.append(
             f"{GLOSSARY_FILE} is kept by hand and {GLOSSARY_DIR}/ has terms: two sources for the "
-            "glossary; "
-            f"git rm --cached {GLOSSARY_FILE} and delete it, or move the terms out"
+            "glossary. "
+            + two_sources_way(root, "glossary", GLOSSARY_FILE, GLOSSARY_DIR, ADD_TERM_HOW)
         )
     return problems
 
@@ -674,11 +708,8 @@ def cmd_draw_gen(args: argparse.Namespace) -> int:
 
 
 def cmd_split(args: argparse.Namespace) -> int:
-    # ledgers_split imports this module by name; when it runs as a script that name is __main__.
-    sys.modules.setdefault("ledgers", sys.modules[__name__])
-    try:
-        import ledgers_split
-    except ImportError:
+    ledgers_split = _sibling("ledgers_split")
+    if ledgers_split is None:
         print(
             "ledgers.py: tools/ledgers_split.py is missing: this repository keeps no ledger to "
             "split",
