@@ -43,6 +43,16 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   --write` no longer edits `wiki/index.md` (the weekly page is listed by itself). Hidden files
   (`.DS_Store`) in `wiki/log/` and `ontology/glossary/` are no fragments. What breaks on upgrade:
   nothing, a tracked unstamped `wiki/index.md` stays `one-file` and keeps every old rule.
+- The code generated from `ontology/` (`src/generated/ontology.ts`, `src/<pkg>/ontology_types.py`)
+  is drawn by `make derived` (`gen-derived`, `ledgers.py draw-gen`) in the `fragments` shape: the
+  generator output with ` sha256:<hex>` (the hash of everything after the first line) at the end of
+  its first comment line, written only when the text changes, never over a hand edit (exit 1, names
+  the file, says to edit `ontology/` and run `make derived`). `make ontology` keeps `ontology_codegen.py
+  --check` in the `one-file` shape and skips it in `fragments`; `make gen` draws in `fragments`. The
+  two Node presets get `"prepare": "command -v make >/dev/null 2>&1 && make -s derived || true"`;
+  `image`, `up` and `deploy` of the `container` layer wait for `derived`. What breaks on upgrade:
+  nothing, a committed unstamped generated file stays `one-file` and `make ontology` compares it as
+  before.
 
 ## 0.7.0 — 2026-11-17
 

@@ -10,7 +10,14 @@ PYTHON ?= python3
 DERIVED_TARGETS += wiki-derived
 DERIVED_FILES += wiki/log.md wiki/index.md ontology/glossary.md
 CHECK_TARGETS += derived-untracked ledgers-check
-.PHONY: derived wiki-derived derived-untracked ledgers-check log
+# The code generated from ontology/ (GEN_OUT and GEN_LANG are set by the preset Makefile before it
+# reads mk/*.mk; a preset with no generated code leaves GEN_OUT empty) is drawn, stamped, in the
+# fragments shape. A repository that still commits the file (the one-file shape) keeps it as it is.
+ifneq ($(GEN_OUT),)
+DERIVED_TARGETS += gen-derived
+DERIVED_FILES += $(GEN_OUT)
+endif
+.PHONY: derived wiki-derived gen-derived derived-untracked ledgers-check log
 
 .SECONDEXPANSION:
 
@@ -19,6 +26,9 @@ derived: upgrade $$(DERIVED_TARGETS) ## Draw every file the repository keeps out
 
 wiki-derived: ## Draw the wiki log, the wiki index and the glossary from their fragments
 	@$(PYTHON) tools/ledgers.py draw
+
+gen-derived: ## Draw the code generated from ontology/ (a repository that commits it keeps it as it is)
+	@$(PYTHON) tools/ledgers.py draw-gen --gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)
 
 derived-untracked: ## Fail when a drawn file is in git
 	@$(PYTHON) tools/ledgers.py untracked $(DERIVED_FILES)

@@ -16,6 +16,7 @@
     "lint": "eslint . && prettier --check --log-level warn .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "command -v make >/dev/null 2>&1 && make -s derived || true"
   }
 }

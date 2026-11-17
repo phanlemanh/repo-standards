@@ -9,6 +9,9 @@ REGISTRY ?= ghcr.io/{{owner_org}}
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 IMAGE := $(REGISTRY)/{{slug}}:$(IMAGE_TAG)
 
+# The generated code is drawn first, so it is in the build context (.dockerignore leaves src/ in).
+deploy: | derived
+
 deploy: ## Build, push and roll out the image to ENV (staging|production)
 	@if [ -n "$$GITHUB_TOKEN" ]; then echo "$$GITHUB_TOKEN" | docker login ghcr.io -u "$${GITHUB_ACTOR:-ci}" --password-stdin; fi
 	docker build -t $(IMAGE) .

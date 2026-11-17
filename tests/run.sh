@@ -2497,6 +2497,101 @@ rc=0; out=$( cd "$ix0" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
 [ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, for an untracked wiki/index.md beside wiki/index.head.md before the first commit ($out)"
 cmp -s "$TMP/ix0.before" "$ix0/wiki/index.md" || miss "index: draw changed an untracked unstamped wiki/index.md"
 case "$out" in *"two sources"*) miss "index: draw says two sources for the index ($out)" ;; esac
+# 48s (plan 48m). the code generated from ontology/ is drawn, stamped, and never committed in the fragments shape;
+#      a repository that still commits it keeps today's behaviour exactly. The real `make test` on a clean
+#      clone (npm ci, uv sync) is left to tests/e2e.sh; here the draw is proved, and that it comes first.
+gn_make() { ( cd "$1" && shift && make "$@" 2>&1 ); }
+gn_check_stamp() { # <file> <label>: the first line carries sha256 of everything after it
+  python3 - "$1" <<'PY' 2>/dev/null || miss "gen: $2: the stamp is not the sha256 of the body"
+import hashlib, re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+first, _, body = text.partition("\n")
+m = re.search(r" sha256:([0-9a-f]{64})", first)
+assert m and hashlib.sha256(body.encode()).hexdigest() == m.group(1)
+PY
+}
+gn_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1"; }
+gn="$TMP/genrepo"; mkdir -p "$gn" && git -C "$gn" init -q -b main
+python3 "$S/apply.py" --target "$gn" --preset ts-node --level starter --var project_name=G --var description=x --var owner=acme >/dev/null
+gn_git() { git -C "$gn" -c user.name=t -c user.email=t@example.com "$@"; }
+gn_out=src/generated/ontology.ts
+# one-file: the file is committed, as today; make derived leaves it alone and make ontology still compares it
+( cd "$gn" && python3 tools/ontology_codegen.py --lang ts --out $gn_out >/dev/null )
+gn_git add -A && gn_git commit -q -m "chore: base"
+[ "$(cd "$gn" && python3 tools/ledgers.py shape gen --gen-out $gn_out)" = one-file ] || miss "gen: shape gen is not one-file for a committed unstamped $gn_out"
+cp "$gn/$gn_out" "$TMP/gn.before"
+gn_make "$gn" derived >/dev/null || miss "gen: make derived fails in the one-file shape"
+cmp -s "$TMP/gn.before" "$gn/$gn_out" || miss "gen: make derived changed a committed one-file $gn_out"
+gn_make "$gn" ontology >/dev/null || miss "gen: make ontology is red for an up to date committed $gn_out"
+printf '// edited by hand\n' >> "$gn/$gn_out"; cp "$gn/$gn_out" "$TMP/gn.handedit"
+if gn_make "$gn" ontology >/dev/null; then miss "gen: make ontology is green for a committed $gn_out that is out of date (one-file shape)"; fi
+gn_make "$gn" derived >/dev/null; cmp -s "$TMP/gn.handedit" "$gn/$gn_out" || miss "gen: make derived overwrote a hand edit of a committed one-file $gn_out"
+gn_git checkout -q -- "$gn_out"
+# fragments: out of git and off disk; make derived draws it, stamped, and a second run writes no byte
+gn_git rm -q --cached "$gn_out"; rm -f "$gn/$gn_out"
+[ "$(cd "$gn" && python3 tools/ledgers.py shape gen --gen-out $gn_out)" = fragments ] || miss "gen: shape gen is not fragments for an absent $gn_out"
+gn_make "$gn" derived >/dev/null || miss "gen: make derived fails in the fragments shape"
+[ -f "$gn/$gn_out" ] || miss "gen: make derived did not draw $gn_out"
+head -1 "$gn/$gn_out" | grep -q '^// Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}$' || miss "gen: the first line of the drawn $gn_out is not the generator header plus a sha256 stamp ($(head -1 "$gn/$gn_out"))"
+gn_check_stamp "$gn/$gn_out" ts
+( cd "$gn" && python3 tools/ontology_codegen.py --lang ts --out "$TMP/gn.direct.ts" >/dev/null )
+[ "$(tail -n +2 "$gn/$gn_out")" = "$(tail -n +2 "$TMP/gn.direct.ts")" ] || miss "gen: the body of the drawn $gn_out differs from what ontology_codegen.py writes"
+cp "$gn/$gn_out" "$TMP/gn.drawn"; touch -t 202001010000 "$gn/$gn_out"; gn_t=$(gn_mtime "$gn/$gn_out")
+out=$(gn_make "$gn" derived); cmp -s "$TMP/gn.drawn" "$gn/$gn_out" || miss "gen: a second make derived changed $gn_out"
+[ "$(gn_mtime "$gn/$gn_out")" = "$gn_t" ] || miss "gen: a second make derived rewrote $gn_out (it must write no byte when nothing changed)"
+case "$out" in *drew*) miss "gen: a second make derived is not quiet ($out)" ;; esac
+gn_make "$gn" derived-untracked >/dev/null || miss "gen: derived-untracked is red for a drawn $gn_out that is out of git"
+gn_make "$gn" ontology >/dev/null || miss "gen: make ontology is red in the fragments shape ($(gn_make "$gn" ontology))"
+# make test and make build draw it first
+out=$(gn_make "$gn" -n test); case "$out" in *"ledgers.py draw-gen"*"npm run --silent test"*) ;; *) miss "gen: make -n test does not draw $gn_out before the test step ($out)" ;; esac
+out=$(gn_make "$gn" -n build); case "$out" in *"ledgers.py draw-gen"*"npm run build"*) ;; *) miss "gen: make -n build does not draw $gn_out before the build ($out)" ;; esac
+rm -f "$gn/$gn_out"; gn_make "$gn" derived >/dev/null; [ -f "$gn/$gn_out" ] || miss "gen: make derived did not draw a deleted $gn_out again"
+# a change in ontology/ is drawn again; a hand edit is refused and named, never overwritten
+python3 "$ROOT/tests/apply_fixture.py" coffee "$gn" >/dev/null
+gn_make "$gn" derived >/dev/null; grep -q 'isVIPCustomer' "$gn/$gn_out" || miss "gen: make derived did not draw again after ontology/ changed"
+gn_check_stamp "$gn/$gn_out" ts-again
+printf '// by hand\n' >> "$gn/$gn_out"; cp "$gn/$gn_out" "$TMP/gn.edited"
+rc=0; out=$(gn_make "$gn" derived) || rc=$?
+[ "$rc" != 0 ] || miss "gen: make derived is green for a hand-edited $gn_out"
+case "$out" in *"$gn_out"*"ontology/"*"make derived"*) ;; *) miss "gen: the refusal does not name $gn_out and say to edit ontology/ and run make derived ($out)" ;; esac
+cmp -s "$TMP/gn.edited" "$gn/$gn_out" || miss "gen: a hand-edited $gn_out was overwritten"
+# an unstamped file that git does not know: left alone, exit 0
+printf '// mine\n' > "$gn/$gn_out"
+gn_make "$gn" derived >/dev/null || miss "gen: make derived is red for an untracked unstamped $gn_out"
+[ "$(cat "$gn/$gn_out")" = "// mine" ] || miss "gen: an untracked unstamped $gn_out was overwritten"
+# a drawn file that is in git is red
+rm -f "$gn/$gn_out"; gn_make "$gn" derived >/dev/null; gn_git add -f "$gn_out"
+if gn_make "$gn" derived-untracked >/dev/null; then miss "gen: derived-untracked is green for a drawn $gn_out in git"; fi
+gn_git rm -q --cached "$gn_out"
+# the package.json of the two Node presets draws on npm ci / npm install
+for pj in "$ROOT"/plugins/repo-setup/presets/ts-node/starter/package.json.tmpl "$ROOT"/plugins/repo-setup/presets/react-vite/starter/package.json.tmpl; do
+  grep -qF '"prepare": "command -v make >/dev/null 2>&1 && make -s derived || true"' "$pj" || miss "gen: $pj has no prepare script that draws"
+done
+# python: the same, with the file under src/<pkg>/ and the stamp before the closing quotes of the docstring
+gq="$TMP/genrepo-py"; mkdir -p "$gq" && git -C "$gq" init -q -b main
+python3 "$S/apply.py" --target "$gq" --preset python --level starter --var project_name=Gq --var description=x --var owner=acme >/dev/null
+gq_out=src/gq/ontology_types.py
+gq_make() { ( cd "$gq" && make PYTHON=python3 "$@" 2>&1 ); }
+gq_make derived >/dev/null || miss "gen: python: make derived fails in the fragments shape"
+head -1 "$gq/$gq_out" | grep -q '^"""Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}"""$' || miss "gen: python: the first line is not the docstring with the stamp before the closing quotes ($(head -1 "$gq/$gq_out"))"
+python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$gq/$gq_out" || miss "gen: python: the drawn file is not valid python"
+gn_check_stamp "$gq/$gq_out" python
+cp "$gq/$gq_out" "$TMP/gq.drawn"; gq_make derived >/dev/null; cmp -s "$TMP/gq.drawn" "$gq/$gq_out" || miss "gen: python: a second make derived changed the file"
+out=$(gq_make -n test); case "$out" in *"ledgers.py draw-gen"*"pytest"*) ;; *) miss "gen: python: make -n test does not draw before pytest ($out)" ;; esac
+gq_make ontology >/dev/null || miss "gen: python: make ontology is red in the fragments shape"
+# python one-file: committed and edited, make ontology is red as today
+rm -f "$gq/$gq_out"; ( cd "$gq" && python3 tools/ontology_codegen.py --lang python --out $gq_out >/dev/null )
+git -C "$gq" add -A; git -C "$gq" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+printf '# x\n' >> "$gq/$gq_out"
+if gq_make ontology >/dev/null; then miss "gen: python: make ontology is green for an out of date committed file (one-file shape)"; fi
+# 48t (plan 48n). the image waits for derived; the drawn file reaches the build context
+gc="$TMP/gen-container"; mkdir -p "$gc" && git -C "$gc" init -q -b main
+python3 "$S/apply.py" --target "$gc" --preset ts-api --deploy container --level team --var project_name=Gc --var description=x --var owner=acme/platform >/dev/null
+for t in image up deploy; do
+  out=$(cd "$gc" && make -n "$t" 2>&1 || true)
+  case "$out" in *"ledgers.py draw-gen"*"docker "*) ;; *) miss "gen: container: make $t does not draw before docker ($out)" ;; esac
+done
+if grep -qxE 'src/?|src/\*\*|src/generated/?|\*\.ts|\*\.py' "$gc/.dockerignore"; then miss "gen: container: .dockerignore leaves the drawn file out of the build context"; fi
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

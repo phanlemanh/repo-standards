@@ -3,6 +3,7 @@
 PKG := {{package_name}}
 DEV_CMD := {{dev_cmd}}
 GEN_OUT := src/$(PKG)/ontology_types.py
+GEN_LANG := python
 PYTEST_ARGS :=
 PYTHON ?= uv run python
 CHECK_TARGETS := lint typecheck test ontology
@@ -40,12 +41,13 @@ typecheck: ## Strict type check
 test: ## Run tests
 	uv run pytest $(PYTEST_ARGS)
 
+# The generated file is committed (one-file) or drawn and kept out of git (fragments): see mk/derived.mk.
 gen: ## Regenerate types from ontology/
-	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT)
+	@if [ "$$($(PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else $(PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT); fi
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
 	uv run python tools/wiki_lint.py
-	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check
+	@if [ "$$($(PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
 
 check: $(CHECK_TARGETS) ## Everything CI runs
 

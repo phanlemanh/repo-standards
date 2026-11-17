@@ -14,6 +14,7 @@ with, and the check that a drawn file does not sit in git.
   python3 tools/ledgers.py shape <log|index|glossary|gen> [--gen-out PATH]
   python3 tools/ledgers.py untracked [PATH ...]
   python3 tools/ledgers.py draw [--quiet]
+  python3 tools/ledgers.py draw-gen --gen-out PATH --gen-lang <ts|python> [--quiet]
   python3 tools/ledgers.py check
   python3 tools/ledgers.py add-log <text> [--date YYYY-MM-DD]
   python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>] [--not-confused-with <s>]
@@ -32,6 +33,7 @@ import hashlib
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 LEDGERS = ("log", "index", "glossary", "gen")
@@ -629,6 +631,92 @@ def cmd_add_term(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------------------------
+# The code generated from ontology/: drawn by `make derived`, kept out of git.
+# ---------------------------------------------------------------------------------------------
+
+GEN_LANGS = ("ts", "python")
+GEN_HASH_RE = re.compile(r" sha256:(?P<hex>[0-9a-f]{64})")
+GEN_HINT = "Edit ontology/ and run: make derived"
+
+
+def stamp_generated(code: str) -> str:
+    """The generated code with ` sha256:<hex>` at the end of its first comment line, where <hex>
+    is the hash of everything after that line. A docstring line keeps its closing quotes last."""
+    first, newline, body = code.partition("\n")
+    mark = f" {HASH_MARK}{_digest(body)}"
+    if first.endswith('"""'):
+        first = first[:-3] + mark + '"""'
+    else:
+        first += mark
+    return first + newline + body
+
+
+def read_generated(path: Path) -> tuple[str | None, bool]:
+    """(body, hand-edited) of a drawn generated file; (None, False) when absent or not stamped."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None, False
+    first, _, body = text.partition("\n")
+    match = GEN_HASH_RE.search(first)
+    if match is None:
+        return None, False
+    return body, _digest(body) != match.group("hex")
+
+
+def run_codegen(root: Path, lang: str) -> str | None:
+    """What tools/ontology_codegen.py writes for `lang`, read back from a temporary file."""
+    tool = Path(__file__).resolve().parent / "ontology_codegen.py"
+    with tempfile.TemporaryDirectory() as scratch:
+        out = Path(scratch) / "generated"
+        done = subprocess.run(
+            [sys.executable, str(tool), "--lang", lang, "--out", str(out), "--root", str(root)],
+            capture_output=True, text=True, check=False,
+        )
+        if done.returncode != 0 or not out.is_file():
+            sys.stderr.write(done.stderr or done.stdout)
+            return None
+        return out.read_text(encoding="utf-8")
+
+
+def draw_generated(root: Path, rel: str, lang: str, quiet: bool) -> int | None:
+    """Draw the generated code at `rel`. None when it is kept as one file (nothing is drawn: the
+    repository commits it and `make ontology` compares it), 0 done, 1 refused."""
+    if shape_of(root, "gen", rel) != FRAGMENTS:
+        return None
+    target = root / rel
+    current, edited = read_generated(target)
+    if target.is_file() and current is None:
+        return 0  # a file this tool did not draw, and git does not know it: leave it alone
+    code = run_codegen(root, lang)
+    if code is None:
+        return 1
+    text = stamp_generated(code)
+    if edited and current is not None:
+        expected = set(text.partition("\n")[2].splitlines())
+        added = [ln for ln in current.splitlines() if ln and ln not in expected]
+        print(f"{rel} was edited by hand; it is drawn from ontology/ and a hand edit is lost.", file=sys.stderr)
+        for ln in added:
+            print(f"  + {ln}", file=sys.stderr)
+        print(GEN_HINT, file=sys.stderr)
+        return 1
+    if target.is_file() and target.read_text(encoding="utf-8") == text:
+        return 0
+    target.parent.mkdir(parents=True, exist_ok=True)
+    scratch = target.with_name(target.name + ".tmp")
+    scratch.write_text(text, encoding="utf-8")
+    scratch.replace(target)
+    if not quiet:
+        print(f"drew {rel}")
+    return 0
+
+
+def cmd_draw_gen(args: argparse.Namespace) -> int:
+    result = draw_generated(Path(args.root), args.gen_out, args.gen_lang, args.quiet)
+    return result or 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ledgers.py", description=__doc__.split("\n")[0])
     parser.add_argument("--root", default=".", help="repository root (default: the current folder)")
@@ -646,6 +734,12 @@ def build_parser() -> argparse.ArgumentParser:
     draw = sub.add_parser("draw", help="draw every ledger that is kept as fragments")
     draw.add_argument("--quiet", action="store_true", help="print nothing unless a file is refused")
     draw.set_defaults(run=cmd_draw)
+
+    draw_gen = sub.add_parser("draw-gen", help="draw the code generated from ontology/ when it is kept as a drawn file")
+    draw_gen.add_argument("--gen-out", required=True, help="path of the generated code file")
+    draw_gen.add_argument("--gen-lang", required=True, choices=GEN_LANGS, help="language of the generated code")
+    draw_gen.add_argument("--quiet", action="store_true", help="print nothing unless a file is refused")
+    draw_gen.set_defaults(run=cmd_draw_gen)
 
     check = sub.add_parser("check", help="fail on a wrong fragment or two sources for a ledger")
     check.set_defaults(run=cmd_check)

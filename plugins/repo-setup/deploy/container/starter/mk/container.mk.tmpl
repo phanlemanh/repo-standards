@@ -3,6 +3,10 @@
 IMAGE ?= {{slug}}
 TAG ?= local
 
+# The code generated from ontology/ is drawn before the build and reaches the build context: the
+# Dockerfile has no make or python3, and .dockerignore leaves src/ in.
+image up: | derived
+
 image: ## Build the production image
 	docker build -t $(IMAGE):$(TAG) .
 
