@@ -46,6 +46,7 @@ if sys.version_info < (3, 11):
 
 import argparse
 import datetime as _dt
+from dataclasses import dataclass
 import difflib
 import hashlib
 import json
@@ -97,7 +98,7 @@ def _read_toml(path: Path) -> dict:
         return tomllib.load(fh)
 
 
-def preset_chain(preset: str) -> list[str]:
+def preset_chain(preset: str, root: Path = PLUGIN_ROOT) -> list[str]:
     """['_core', base..., preset] following `extends`."""
     chain: list[str] = []
     current: str | None = preset
@@ -105,22 +106,24 @@ def preset_chain(preset: str) -> list[str]:
         if current in chain:
             raise ValueError(f"circular extends at {current}")
         chain.insert(0, current)
-        current = _read_toml(PRESETS_DIR / current / "preset.toml").get("extends")
+        current = _read_toml(root / "presets" / current / "preset.toml").get("extends")
     return ["_core", *chain]
 
 
-def available(kind: str) -> list[str]:
-    folder = PLUGIN_ROOT / kind
+def available(kind: str, root: Path = PLUGIN_ROOT) -> list[str]:
+    folder = root / kind
     if not folder.is_dir():
         return []
     return sorted(p.name for p in folder.iterdir() if p.is_dir() and not p.name.startswith("_"))
 
 
-def capabilities_for(archetype: str, extra: list[str] | None = None) -> list[str]:
+def capabilities_for(
+    archetype: str, extra: list[str] | None = None, root: Path = PLUGIN_ROOT
+) -> list[str]:
     """Capabilities an archetype brings (preset.toml `capabilities`) plus requested ones."""
     caps: list[str] = []
     if archetype and archetype != "none":
-        caps += _read_toml(PLUGIN_ROOT / "archetypes" / archetype / "preset.toml").get(
+        caps += _read_toml(root / "archetypes" / archetype / "preset.toml").get(
             "capabilities", []
         )
     for c in extra or []:
@@ -130,17 +133,21 @@ def capabilities_for(archetype: str, extra: list[str] | None = None) -> list[str
 
 
 def units(
-    preset: str, archetype: str = "none", deploy: str = "none", caps: list[str] | None = None
+    preset: str,
+    archetype: str = "none",
+    deploy: str = "none",
+    caps: list[str] | None = None,
+    root: Path = PLUGIN_ROOT,
 ) -> list[Path]:
     """Directories that contribute, in order: core, stack chain, archetype, capabilities,
     deploy target."""
-    out = [PRESETS_DIR / name for name in preset_chain(preset)]
+    out = [root / "presets" / name for name in preset_chain(preset, root)]
     if archetype and archetype != "none":
-        out.append(PLUGIN_ROOT / "archetypes" / archetype)
-    for cap in capabilities_for(archetype, caps):
-        out.append(PLUGIN_ROOT / "capabilities" / cap)
+        out.append(root / "archetypes" / archetype)
+    for cap in capabilities_for(archetype, caps, root):
+        out.append(root / "capabilities" / cap)
     if deploy and deploy != "none":
-        out.append(PLUGIN_ROOT / "deploy" / deploy)
+        out.append(root / "deploy" / deploy)
     return out
 
 
@@ -179,6 +186,7 @@ def load_meta(
     archetype: str = "none",
     deploy: str = "none",
     caps: list[str] | None = None,
+    root: Path = PLUGIN_ROOT,
 ) -> dict:
     """Merged preset.toml data for every unit and all levels up to `level`."""
     merged: dict = {
@@ -196,9 +204,9 @@ def load_meta(
         "hand_merge": {},
     }
     upto = LEVELS[: LEVELS.index(level) + 1]
-    for unit in units(preset, archetype, deploy, caps):
+    for unit in units(preset, archetype, deploy, caps, root):
         data = _read_toml(unit / "preset.toml")
-        if unit.name == preset and unit.parent == PRESETS_DIR:
+        if unit.name == preset and unit.parent == root / "presets":
             merged["description"] = data.get("description", "")
         merged["vars"].update(data.get("vars", {}))
         merged["hand_merge"].update(data.get("hand_merge", {}))
@@ -322,13 +330,14 @@ def layers_for(
     archetype: str = "none",
     deploy: str = "none",
     caps: list[str] | None = None,
+    root: Path = PLUGIN_ROOT,
 ) -> list[Path]:
     # Level-major: every starter layer first, then every team layer, so a team file of a
     # base preset still overrides a starter file of a derived preset.
     upto = LEVELS[: LEVELS.index(level) + 1]
     layers: list[Path] = []
     for lv in upto:
-        for unit in units(preset, archetype, deploy, caps):
+        for unit in units(preset, archetype, deploy, caps, root):
             d = unit / lv
             if d.is_dir():
                 layers.append(d)
@@ -342,13 +351,14 @@ def build_plan(
     archetype: str = "none",
     deploy: str = "none",
     caps: list[str] | None = None,
+    root: Path = PLUGIN_ROOT,
 ) -> dict[Path, dict]:
     """Files to write. A directory named "+<file>" holds fragments that are concatenated
     (sorted by fragment name, across all layers) into <file>; a later layer's fragment with
     the same name replaces the earlier one."""
     plan: dict[Path, dict] = {}
     composed: dict[Path, dict[str, bytes]] = {}
-    for layer in layers_for(preset, level, archetype, deploy, caps):
+    for layer in layers_for(preset, level, archetype, deploy, caps, root):
         for src in sorted(layer.rglob("*")):
             if src.is_dir() or src.name == ".DS_Store" or "__pycache__" in src.parts:
                 continue
@@ -382,6 +392,60 @@ def build_plan(
             "source": f"composed from {len(parts)} fragments",
         }
     return plan
+
+
+@dataclass(frozen=True)
+class Choices:
+    """What a repository was set up with, as .repo-setup.json records it."""
+
+    preset: str
+    level: str
+    archetype: str = "none"
+    deploy: str = "none"
+    caps: tuple[str, ...] = ()
+
+
+def choices_from_manifest(manifest: dict) -> Choices:
+    return Choices(
+        preset=str(manifest["preset"]),
+        level=str(manifest.get("level", "starter")),
+        archetype=str(manifest.get("archetype", "none")),
+        deploy=str(manifest.get("deploy", "none")),
+        caps=tuple(manifest.get("capabilities", [])),
+    )
+
+
+def render_variables(
+    raw: dict[str, str], choices: Choices, root: Path = PLUGIN_ROOT
+) -> dict[str, str]:
+    """The variables templates see: derived from the raw ones, plus the presets' defaults."""
+    variables = derive_vars(raw)
+    meta = load_meta(choices.preset, choices.level, choices.archetype, choices.deploy,
+                     list(choices.caps), root)
+    for k, val in meta["vars"].items():
+        variables.setdefault(k, str(val))
+    return variables
+
+
+def left_out_patterns(meta: dict, level: str) -> list[str]:
+    """Files a derived preset does not want from its base (e.g. a CLI entry point), core parts
+    that do not fit this kind of repository, and core files only team-level tools need."""
+    left_out = [*meta["exclude"], *(p for na in meta["not_applicable"] for p in na.get("paths", []))]
+    if level == "starter":
+        left_out += meta["team_only"]
+    return left_out
+
+
+def planned_files(
+    choices: Choices, variables: dict[str, str], root: Path = PLUGIN_ROOT
+) -> dict[str, dict]:
+    """The files the templates under `root` give for these choices, keyed by posix path."""
+    caps = list(choices.caps)
+    meta = load_meta(choices.preset, choices.level, choices.archetype, choices.deploy, caps, root)
+    plan = build_plan(choices.preset, choices.level, variables, choices.archetype, choices.deploy,
+                      caps, root)
+    left_out = left_out_patterns(meta, choices.level)
+    return {k.as_posix(): v for k, v in plan.items() if not matches(k.as_posix(), left_out)}
 
 
 def sha(data: bytes) -> str:
@@ -584,11 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyError as exc:
         print(f"Template error: {exc}", file=sys.stderr)
         return 2
-    # Files a derived preset does not want from its base (e.g. a CLI entry point), core parts
-    # that do not fit this kind of repository, and core files only team-level tools need.
-    left_out = [*meta["exclude"], *(p for na in meta["not_applicable"] for p in na.get("paths", []))]
-    if level == "starter":
-        left_out += meta["team_only"]
+    left_out = left_out_patterns(meta, level)
     not_applicable = [
         {"what": na.get("what", ""), "reason": na.get("reason", "")}
         for na in meta["not_applicable"]

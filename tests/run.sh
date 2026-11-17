@@ -2206,5 +2206,8 @@ print(s.capped({'merged': [0] * s.PR_LIMIT, 'open': [0]}))" 2>/dev/null || true)
 [ "$partial" = "['merged']" ] || miss "flow: a list of pull requests cut at the limit is taken for the whole list"
 echo "ok  flow (or misses reported above)"
 
+# shellcheck source=tests/upgrade.sh
+. "$ROOT/tests/upgrade.sh"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
