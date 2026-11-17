@@ -25,13 +25,15 @@ should merge without "Update branch" (not yet measured on the probe repository).
 - A drawn markdown file opens with `<!-- Drawn by tools/ledgers.py from <source>. Edit the source,
   not this file. sha256:<hex> -->`, `<hex>` being the hash of the rest of the file. A hand edit that
   adds a line no source holds makes `draw` exit 1, write nothing, list those lines and end with the
-  way back: put each line in its source (`make log m="..."`, `add-term`, a page), then delete the
+  way back: put each line in its source (an entry-shaped line with `make log m="..."` or
+  `add-term`, any other line in the head file, an index line in a page), then delete the
   file and run `make derived`. Once every added line is in a source, or when the edit only removed
   lines, nothing would be lost and the file is drawn over. The generated code is stamped the same
   way, with ` sha256:<hex>` at the end of its first comment line.
 - In the `fragments` shape a file at a drawn path that carries no stamp and that git does not track
   is never drawn over and never left alone in silence: `draw` exits 1, names it, lists its log
-  lines or glossary rows that no fragment holds, and says to move it aside or delete it, then run
+  lines or glossary rows that no source holds (head lines with the head file to move them to), and
+  says to move it aside or delete it, then run
   `make derived`. The one exception is generated code whose first line is the header of
   `ontology_codegen.py` (someone ran the generator by hand): it is drawn over, stamped, so it
   follows `ontology/`. A tracked unstamped file is the `one-file` shape and is not affected.
@@ -43,9 +45,11 @@ should merge without "Update branch" (not yet measured on the probe repository).
   the top of `wiki/log.md`; in the `fragments` shape it writes `wiki/log/YYYY-MM-DD-NN-<slug>.md`.
   `make derived` draws `wiki/log.md`: stamp, `wiki/log.head.md`, one line per entry, newest first.
   A hand-kept `wiki/log.md` beside entries in `wiki/log/` is "two sources": `draw` exits 1 and
-  `ledgers-check` is red. The message lists the lines of the hand-kept file that no entry holds and
-  says to copy them, `git rm wiki/log.md`, then add each with `make log m="..."` (while the file is
-  in git, `make log` writes into it); with no such line it says the file is safe to delete.
+  `ledgers-check` is red. The message lists every line of the hand-kept file that the drawn log
+  lacks: an entry (also a malformed one, such as a hyphen for the dash) is to be copied, then
+  `git rm wiki/log.md`, then added with `make log m="..."` (while the file is in git, `make log`
+  writes into it); any other line goes into `wiki/log.head.md`. Only when no such line is left does
+  it say the file is safe to delete.
 - **Glossary.** `python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>]
   [--not-confused-with <s>]`: in the `one-file` shape it adds a row to the table of
   `ontology/glossary.md`; in the `fragments` shape it writes `ontology/glossary/<Term>.md` (front

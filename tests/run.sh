@@ -3244,6 +3244,53 @@ done
 printf -- '---\nterm: Old\ndisplay: Old\nnot_confused_with: \n---\nOld form.\n' > "$fm/ontology/glossary/Old.md"
 ( cd "$fm" && python3 tools/ledgers.py draw >/dev/null && python3 tools/ledgers.py check >/dev/null ) || miss "fragment form: a fragment in the old form is no longer read"
 grep -qxF '| `Old` | Old form. |  | Old |' "$fm/ontology/glossary.md" && grep -qxF '| `Order` | A confirmed purchase. |  | Order |' "$fm/ontology/glossary.md" || miss "fragment form: the old and the new form do not draw the same kind of row"
+# 48zn. a hand-kept ledger beside fragments is safe to delete only when every line of it is in a source: a
+#       malformed entry line and a line of the head part are listed too, each with where it goes
+rs="$TMP/residual"; mkdir -p "$rs" && git -C "$rs" init -q -b main
+python3 "$S/apply.py" --target "$rs" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$rs" track
+rs_git() { git -C "$rs" -c user.name=t -c user.email=t@example.com "$@"; }
+rs_tool() { ( cd "$rs" && python3 tools/ledgers.py "$@" ); }
+rs_git add -A && rs_git commit -q -m "chore: base"
+cp "$rs/wiki/log.md" "$TMP/rs.log"; cp "$rs/ontology/glossary.md" "$TMP/rs.gl"
+rs_tool split log >/dev/null 2>&1 && rs_tool split glossary >/dev/null 2>&1 || miss "residual: split log or glossary failed"
+rs_tool add-term Order --definition "A purchase." >/dev/null || miss "residual: add-term failed"
+rs_git add -A && rs_git commit -q -m "docs: split"
+{ cat "$TMP/rs.log"; printf -- '- 2026-11-17 - typed with a hyphen\nSee also the release notes in docs/.\n'; } > "$rs/wiki/log.md"
+rs_git add -f wiki/log.md   # a hand-kept log back in git beside the entries: two sources
+rc=0; out=$(rs_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "residual: check exits $rc, not 1, for a hand-kept log beside entries"
+case "$out" in *"- 2026-11-17 - typed with a hyphen"*'make log m='*) ;; *) miss "residual: check does not list the malformed entry line with make log ($out)" ;; esac
+case "$out" in *"See also the release notes in docs/."*"wiki/log.head.md"*) ;; *) miss "residual: check does not list the head line with wiki/log.head.md ($out)" ;; esac
+case "$out" in *"safe to delete"*) miss "residual: check says the log is safe to delete while two of its lines are in no source ($out)" ;; esac
+printf 'See also the release notes in docs/.\n' >> "$rs/wiki/log.head.md"
+printf 'typed with a hyphen\n' > "$rs/wiki/log/2026-11-17-01-typed-with-a-hyphen.md"
+{ cat "$TMP/rs.log"; printf -- '- 2026-11-17 — typed with a hyphen\nSee also the release notes in docs/.\n'; } > "$rs/wiki/log.md"
+out=$(rs_tool check 2>&1 || true)
+case "$out" in *"wiki/log.md"*"safe to delete"*) ;; *) miss "residual: check does not say the log is safe to delete once every line is in a source ($out)" ;; esac
+rs_git rm -q -f wiki/log.md
+{ cat "$TMP/rs.gl"; printf 'Terms follow the names used on the floor.\n'; } > "$rs/ontology/glossary.md"
+rs_git add -f ontology/glossary.md
+rc=0; out=$(rs_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"Terms follow the names used on the floor."*"ontology/glossary.head.md"*) true ;; *) false ;; esac || miss "residual: check exits $rc, or does not list the hand paragraph of the glossary with ontology/glossary.head.md ($out)"
+case "$out" in *"safe to delete"*) miss "residual: check says the glossary is safe to delete while a line of it is in no source ($out)" ;; esac
+printf 'Terms follow the names used on the floor.\n' >> "$rs/ontology/glossary.head.md"
+out=$(rs_tool check 2>&1 || true)
+case "$out" in *"ontology/glossary.md"*"safe to delete"*) ;; *) miss "residual: check does not say the glossary is safe to delete once every line is in a source ($out)" ;; esac
+rs_git rm -q -f ontology/glossary.md
+# untracked, unstamped: the same lines are listed, with the same places to go
+{ cat "$TMP/rs.log"; printf 'An untracked note.\n'; } > "$rs/wiki/log.md"
+rc=0; out=$(rs_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"An untracked note."*"wiki/log.head.md"*) true ;; *) false ;; esac || miss "residual: draw exits $rc, or does not list a head line of an untracked wiki/log.md with wiki/log.head.md ($out)"
+rm -f "$rs/wiki/log.md"
+# a line typed above the entries of a drawn file goes to the head file, not to make log
+rs_tool draw >/dev/null || miss "residual: draw failed"
+awk 'NR == 2 { print "A note typed above the entries." } { print }' "$rs/wiki/log.md" > "$TMP/rs.edit"; cp "$TMP/rs.edit" "$rs/wiki/log.md"
+rc=0; out=$(rs_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"A note typed above the entries."*"wiki/log.head.md"*"delete wiki/log.md"*) true ;; *) false ;; esac || miss "residual: a head line typed into the drawn log is not sent to wiki/log.head.md ($out)"
+case "$out" in *'make log m='*) miss "residual: a head line typed into the drawn log is sent to make log ($out)" ;; esac
+printf 'A note typed above the entries.\n' >> "$rs/wiki/log.head.md"
+rs_tool draw >/dev/null 2>&1 || miss "residual: draw stays red once the typed head line is in wiki/log.head.md ($(rs_tool draw 2>&1))"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

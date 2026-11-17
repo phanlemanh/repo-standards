@@ -499,34 +499,86 @@ def compare_index(
 # ---------------------------------------------------------------------------------------------
 
 
-def unmoved(root: Path, ledger: str, text: str) -> list[str]:
-    """The entries of a hand-kept log or glossary (`text`) that no fragment holds word for word,
-    each as the drawn file shows it."""
-    if ledger == "log":
-        held = {line for line in map(led.log_line, led.log_entries(root)) if line}
-        lines = (f"- {date} — {entry}" for date, entry in parse_log(text)[0])
-        return [line for line in lines if line not in held]
-    terms = (t for t in map(led.Term, led.glossary_files(root)) if t.term)
-    held = {entry_text((t.term, t.definition, t.not_confused_with, t.display)) for t in terms}
-    return [f"| {e} |" for e in map(entry_text, parse_glossary(text)[0]) if e not in held]
+HEAD_FILES = {"log": led.LOG_HEAD, "glossary": led.GLOSSARY_HEAD}
 
 
-def unmoved_in(root: Path, ledger: str, rel: str) -> list[str]:
-    """unmoved() of the file at `rel`; [] when it cannot be read."""
+def is_entry_line(ledger: str, line: str) -> bool:
+    """The line has the shape of an entry (a log line with a date, a table row); anything else
+    belongs to the head file."""
+    return bool(LOG_LIKE_RE.match(line)) if ledger == "log" else line.lstrip().startswith("|")
+
+
+def head_lines(ledger: str, lines: list[str]) -> list[str]:
+    return [line for line in lines if not is_entry_line(ledger, line)]
+
+
+def held_row(line: str, held: set[str]) -> bool:
+    """A table row a split leaves out on purpose (header, separator, the template's example) or
+    one a fragment holds, whatever its padding."""
+    cells = split_cells(line)
+    if tuple(cells) == led.GLOSSARY_COLUMNS or SEPARATOR_RE.match(line.strip()):
+        return True
+    if len(cells) != len(led.GLOSSARY_COLUMNS):
+        return False
+    return cells[0].startswith(EXAMPLE_MARK) or entry_text(row_entry(cells)[0]) in held
+
+
+def unmoved(root: Path, ledger: str, text: str) -> tuple[list[str], list[str]]:
+    """(entry lines, head lines) of a hand-kept log or glossary (`text`) that no source holds:
+    every line that the drawn body lacks counts, a malformed entry line and a head line too."""
+    body = led.log_body(root) if ledger == "log" else led.glossary_body(root)
+    missing = led.lines_not_in(text, body)
+    if ledger == "glossary":
+        terms = (t for t in map(led.Term, led.glossary_files(root)) if t.term)
+        held = {entry_text((t.term, t.definition, t.not_confused_with, t.display)) for t in terms}
+        missing = [
+            line
+            for line in missing
+            if not line.startswith(led.GLOSSARY_COMMENT)
+            and not (line.lstrip().startswith("|") and held_row(line, held))
+        ]
+    heads = head_lines(ledger, missing)
+    return [line for line in missing if line not in heads], heads
+
+
+def unmoved_in(root: Path, ledger: str, rel: str) -> tuple[list[str], list[str]]:
+    """unmoved() of the file at `rel`; nothing when it cannot be read."""
     try:
         return unmoved(root, ledger, (root / rel).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError):
-        return []
+        return [], []
+
+
+def head_note(ledger: str, rel: str, heads: list[str]) -> str:
+    if not heads:
+        return ""
+    return (
+        f"These lines of {rel} are in no source yet:{led.listed(heads)}\n"
+        f"Move them into {HEAD_FILES[ledger]}.\n"
+    )
+
+
+def unmoved_note(root: Path, ledger: str, rel: str) -> str:
+    """For an untracked hand-kept file: what of it no source holds, and where each part goes."""
+    entries, heads = unmoved_in(root, ledger, rel)
+    listing = f"These entries of {rel} are in no fragment yet:{led.listed(entries)}\n"
+    return (listing if entries else "") + head_note(ledger, rel, heads)
 
 
 def two_sources_way(root: Path, ledger: str, rel: str, folder: str, how: str) -> str:
-    """The way out of a tracked hand-kept file beside fragments, losing nothing: the entries of the
-    file that no fragment holds are listed first. `how` writes into the hand-kept file while it is
-    in git, so the deletion comes first."""
-    lines = unmoved_in(root, ledger, rel)
-    if not lines:
-        return f"Every entry of {rel} is in {folder}/, so it is safe to delete: git rm {rel}."
+    """The way out of a tracked hand-kept file beside fragments, losing nothing: every line of the
+    file that no source holds is listed first. `how` writes into the hand-kept file while it is in
+    git, so the deletion comes before the entries are added."""
+    entries, heads = unmoved_in(root, ledger, rel)
+    if not entries and not heads:
+        return (
+            f"Every line of {rel} is in {folder}/ or its head file, so it is safe to delete: "
+            f"git rm {rel}."
+        )
+    text = head_note(ledger, rel, heads)
+    if not entries:
+        return f"{text}Then git rm {rel} and run make derived."
     return (
-        f"These entries of {rel} are in no fragment yet:{led.listed(lines)}\n"
+        f"{text}These entries of {rel} are in no fragment yet:{led.listed(entries)}\n"
         f"Copy them, git rm {rel}, then add each one: {how}; then make derived."
     )

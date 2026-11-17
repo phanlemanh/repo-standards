@@ -272,13 +272,20 @@ def listed(lines: list[str]) -> str:
     return "".join(f"\n  + {line}" for line in lines)
 
 
-def hand_edit_refusal(rel: str, source: str, added: list[str], how: str) -> str:
-    return (
-        f"{rel} was edited by hand; it is drawn from {source}, so nothing was written. "
-        f"These lines are in no source yet:{listed(added)}\n"
-        f"Move each one: {how} (a changed line: edit its file in {source}); then delete {rel} "
-        "and run make derived."
-    )
+def hand_edit_refusal(
+    rel: str, source: str, added: list[str], how: str, ledger: str | None = None
+) -> str:
+    """An entry-shaped line goes in with `how`; any other log or glossary line, to its head."""
+    read = _sibling("ledgers_split_read") if ledger else None
+    heads = read.head_lines(ledger, added) if read else []
+    entries = [line for line in added if line not in heads]
+    text = f"{rel} was edited by hand; it is drawn from {source}, so nothing was written.\n"
+    if entries:
+        text += f"These lines are in no source yet:{listed(entries)}\nMove each one: {how} (a "
+        text += f"changed line: edit its file in {source}).\n"
+    if heads:
+        text += read.head_note(ledger, rel, heads)
+    return f"{text}Then delete {rel} and run make derived."
 
 
 def unstamped_refusal(
@@ -293,10 +300,7 @@ def unstamped_refusal(
     read = _sibling("ledgers_split_read") if ledger else None
     if read is None:
         return text
-    lines = read.unmoved_in(root, ledger, rel)
-    if lines:
-        text += f"\nThese lines of {rel} are in no source yet:{listed(lines)}"
-    return f"{text}\nA line goes into {source} with: {how}."
+    return f"{text}\n{read.unmoved_note(root, ledger, rel)}A line goes into {source} with: {how}."
 
 
 def draw_ledger(
@@ -304,8 +308,7 @@ def draw_ledger(
 ) -> int:
     """Draw one markdown ledger at `rel` from `body`. 0 done, 1 refused. An unstamped file there
     (git does not know it) is refused, never overwritten. A drawn file edited by hand is drawn over
-    when every line the edit added is in `body`; otherwise refused, with those lines and the way
-    back. `how` puts a line in the source; `ledger` (log, glossary) names fragments to compare."""
+    when every line the edit added is in `body`, else refused with those lines and the way back."""
     target = root / rel
     current, edited = read_stamped(target)
     if target.is_file() and current is None:
@@ -315,7 +318,7 @@ def draw_ledger(
     if edited and current is not None:
         added = lines_not_in(current, body)
         if added:
-            print(hand_edit_refusal(rel, source, added, how), file=sys.stderr)
+            print(hand_edit_refusal(rel, source, added, how, ledger), file=sys.stderr)
             return 1
         if not quiet:
             print(f"{rel} was edited by hand; every line the edit added is in {source}: drawn over")
