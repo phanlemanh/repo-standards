@@ -3074,6 +3074,45 @@ case "$out" in *"uv run"*) miss "python: make -n derived goes through uv run ($o
 case "$out" in *"python3 tools/ledgers.py draw"*) ;; *) miss "python: make -n derived does not draw with python3 ($out)" ;; esac
 out=$(cd "$gp" && make -n gen 2>&1 || true)
 case "$out" in *"uv run"*) miss "python: make -n gen goes through uv run ($out)" ;; esac
+# 48zh (plan 48u). an upgrade creates no fragment and stays green; doctor names the ledgers not split yet
+#      and the score does not move for it (the fresh fragments repo of the same preset is the yardstick)
+ou="$TMP/oldshape"; mkdir -p "$ou" && git -C "$ou" init -q -b main
+python3 "$S/apply.py" --target "$ou" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$ou" track
+( cd "$ou" && mkdir -p src/generated && python3 tools/ontology_codegen.py --lang ts --out src/generated/ontology.ts >/dev/null 2>&1 ) || miss "one-file upgrade: cannot generate the hand-kept src/generated/ontology.ts"
+python3 - "$ou" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1]); m = root / ".repo-setup.json"; d = json.loads(m.read_text())
+for rel in ("wiki/log.md", "wiki/index.md", "ontology/glossary.md", "src/generated/ontology.ts"):
+    d["files"][rel] = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+    d["file_versions"][rel] = d["version"]
+m.write_text(json.dumps(d, indent=2) + "\n")
+PY
+git -C "$ou" add -f -A; git -C "$ou" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+python3 "$S/apply.py" --target "$ou" >/dev/null 2>&1 || miss "one-file upgrade: apply.py is not green on a repository that keeps its ledgers as files"
+for ou_d in wiki/log ontology/glossary; do
+  [ -z "$(ls -A "$ou/$ou_d" 2>/dev/null | grep -v '^\.gitkeep$')" ] || miss "one-file upgrade: a fragment was created in $ou_d"
+done
+for ou_l in log index glossary; do
+  [ "$(cd "$ou" && python3 tools/ledgers.py shape $ou_l)" = one-file ] || miss "one-file upgrade: shape $ou_l is not one-file"
+done
+[ "$(cd "$ou" && python3 tools/ledgers.py shape gen --gen-out src/generated/ontology.ts)" = one-file ] || miss "one-file upgrade: shape gen is not one-file"
+( cd "$ou" && python3 tools/ledgers.py check >/dev/null 2>&1 && make derived PYTHON=python3 >/dev/null 2>&1 && make derived-untracked PYTHON=python3 >/dev/null 2>&1 && python3 tools/wiki_lint.py >/dev/null 2>&1 ) || miss "one-file upgrade: check, derived, derived-untracked or wiki_lint is red"
+( cd "$ou" && make log m=x PYTHON=python3 >/dev/null 2>&1 ) && grep -qF -- '— x' "$ou/wiki/log.md" || miss "one-file upgrade: make log m=x does not write into wiki/log.md"
+ou_json=$(python3 "$S/doctor.py" --target "$ou" --level starter --json)
+printf '%s' "$ou_json" | json '[n["ledger"] for n in d["ledgers_split"]]' | grep -qF "['log', 'index', 'glossary', 'gen']" || miss "doctor: ledgers_split does not list the four ledgers ($(printf '%s' "$ou_json" | json 'd.get("ledgers_split")'))"
+printf '%s' "$ou_json" | json '[n["command"] for n in d["ledgers_split"]]' | grep -qF "make split L=glossary" || miss "doctor: ledgers_split does not carry the split command"
+python3 "$S/doctor.py" --target "$ou" --level starter | grep -qF 'Ledgers still kept as one file (not scored):' || miss "doctor text: no ledgers notice for a one-file repository"
+fr="$TMP/oldshape-fresh"; mkdir -p "$fr" && git -C "$fr" init -q -b main
+python3 "$S/apply.py" --target "$fr" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+git -C "$fr" add -A; git -C "$fr" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+fr_json=$(python3 "$S/doctor.py" --target "$fr" --level starter --json)
+[ "$(printf '%s' "$fr_json" | json 'd["ledgers_split"]')" = "[]" ] || miss "doctor: a fragments repository gets a ledgers notice ($(printf '%s' "$fr_json" | json 'd["ledgers_split"]'))"
+[ "$(printf '%s' "$ou_json" | json 'd["score"]')" = "$(printf '%s' "$fr_json" | json 'd["score"]')" ] || miss "doctor: the ledgers notice changes the score ($(printf '%s' "$ou_json" | json 'd["score"]') against $(printf '%s' "$fr_json" | json 'd["score"]'))"
+[ "$(printf '%s' "$ou_json" | json 'sorted(r["id"] for r in d["failed"])')" = "$(printf '%s' "$fr_json" | json 'sorted(r["id"] for r in d["failed"])')" ] || miss "doctor: the ledgers notice adds a failed check"
+# an install from before tools/ledgers.py: no notice, no error
+ol="$TMP/oldshape-noledgers"; cp -R "$ou" "$ol"; rm -f "$ol/tools/ledgers.py"
+[ "$(python3 "$S/doctor.py" --target "$ol" --level starter --json | json 'd["ledgers_split"]')" = "[]" ] || miss "doctor: a repository without tools/ledgers.py gets a notice or an error"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

@@ -12,6 +12,13 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   draw".
 - New `make check` step `derived-untracked`: red when a file in `DERIVED_FILES` is in git and
   opens with the stamp `tools/ledgers.py` writes, with the path and `git rm --cached <path>`.
+- `doctor` lists the ledgers still kept as one file (`ledgers_split` in `--json`, a block in the text
+  report) with their split command, `make split L=<ledger>`. It is a notice: the score does not move,
+  and a repository without `tools/ledgers.py` gets nothing. An upgrade creates no fragment and
+  leaves a one-file repository green; what breaks on upgrade: nothing, the split is the owner's
+  call, one pull request per ledger.
+- python preset: `pyproject.toml` excludes `tools/` (vendored by repo-setup) from ruff, so `make lint`
+  does not read the ledger tools. What breaks on upgrade: nothing; `pyproject.toml` merges as before.
 - `tools/ledgers.py shape <ledger>` prints `one-file` or `fragments`.
 - What breaks on upgrade: nothing. A repository that keeps `wiki/log.md`, `wiki/index.md` and
   `ontology/glossary.md` in git and edits them by hand has no stamp, so they stay `one-file` and

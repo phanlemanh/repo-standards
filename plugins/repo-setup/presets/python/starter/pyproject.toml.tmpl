@@ -19,7 +19,8 @@ line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
 # Generated from ontology/ (make gen): type-checked by mypy, not formatted or linted.
-extend-exclude = ["src/*/ontology_types.py"]
+# tools/ is vendored by repo-setup (standard library scripts): the repository does not lint it.
+extend-exclude = ["src/*/ontology_types.py", "tools"]
 
 [tool.ruff.lint]
 select = [
