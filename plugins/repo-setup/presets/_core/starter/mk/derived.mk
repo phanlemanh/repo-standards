@@ -5,6 +5,7 @@
 # `derived` takes DERIVED_TARGETS as prerequisites by second expansion, after every mk file is read,
 # so a target added by a file read after this one still runs. The Makefile of each preset puts `| derived` ahead of the steps that read the
 # drawn files, and `derived` itself waits for `upgrade`: a file with conflict markers is not drawn from.
+# `.SECONDEXPANSION` is on for the whole Makefile: write no `$$` in a prerequisite list in an mk file.
 PYTHON ?= python3
 DERIVED_TARGETS += wiki-derived
 DERIVED_FILES += wiki/log.md wiki/index.md ontology/glossary.md

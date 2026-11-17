@@ -8,8 +8,9 @@ CHECK_TARGETS := lint test
 # They append to CHECK_TARGETS, so `make check` grows with the setup.
 -include mk/*.mk
 
-# Everything that reads a drawn file waits for `make derived` (mk/derived.mk).
-lint test: | derived
+# Every check step, those layers added in mk/*.mk too, waits for `make derived` (mk/derived.mk).
+# `upgrade` runs first and `derived` waits for it, so it stays out of the list.
+$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)): | derived
 
 .PHONY: help setup lint test check validate bump
 

@@ -80,9 +80,12 @@ def _first_line(path: Path) -> str:
 
 
 def is_stamped(path: Path) -> bool:
-    """The first line is a stamp: the markdown stamp, or a comment carrying a hash (generated code)."""
+    """The first line is a stamp: the full stamp line for a markdown ledger; for generated code
+    (any other file) a comment line that carries a hash is enough."""
     first = _first_line(path)
-    return STAMP_RE.match(first) is not None or HASH_MARK in first
+    if path.suffix == ".md":
+        return STAMP_RE.match(first) is not None
+    return HASH_MARK in first
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str] | None:

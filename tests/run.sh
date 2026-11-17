@@ -2216,10 +2216,15 @@ dv_git() { git -C "$dv" -c user.name=t -c user.email=t@example.com "$@"; }
 dv_ledger() { ( cd "$dv" && python3 tools/ledgers.py "$@" ); }
 # 48a. a target a later file adds to DERIVED_TARGETS still runs before `make test`, on a clean clone
 printf 'DERIVED_TARGETS += zz\n.PHONY: zz\nzz: ; @touch zz.done\n' > "$dv/mk/zz.mk"
+# a step a layer appends to CHECK_TARGETS waits for derived too: it sees what zz drew
+printf 'CHECK_TARGETS += yy\n.PHONY: yy\nyy: ; @test -f zz.done && touch yy.ok\n' > "$dv/mk/yy.mk"
 dv_git add -A && dv_git commit -q -m "chore: base"
 git clone -q "$dv" "$TMP/derived-clone" 2>/dev/null
 ( cd "$TMP/derived-clone" && make test >/dev/null 2>&1 || true )
 [ -f "$TMP/derived-clone/zz.done" ] || miss "derived: a target added to DERIVED_TARGETS by a later mk file did not run before make test"
+git clone -q "$dv" "$TMP/derived-clone2" 2>/dev/null
+( cd "$TMP/derived-clone2" && make yy >/dev/null 2>&1 || true )
+[ -f "$TMP/derived-clone2/yy.ok" ] || miss "derived: a check step a layer appended to CHECK_TARGETS ran before make derived"
 dv_out=$(cd "$TMP/derived-clone" && make derived 2>&1 || true)
 case "$dv_out" in *"nothing to draw"*) ;; *) false ;; esac || miss "derived: make derived on a repository with no drawn ledger does not say there is nothing to draw"
 dv_out=$(cd "$TMP/derived-clone" && make -n check 2>/dev/null || true)
@@ -2231,6 +2236,8 @@ printf '# Log\n\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"
 [ "$(dv_ledger shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments while wiki/log.md is not in git"
 dv_git add wiki/log.md
 [ "$(dv_ledger shape log 2>&1)" = one-file ] || miss "derived: shape log is not one-file when an unstamped wiki/log.md is in git"
+printf 'x sha256:abc\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"; dv_git add wiki/log.md
+[ "$(dv_ledger shape log 2>&1)" = one-file ] || miss "derived: a wiki/log.md whose first line only contains sha256: is not one-file"
 dv_nogit="$TMP/derived-nogit"; mkdir -p "$dv_nogit/wiki" "$dv_nogit/tools"
 cp "$dv/tools/ledgers.py" "$dv_nogit/tools/" 2>/dev/null || true
 [ "$(cd "$dv_nogit" && python3 tools/ledgers.py shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments outside git with no wiki/log.md"
