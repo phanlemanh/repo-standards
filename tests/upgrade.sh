@@ -276,4 +276,25 @@ in_group "$up2" dropped .editorconfig || miss "upgrade: a file the templates no 
 [ "$(manifest_get "$up2" '".editorconfig" in m["files"] or ".editorconfig" in m.get("file_versions", {})')" = False ] \
   || miss "upgrade: a dropped file stays in the manifest"
 
+# 47i. make check stays red while a setup file holds conflict markers, and only setup files count
+up4="$TMP/up4"; up_install "$up4" "$old"
+subst 's|^- Procedures live in `.claude/skills/`; use them:$|- Our procedures are in `.claude/skills/`:|' "$up4/CLAUDE.md"
+up_apply "$S/apply.py" "$up4" --base-from "$arch" >/dev/null
+mkdir -p "$up4/docs"; printf 'How a conflict looks:\n<<<<<<< this repository\n' > "$up4/docs/x.md"
+wall=$(cd "$up4" && make upgrade 2>&1) && miss "upgrade: make upgrade is green while CLAUDE.md holds markers"
+echo "$wall" | grep -q 'CLAUDE.md:' || miss "upgrade: make upgrade does not name the marked file ($wall)"
+echo "$wall" | grep -q 'docs/x.md' && miss "upgrade: make upgrade reports a file that is not the setup's"
+python3 - "$up4/CLAUDE.md" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text("".join(l for l in p.read_text().splitlines(True) if not l.startswith(("<<<<<<< ", "||||||| ", "=======", ">>>>>>> "))))
+PY2
+(cd "$up4" && make upgrade >/dev/null 2>&1) || miss "upgrade: make upgrade stays red once the markers are gone"
+for preset in python ts-node claude-plugin; do
+  d="$TMP/$preset-starter"
+  [ -d "$d" ] || continue
+  dry=$(cd "$d" && make -n check 2>&1 || true)
+  echo "$dry" | grep -q 'upgrade_markers.py' || miss "upgrade: make check of $preset does not run the marker check ($(echo "$dry" | tail -2 | tr '\n' ' '))"
+done
+
 echo "ok  upgrade path (or misses reported above)"

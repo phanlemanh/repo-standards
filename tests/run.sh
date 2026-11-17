@@ -1003,7 +1003,7 @@ out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starte
   --var project_name=Sample --var description=x --var owner=acme --json)
 [ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
-padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'tools/plugin_lint.py']"
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/upgrade.mk', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
 padopt "d['merged'] == ['.gitignore']"
 padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
 padopt "d['conflict'] == ['LICENSE', 'README.md']"
