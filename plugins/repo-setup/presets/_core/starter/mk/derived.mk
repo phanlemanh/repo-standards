@@ -7,8 +7,8 @@
 # drawn files, and `derived` itself waits for `upgrade`: a file with conflict markers is not drawn from.
 # `.SECONDEXPANSION` is on for the whole Makefile: write no `$$` in a prerequisite list in an mk file.
 PYTHON ?= python3
-# ledgers.py, ledgers_split.py, ledgers_ontology.py and ontology_codegen.py use the standard library only: they run with the
-# system python3 even where PYTHON is `uv run python` (which could sync a venv at every session start).
+# ledgers.py, ledgers_split.py, ledgers_split_read.py, ledgers_ontology.py and ontology_codegen.py use the standard
+# library only: they run with the system python3 even where PYTHON is `uv run python` (which could sync a venv at every session start).
 LEDGERS_PYTHON ?= python3
 DERIVED_TARGETS += wiki-derived
 DERIVED_FILES += wiki/log.md wiki/index.md ontology/glossary.md
