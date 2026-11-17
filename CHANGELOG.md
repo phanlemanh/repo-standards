@@ -44,6 +44,16 @@ What changes on upgrade:
 - The upgrade needs network access to GitHub for files written by an earlier release, unless
   `--base-from` points at a copy of it.
 
+### Verified
+
+- Run on GitHub, on the private probe repository: upgraded to tag `repo-setup-v0.6.0`, two setup
+  files edited in place, then upgraded with this code from a stand-in release with two template
+  fixes (the base rebuilt from the real tag). `.editorconfig` and `package.json` were merged,
+  `AGENTS.md` (same line on both sides) and `wiki/log.md` (no `today` in the 0.6.0 manifest) were
+  marked; `check` stayed red at the `upgrade` step, naming the files and lines, until the markers
+  were merged by hand, then green. The first push showed the wall hidden behind `lint` and Prettier
+  removing it, fixed above.
+
 ## 0.6.0 — 2026-11-17
 
 ### Parallel work

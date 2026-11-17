@@ -197,7 +197,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
 | RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Làm cùng RS9                         |
 | RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Chưa thiết kế                        |
-| RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Đã dựng (2026-11-17), mục 47 bộ kiểm; chưa chạy ở kho thử |
+| RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Đã dựng và chạy ở kho thử (2026-11-17), mục 47 bộ kiểm |
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
 | RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 
@@ -285,6 +285,41 @@ Ghi chú cho các gói mới và gói đổi:
      đó chạy mà không ai duyệt. Đây là chỗ duy nhất mà nguyên tắc đặt một người, nên cách thay
      (ví dụ: chỉ chạy production khi một người tự bấm chạy) là việc chủ kho quyết. Ở
      `onehub-inventory` khâu triển khai đang tắt, nên hiện chưa có hậu quả.
+- **Chạy thật đường nâng cấp ở kho thử (17/11).** Ba PR trên `design-ci-probe`, theo đúng ba bước
+  của thiết kế RS8:
+
+  1. PR 7: nâng lên tag `repo-setup-v0.6.0` bằng `apply.py` của 0.6.0. Kết quả: 1 tệp `updated`
+     (`tools/github_setup.py`), 1 tệp `conflict` (`wiki/log.md`, sổ log của kho, để nguyên). CI
+     xanh, đã gộp.
+  2. PR 8: sửa tại chỗ hai tệp do setup ghi, dòng ghi chú ở đầu `.editorconfig` và dòng
+     `make check` trong `AGENTS.md`. Đã gộp.
+  3. PR 9: nâng bằng mã của nhánh RS8. Nhánh không đổi mẫu nào có sẵn, nên mã chạy từ một bản
+     phát hành dựng thay, `0.6.1`: bản sao của nhánh, với hai bản sửa ở mẫu (một khối ở cuối
+     `.editorconfig`, dòng `make check` của `AGENTS.md`). Gốc dựng lại từ tag `0.6.0` tải thật.
+
+  | Tệp             | Kết quả                                                                                                                      |
+  | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+  | `.editorconfig` | `merged`: giữ dòng ghi chú của kho ở đầu, nhận khối mới của mẫu ở cuối                                                       |
+  | `package.json`  | `merged`: nhận một bản sửa thật của mẫu từ bản cũ hơn (`prettier --check --log-level warn`), bản mà 0.6.0 chỉ để nguyên được |
+  | `AGENTS.md`     | `marked`: kho và mẫu sửa cùng một dòng; nhãn `this repository`, `repo-setup 0.6.0`, `repo-setup 0.6.1`                       |
+  | `wiki/log.md`   | `marked`, `no matching base`: manifest của 0.6.0 không ghi `today`, đúng như thiết kế đã lường                               |
+
+  Ô `check` đỏ; gỡ dấu bằng tay thì xanh, PR gộp được, và đã gộp. Sau đó `doctor` báo
+  `setup_in_sync` và `upgrade_wall` đều qua. Có hai điều mà bộ kiểm và e2e không thấy được:
+
+  1. **Bức tường bị che, rồi bị gỡ mất.** Lần đẩy đầu tiên, ô `check` đỏ ở `lint` (Prettier), trước
+     khi chạy tới bước `upgrade`. Lời khuyên của nó, `prettier --write`, thụt lề và thoát ký tự cho
+     các dấu trong tệp Markdown, nên công cụ dò không còn thấy dấu nào trong `AGENTS.md`; danh sách
+     «Next» của `apply.py` cũng có `make format`. **Đã sửa:** `upgrade` chạy đầu tiên trong
+     `make check`, `make format` chờ nó, và dấu bị bộ định dạng thụt lề vẫn bị đếm. Mục 47l của bộ
+     kiểm. Lần đẩy sau, ô đỏ ở đúng bước `upgrade`, nêu đúng tệp và dòng.
+  2. **Mỗi kho cũ có sổ log sẽ đỏ một lần.** `wiki/log.md` luôn bị kho sửa, và gốc của nó không
+     dựng lại được khi manifest không ghi `today`. Vì vậy lần nâng RS8 đầu tiên ở mọi kho cài trước
+     RS8 đều ghi dấu cả sổ log. Thiết kế đã chấp nhận chi phí này; ở `onehub-inventory` cần dặn
+     trước: giữ phần của kho, bỏ phần của mẫu.
+
+  Hai tệp sửa ở bước 3 mang băm của bản dựng thay, nên lần nâng thật kế tiếp của kho thử sẽ không
+  tìm được gốc khớp cho chúng.
 - **RS2b rộng hơn bản trước.** Ngoài `wiki/`, kho này còn sinh ra tệp cùng dạng: `src/generated/*`
   (mã sinh từ mô hình, 5 đến 8 trên 30 PR chạm), `ontology/glossary.md` và `ontology/labels.yaml`
   (danh sách chung, 7 đến 8). design-assembly cần cùng cơ chế cho sổ linh kiện và bảng vai × màn ×
