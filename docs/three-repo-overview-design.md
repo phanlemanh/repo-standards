@@ -190,8 +190,8 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
 | RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); đã chạy ở kho thử    |
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
-| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Chưa thiết kế                        |
-| RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Chưa thiết kế                        |
+| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Đã thiết kế, chủ kho duyệt (2026-11-17); chờ dựng |
+| RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Đã thiết kế, chủ kho duyệt (2026-11-17); chờ dựng |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
@@ -201,7 +201,21 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
 | RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 
-Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md).
+Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md); RS8,
+[đường nâng cấp](superpowers/specs/2026-11-17-upgrade-path-design.md); RS2b,
+[mỗi tệp một người ghi](superpowers/specs/2026-11-17-ledger-fragments-design.md) (kế hoạch:
+[ledger-fragments](superpowers/plans/2026-11-17-ledger-fragments.md)); RS3,
+[CI xếp tầng](superpowers/specs/2026-11-17-tiered-ci-design.md) (kế hoạch:
+[tiered-ci](superpowers/plans/2026-11-17-tiered-ci.md)).
+
+Hai điều bản thiết kế bước D đổi so với ghi chú bên dưới:
+
+- **RS3 không chờ ô `gate`.** Ô `gate` của kit đỏ tới khi có chữ ký, trong khi vòng làm việc chờ
+  CI xanh rồi mới mời ký. Chờ `gate` thì hai bên chờ nhau. Chủ kho chọn: tầng nặng chạy lại khi
+  đầu vào của nó đổi so với lần xanh trước; commit chữ ký dùng lại kết quả cũ.
+- **RS2b không gồm `ontology/labels.yaml`.** Tệp đó và `src/generated/labels.ts`, `display.ts` do
+  công cụ riêng của `onehub-inventory` sinh ra. Kho này cấp cơ chế (`make derived`); kho đó tự nối
+  vào ở bước chạy trên kho đó.
 
 Ghi chú cho các gói mới và gói đổi:
 
