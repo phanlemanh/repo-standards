@@ -3003,6 +3003,9 @@ cp "$mf/wiki/log.head.md" "$TMP/mf.head"
 mf_out=$(python3 "$S/apply.py" --target "$mf" --json)
 printf '%s' "$mf_out" | json '"wiki/log.head.md" in d["kept"] and not [k for k in ("created","updated","merged","edited","marked","conflict") if "wiki/log.head.md" in d[k]]' | grep -q True || miss "split manifest: apply.py does not report the split wiki/log.head.md as kept ($(printf '%s' "$mf_out" | json 'd["kept"]'))"
 cmp -s "$TMP/mf.head" "$mf/wiki/log.head.md" || miss "split manifest: apply.py changed a split wiki/log.head.md"
+mf_text=$(python3 "$S/apply.py" --target "$mf" 2>&1)
+case "$mf_text" in *"by hand"*) miss "split manifest: apply.py asks for a merge by hand of a split head file ($mf_text)" ;; esac
+printf '%s' "$mf_out" | json 'd["notes"]' | grep -q 'head' && miss "split manifest: apply.py notes something about a split head file"
 # a dry run leaves the manifest as it was
 mf2="$TMP/manifest2"; mkdir -p "$mf2" && git -C "$mf2" init -q -b main
 python3 "$S/apply.py" --target "$mf2" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
@@ -3040,6 +3043,37 @@ rc=0; out=$( cd "$nw_clone" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
 [ "$rc" = 1 ] || miss "two sources: draw exits $rc, not 1, for an untracked wiki/log.md beside entries"
 case "$out" in *"two sources"*"move wiki/log.md aside"*'make log m='*) ;; *) miss "two sources: the refusal does not say to move wiki/log.md aside and use make log ($out)" ;; esac
 case "$out" in *"git rm --cached"*) miss "two sources: the refusal says git rm --cached for a file that is not in git ($out)" ;; esac
+# 48zf. a .gitignore with a team line at its end is upgraded from the previous template without a conflict
+gi="$TMP/gi-arch"; mkdir -p "$gi"
+for v in 0.0.1; do
+  cp -R "$ROOT/plugins/repo-setup" "$gi/repo-setup-v$v"; find "$gi/repo-setup-v$v" -name __pycache__ -prune -exec rm -rf {} +
+  subst "s/\"version\": \"[^\"]*\"/\"version\": \"$v\"/" "$gi/repo-setup-v$v/.claude-plugin/plugin.json"
+  for f in _core/starter/dot.gitignore ts-node/starter/dot.gitignore python/starter/dot.gitignore.tmpl; do   # the template before the drawn-file block
+    python3 - "$gi/repo-setup-v$v/presets/$f" <<'PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(re.sub(r"# Drawn by `make derived` from their fragments; never committed\n(?:[^\n]+\n)+\n", "", t))
+PY
+  done
+done
+for gi_p in ts-node python; do
+  gr="$TMP/gi-$gi_p"; mkdir -p "$gr" && git -C "$gr" init -q -b main
+  python3 "$gi/repo-setup-v0.0.1/scripts/apply.py" --target "$gr" --preset "$gi_p" --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+  grep -q 'Drawn by' "$gr/.gitignore" && miss "gitignore upgrade ($gi_p): the stand-in old release already has the block"
+  printf 'my-team-file.txt\n' >> "$gr/.gitignore"
+  gi_out=$(python3 "$S/apply.py" --target "$gr" --base-from "$gi" --json) && gi_rc=0 || gi_rc=$?
+  [ "$gi_rc" = 0 ] || miss "gitignore upgrade ($gi_p): apply.py exits $gi_rc for a .gitignore with a team line at its end"
+  printf '%s' "$gi_out" | json '".gitignore" not in d["marked"] and ".gitignore" not in d["conflict"] and (".gitignore" in d["merged"] or ".gitignore" in d["updated"])' | grep -q True || miss "gitignore upgrade ($gi_p): .gitignore is not merged cleanly ($(printf '%s' "$gi_out" | json '[k for k in ("marked","conflict","merged","updated","edited") if ".gitignore" in d[k]]'))"
+  grep -q '<<<<<<<' "$gr/.gitignore" && miss "gitignore upgrade ($gi_p): conflict markers in .gitignore"
+  grep -qxF 'my-team-file.txt' "$gr/.gitignore" && grep -qxF 'wiki/log.md' "$gr/.gitignore" || miss "gitignore upgrade ($gi_p): the upgraded .gitignore lost the team line or lacks the new block"
+done
+# 48zg. the hook and make derived never go through `uv run`: the ledger tools use the standard library only
+gp="$TMP/newrepo-python"
+out=$(cd "$gp" && make -n derived 2>&1 || true)
+case "$out" in *"uv run"*) miss "python: make -n derived goes through uv run ($out)" ;; esac
+case "$out" in *"python3 tools/ledgers.py draw"*) ;; *) miss "python: make -n derived does not draw with python3 ($out)" ;; esac
+out=$(cd "$gp" && make -n gen 2>&1 || true)
+case "$out" in *"uv run"*) miss "python: make -n gen goes through uv run ($out)" ;; esac
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

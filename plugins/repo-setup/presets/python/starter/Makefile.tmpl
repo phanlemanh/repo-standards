@@ -43,11 +43,11 @@ test: ## Run tests
 
 # The generated file is committed (one-file) or drawn and kept out of git (fragments): see mk/derived.mk.
 gen: ## Regenerate types from ontology/
-	@if [ "$$($(PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else $(PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT); fi
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT); fi
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
 	uv run python tools/wiki_lint.py
-	@if [ "$$($(PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
 
 check: $(CHECK_TARGETS) ## Everything CI runs
 

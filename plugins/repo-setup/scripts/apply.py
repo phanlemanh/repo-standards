@@ -39,6 +39,13 @@ A preset can declare parts of the shared core that do not fit its kind of reposi
 (`[[not_applicable]]` with `what`, `reason`, `paths`): those files are left out and the reason is
 reported, never dropped silently. `team_only` lists core files that only team-level tools need.
 
+Two preset keys list files the repository may already have that the manifest does not record:
+  * `user_owned`: the file is kept and a note asks the person to merge what the preset puts in it
+    by hand (a package.json, a pyproject.toml);
+  * `kept_quietly`: the file is kept, reported under `kept`, with no note and no diff. For a file
+    that became the repository's own through a command, not through a decision to merge
+    (the ledger head files after `make split`): nobody has anything to merge.
+
 Only the Python standard library is used (Python 3.11+).
 """
 
@@ -204,6 +211,7 @@ def load_meta(
         "description": "",
         "vars": {},
         "user_owned": [],
+        "kept_quietly": [],
         "sample": [],
         "merge_lines": [],
         "equivalents": [],
@@ -221,7 +229,7 @@ def load_meta(
             merged["description"] = data.get("description", "")
         merged["vars"].update(data.get("vars", {}))
         merged["hand_merge"].update(data.get("hand_merge", {}))
-        for key in ("user_owned", "sample", "merge_lines", "equivalents", "exclude",
+        for key in ("user_owned", "kept_quietly", "sample", "merge_lines", "equivalents", "exclude",
                     "not_applicable", "team_only"):
             merged[key] += data.get(key, [])
         for lv in upto:
@@ -755,6 +763,9 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 if group == "marked" and args.diff and write is not None:
                     diffs[key] = write.decode("utf-8", "replace")
+            elif matches(key, meta["kept_quietly"]):
+                results["kept"].append(key)
+                continue
             elif matches(key, meta["user_owned"]):
                 results["kept"].append(key)
                 what = meta["hand_merge"].get(key, "what the preset puts in it")

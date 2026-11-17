@@ -7,6 +7,9 @@
 # drawn files, and `derived` itself waits for `upgrade`: a file with conflict markers is not drawn from.
 # `.SECONDEXPANSION` is on for the whole Makefile: write no `$$` in a prerequisite list in an mk file.
 PYTHON ?= python3
+# ledgers.py, ledgers_split.py and ontology_codegen.py use the standard library only: they run with the
+# system python3 even where PYTHON is `uv run python` (which could sync a venv at every session start).
+LEDGERS_PYTHON ?= python3
 DERIVED_TARGETS += wiki-derived
 DERIVED_FILES += wiki/log.md wiki/index.md ontology/glossary.md
 CHECK_TARGETS += derived-untracked ledgers-check
@@ -25,24 +28,24 @@ derived: upgrade $$(DERIVED_TARGETS) ## Draw every file the repository keeps out
 	@:
 
 wiki-derived: ## Draw the wiki log, the wiki index and the glossary from their fragments
-	@$(PYTHON) tools/ledgers.py draw
+	@$(LEDGERS_PYTHON) tools/ledgers.py draw
 
 gen-derived: ## Draw the code generated from ontology/ (a repository that commits it keeps it as it is)
-	@$(PYTHON) tools/ledgers.py draw-gen --gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)
+	@$(LEDGERS_PYTHON) tools/ledgers.py draw-gen --gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)
 
 derived-untracked: ## Fail when a drawn file is in git
-	@$(PYTHON) tools/ledgers.py untracked $(DERIVED_FILES)
+	@$(LEDGERS_PYTHON) tools/ledgers.py untracked $(DERIVED_FILES)
 
 ledgers-check: ## Fail on a wrong ledger fragment or two sources for one ledger
-	@$(PYTHON) tools/ledgers.py check
+	@$(LEDGERS_PYTHON) tools/ledgers.py check
 
 # `$(value m)` hands the text over as typed: make does not expand a `$` in it. It is exported to
 # the one recipe below only, through the environment, so quotes and backticks reach the tool too.
 log: export LOG_ENTRY = $(value m)
 log: ## Add a line to the wiki log: make log m="what changed — link"
-	@$(PYTHON) tools/ledgers.py add-log -- "$$LOG_ENTRY"
+	@$(LEDGERS_PYTHON) tools/ledgers.py add-log -- "$$LOG_ENTRY"
 
 # One ledger at a time, in a pull request of its own: L=log, index, glossary or gen. DRY=1 prints
 # what would be written and the comparison, and writes nothing.
 split: ## Move a one-file ledger into fragments without losing an entry: make split L=log [DRY=1]
-	@$(PYTHON) tools/ledgers.py split $(L) $(if $(GEN_OUT),--gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)) $(if $(DRY),--dry-run)
+	@$(LEDGERS_PYTHON) tools/ledgers.py split $(L) $(if $(GEN_OUT),--gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)) $(if $(DRY),--dry-run)

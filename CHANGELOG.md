@@ -78,9 +78,14 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   code (`src/generated/ontology.ts`, `src/<pkg>/ontology_types.py`) are in `.gitignore`; the two Node
   and Python presets add the lines, and `.prettierignore` lists the drawn markdown. The archetypes
   `service-api` and `modular-monolith` no longer add `wiki/+index.md/50-decisions.md`: the decision
-  pages are listed by the drawn index. The three head files are `user_owned`: once `make split`
-  rewrites one, it is taken out of `.repo-setup.json` (it is the repository's own), and `apply.py`
-  keeps it.
+  pages are listed by the drawn index. Once `make split` rewrites a head file, it is taken out of
+  `.repo-setup.json` (it is the repository's own). New preset key `kept_quietly` (next to `user_owned`):
+  a file listed there that the manifest does not record and the repository has is reported under `kept`
+  with no note and no diff; `_core/preset.toml` lists the three head files, so an upgrade never asks
+  anyone to merge one.
+- `mk/derived.mk` runs `ledgers.py`, `ledgers_split.py` and `ontology_codegen.py` with `LEDGERS_PYTHON`
+  (default `python3`, standard library only), not `PYTHON`: in a python or fastapi repository `make derived`
+  and the SessionStart hook no longer go through `uv run`, which could sync a venv at every session start.
 - `.claude/settings.json` gets a `SessionStart` hook that runs `make -s derived` (always exit 0; the
   error of a failed draw is printed for the agent; nothing happens when `make` or the Makefile is
   missing), so a session starts with the drawn files present. `tools/wiki_lint.py` draws a ledger that is
@@ -100,7 +105,9 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   `ontology/glossary.md` as `dropped` (the template no longer gives them) and leaves them in place, so a
   repository that keeps them in git stays `one-file`; `wiki/log.md merge=union` stays in
   `.gitattributes`. It also creates the head files, the two folders (`.gitkeep`) and the hook, and
-  merges the new `.gitignore` lines; a tracked file is not affected by `.gitignore`. A repository that
+  merges the new `.gitignore` lines (the block sits after the first section of the file, so a `.gitignore`
+  where a team only appended lines at the end merges cleanly; one edited next to that first section can still
+  be marked); a tracked file is not affected by `.gitignore`. A repository that
   edited `.claude/settings.json` has the hook merged in or marked on conflict. Run `make split L=<ledger>`
   per ledger, in a pull request of its own, to move to the fragments shape.
 
