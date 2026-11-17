@@ -703,6 +703,7 @@ if grep -q "allowed_bots: *['\"]\*" "$pipeline"; then miss "pipeline allows ever
 if echo "$review" | grep -q 'setup-project'; then miss "review installs the PR's dependencies"; fi
 if echo "$review" | grep -q 'Bash(make:'; then miss "review may run make from the PR"; fi
 echo "$review" | grep -q -- '--strict-mcp-config' || miss "review may start MCP servers from the PR"
+echo "$review" | grep -qF -- "--settings '{\"disableAllHooks\": true}'" || miss "review may run the PR's hooks (SessionStart runs make from the PR)"
 echo "$review" | grep -q 'Bash(gh pr checks:' || miss "review cannot read the CI result"
 echo "$review" | grep -q 'checks: read' || miss "review lacks permission to read checks"
 skill="$g/.claude/skills/review-change/SKILL.md"

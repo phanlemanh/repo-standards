@@ -155,9 +155,13 @@ jobs:
               gh pr edit ${{ github.event.pull_request.number }} --add-label agent-review:approved --remove-label agent-review:changes
             or
               gh pr edit ${{ github.event.pull_request.number }} --add-label agent-review:changes --remove-label agent-review:approved
+          # --settings turns off every hook the PR's own .claude/settings.json declares (a
+          # SessionStart hook runs `make` from the checkout). Claude Code hooks docs, "Disable or
+          # remove hooks": this setting "takes precedence over project and local settings".
           claude_args: |
             --max-turns 40
             --strict-mcp-config
+            --settings '{"disableAllHooks": true}'
             --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh pr edit:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
 
   automerge:
