@@ -24,6 +24,15 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   the added lines. New `make check` step `ledgers-check`: a fragment with a wrong name, or a
   hand-kept `wiki/log.md` beside entries in `wiki/log/` (two sources), is red. What breaks on
   upgrade: nothing, a tracked unstamped `wiki/log.md` stays `one-file`.
+- New `python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>] [--not-confused-with <s>]`:
+  in the `one-file` shape it adds a row to the table of `ontology/glossary.md`; in the `fragments`
+  shape it writes `ontology/glossary/<Term>.md` (front matter `term`, `display`, `not_confused_with`,
+  body one sentence) and touches nothing else. `make derived` draws `ontology/glossary.md` (stamp,
+  `ontology/glossary.head.md` or a built-in head, a four-column table sorted by term, `|` escaped),
+  even with no term, so `wiki_lint.py` still reads it. A hand edit of the drawn file, or a hand-kept
+  `ontology/glossary.md` beside fragments, makes `draw` exit 1. `ledgers-check` is red for a fragment
+  whose `term` is not its file name or that has no `display`. What breaks on upgrade: nothing, a
+  tracked unstamped `ontology/glossary.md` stays `one-file`.
 
 ## 0.7.0 — 2026-11-17
 

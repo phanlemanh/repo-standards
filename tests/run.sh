@@ -2348,6 +2348,69 @@ rc=0; out=$(cd "$ts" && python3 tools/ledgers.py check 2>&1) || rc=$?
 [ "$rc" = 1 ] || miss "log: check exits $rc, not 1, for two sources"
 case "$out" in *wiki/log.md*) ;; *) miss "log: check does not name wiki/log.md for two sources ($out)" ;; esac
 if ( cd "$ts" && make ledgers-check >/dev/null 2>&1 ); then miss "log: make ledgers-check is green for two sources"; fi
+# 48k (plan 48h). the glossary: one file per term; ontology/glossary.md is the head and a four-column
+#      table, sorted by term, a pipe escaped
+gl="$TMP/glossrepo"; mkdir -p "$gl" && git -C "$gl" init -q -b main
+python3 "$S/apply.py" --target "$gl" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+gl_git() { git -C "$gl" -c user.name=t -c user.email=t@example.com "$@"; }
+gl_tool() { ( cd "$gl" && python3 tools/ledgers.py "$@" ); }
+gl_git add -A && gl_git commit -q -m "chore: base"
+# one-file shape: the row goes into the table of ontology/glossary.md, above the closing comment
+gl_tool add-term Order --definition "A confirmed purchase." --not-confused-with "Cart" >/dev/null || miss "glossary: add-term failed in the one-file shape"
+grep -qF '| `Order` | A confirmed purchase. | Cart | Order |' "$gl/ontology/glossary.md" || miss "glossary: add-term in the one-file shape wrote no row"
+[ ! -d "$gl/ontology/glossary" ] || miss "glossary: add-term in the one-file shape wrote a fragment"
+if gl_tool add-term Order --definition "again" >/dev/null 2>&1; then miss "glossary: add-term twice for one term is green in the one-file shape"; fi
+gl_git checkout -q -- ontology/glossary.md && gl_git rm -q --cached ontology/glossary.md && rm -f "$gl/ontology/glossary.md"
+gl_git commit -q -m "docs: glossary becomes fragments"
+gl_tool draw >/dev/null || miss "glossary: draw failed with no term"
+[ "$(sed -n '2,$p' "$gl/ontology/glossary.md" | grep -c '^| ')" = 2 ] || miss "glossary: with no term the drawn file is not the head, a header row and a separator"
+gl_tool add-term Order --definition "A confirmed | purchase." --display "Customer order" >/dev/null || miss "glossary: add-term failed in the fragments shape"
+gl_tool add-term Customer --definition "A person who has bought." --not-confused-with '`Visitor`' >/dev/null || miss "glossary: add-term Customer failed"
+[ "$(gl_git status --porcelain | grep -vc ' ontology/glossary.md$')" = 1 ] || miss "glossary: add-term touched more than the fragment folder ($(gl_git status --porcelain | tr '\n' ';'))"
+grep -qx 'term: Order' "$gl/ontology/glossary/Order.md" || miss "glossary: the fragment has no term: line"
+gl_tool draw >/dev/null || miss "glossary: draw failed on two fragments"
+head -1 "$gl/ontology/glossary.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from ontology/glossary/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' || miss "glossary: ontology/glossary.md does not open with the stamp line"
+grep -qxF '| Term (code name) | Definition | Not to be confused with | Display name |' "$gl/ontology/glossary.md" || miss "glossary: the header row is not the four columns"
+rows=$(grep -E '^\| `' "$gl/ontology/glossary.md")
+[ "$rows" = "$(printf '%s\n' '| `Customer` | A person who has bought. | `Visitor` | Customer |' '| `Order` | A confirmed \| purchase. |  | Customer order |')" ] || miss "glossary: the rows are not sorted by term with the pipe escaped ($rows)"
+cp "$gl/ontology/glossary.md" "$TMP/gl.once"; gl_tool draw >/dev/null
+cmp -s "$TMP/gl.once" "$gl/ontology/glossary.md" || miss "glossary: drawing a second time changed a byte"
+# terms with a space or a dot: the file name is the term
+gl_tool add-term "Sales order" --definition "x" >/dev/null && [ -f "$gl/ontology/glossary/Sales order.md" ] || miss "glossary: a term with a space is not the file name"
+gl_tool add-term "v1.2" --definition "x" >/dev/null && [ -f "$gl/ontology/glossary/v1.2.md" ] || miss "glossary: a term with a dot is not the file name"
+rc=0; out=$(gl_tool add-term "a/b" --definition x 2>&1) || rc=$?
+[ "$rc" = 2 ] && case "$out" in *"/"*) true ;; *) false ;; esac || miss "glossary: add-term a/b exits $rc, or does not name the character ($out)"
+rc=0; gl_tool add-term ".hidden" --definition x >/dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] || miss "glossary: add-term with a leading dot exits $rc, not 2"
+rc=0; out=$(gl_tool add-term Order --definition again 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *Order*) true ;; *) false ;; esac || miss "glossary: add-term for an existing term exits $rc, or does not name it ($out)"
+# 48l (plan 48i). a fragment whose term differs from its file name, or without display: check names the file
+gl_tool check >/dev/null || miss "glossary: check fails on good fragments ($(gl_tool check 2>&1))"
+printf -- '---\nterm: Client\ndisplay: Client\nnot_confused_with:\n---\nA buyer.\n' > "$gl/ontology/glossary/Customer.md"
+rc=0; out=$(gl_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *glossary/Customer.md*) true ;; *) false ;; esac || miss "glossary: check exits $rc, or does not name Customer.md for a different term ($out)"
+printf -- '---\nterm: Customer\nnot_confused_with:\n---\nA buyer.\n' > "$gl/ontology/glossary/Customer.md"
+rc=0; out=$(gl_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *glossary/Customer.md*display*) true ;; *) false ;; esac || miss "glossary: check exits $rc, or does not name the missing display ($out)"
+printf -- '---\nterm: Customer\ndisplay: Customer\nnot_confused_with:\n---\nA buyer.\n' > "$gl/ontology/glossary/Customer.md"
+# wiki_lint reads the drawn file: a term in it is defined, an entity outside it is a warning
+mkdir -p "$gl/ontology/entities"
+printf 'name: Customer\n' > "$gl/ontology/entities/Customer.yaml"; printf 'name: Ghost\n' > "$gl/ontology/entities/Ghost.yaml"
+gl_tool draw >/dev/null
+lint=$(cd "$gl" && python3 tools/wiki_lint.py 2>&1 || true)
+case "$lint" in *"entity 'Ghost' is not defined in the glossary"*) ;; *) miss "glossary: wiki_lint does not warn that Ghost is outside the drawn glossary ($lint)" ;; esac
+case "$lint" in *"entity 'Customer' is not defined"*) miss "glossary: wiki_lint warns about Customer although the drawn glossary has it" ;; esac
+case "$lint" in *"missing glossary"*) miss "glossary: wiki_lint says the drawn glossary is missing" ;; esac
+# 48m. a hand edit of the drawn glossary is refused and named; a hand-kept file beside fragments is two sources
+cp "$gl/ontology/glossary.md" "$TMP/gl.edit"; printf '| `Typed` | by hand | | Typed |\n' >> "$TMP/gl.edit"; cp "$TMP/gl.edit" "$gl/ontology/glossary.md"
+rc=0; out=$(gl_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "glossary: draw exits $rc, not 1, on a hand-edited ontology/glossary.md"
+case "$out" in *Typed*"ledgers.py add-term"*) ;; *) miss "glossary: draw does not print the added line and the add-term command ($out)" ;; esac
+cmp -s "$TMP/gl.edit" "$gl/ontology/glossary.md" || miss "glossary: draw changed a hand-edited ontology/glossary.md"
+printf '# Glossary\n' > "$gl/ontology/glossary.md"
+rc=0; out=$(gl_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"two sources"*) true ;; *) false ;; esac || miss "glossary: draw exits $rc, or does not say two sources, for a hand-kept glossary beside fragments ($out)"
+[ "$(cat "$gl/ontology/glossary.md")" = "# Glossary" ] || miss "glossary: draw overwrote an unstamped ontology/glossary.md"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

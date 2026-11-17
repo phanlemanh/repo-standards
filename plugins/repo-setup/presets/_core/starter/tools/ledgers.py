@@ -16,6 +16,7 @@ with, and the check that a drawn file does not sit in git.
   python3 tools/ledgers.py draw [--quiet]
   python3 tools/ledgers.py check
   python3 tools/ledgers.py add-log <text> [--date YYYY-MM-DD]
+  python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>] [--not-confused-with <s>]
 
 Exit codes: 0 done, 1 refused (a drawn file is in git, a drawn file edited by hand, a fragment
 that is wrong, two sources for one ledger), 2 wrong usage.
@@ -220,41 +221,48 @@ def log_body(root: Path) -> str:
     return head.rstrip("\n") + "\n\n" + "".join(f"{ln}\n" for ln in lines)
 
 
+def draw_ledger(root: Path, rel: str, source: str, has_entries: bool, body: str, hint: str, quiet: bool) -> int:
+    """Draw one markdown ledger at `rel` from `body`. 0 done, 1 refused.
+
+    An unstamped file at the old path is never overwritten: alone (a new repository that has not
+    made its first commit) it is left as it is; beside entries it is two sources. A drawn file
+    edited by hand is refused, with the lines that were added and the command to use instead.
+    """
+    target = root / rel
+    current, edited = read_stamped(target)
+    if target.is_file() and current is None:
+        if not has_entries:
+            return 0
+        print(f"{rel} is not a drawn file and {source} has entries: two sources for the ledger; "
+              f"git rm --cached {rel} and delete it, or move the entries out", file=sys.stderr)
+        return 1
+    if edited and current is not None:
+        expected = set(body.splitlines())
+        added = [ln for ln in current.splitlines() if ln and ln not in expected]
+        print(f"{rel} was edited by hand; it is drawn from {source} and a hand edit is lost.", file=sys.stderr)
+        for ln in added:
+            print(f"  + {ln}", file=sys.stderr)
+        print(hint, file=sys.stderr)
+        return 1
+    text = stamp(body, source)
+    if not target.is_file() or target.read_text(encoding="utf-8") != text:
+        target.write_text(text, encoding="utf-8")
+        if not quiet:
+            print(f"drew {rel}")
+    return 0
+
+
 def draw_log(root: Path, quiet: bool) -> int | None:
     """Draw wiki/log.md. None when the log is not kept as fragments (nothing was drawn)."""
     if not (root / "wiki").is_dir() or shape_of(root, "log") != FRAGMENTS:
         return None
-    target = root / LOG_FILE
-    body = log_body(root)
-    current, edited = read_stamped(target)
-    if target.is_file() and current is None:
-        # An unstamped file at the old path is never overwritten. Alone (a new repository that
-        # has not made its first commit) it is left as it is; beside entries it is two sources.
-        if not log_entries(root):
-            return None
-        print(f"{LOG_FILE} is not a drawn file and {LOG_DIR}/ has entries: two sources for the log; "
-              f"git rm --cached {LOG_FILE} and delete it, or move the entries out", file=sys.stderr)
-        return 1
-    if edited and current is not None:
-        # read_stamped gave the body as written; show what was added by hand
-        expected = set(body.splitlines())
-        added = [ln for ln in current.splitlines() if ln and ln not in expected]
-        print(f"{LOG_FILE} was edited by hand; it is drawn from {LOG_DIR}/ and a hand edit is lost.", file=sys.stderr)
-        for ln in added:
-            print(f"  + {ln}", file=sys.stderr)
-        print('Put it in an entry instead: make log m="<text>"', file=sys.stderr)
-        return 1
-    text = stamp(body, f"{LOG_DIR}/")
-    if not target.is_file() or target.read_text(encoding="utf-8") != text:
-        target.write_text(text, encoding="utf-8")
-        if not quiet:
-            print(f"drew {LOG_FILE}")
-    return 0
+    return draw_ledger(root, LOG_FILE, f"{LOG_DIR}/", bool(log_entries(root)), log_body(root),
+                       'Put it in an entry instead: make log m="<text>"', quiet)
 
 
 def cmd_draw(args: argparse.Namespace) -> int:
     root = Path(args.root)
-    results = [draw_log(root, args.quiet)]
+    results = [draw_log(root, args.quiet), draw_glossary(root, args.quiet)]
     drawn = [r for r in results if r is not None]
     if not drawn and not args.quiet:
         print("nothing to draw")
@@ -276,7 +284,8 @@ def check_log(root: Path) -> list[str]:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    problems = check_log(Path(args.root))
+    root = Path(args.root)
+    problems = check_log(root) + check_glossary(root)
     for line in problems:
         print(line, file=sys.stderr)
     return 1 if problems else 0
@@ -321,6 +330,177 @@ def cmd_add_log(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------------------------
+# The glossary: ontology/glossary/<Term>.md, one term each; ontology/glossary.md is drawn from them.
+# ---------------------------------------------------------------------------------------------
+
+GLOSSARY_DIR = "ontology/glossary"
+GLOSSARY_HEAD = "ontology/glossary.head.md"
+GLOSSARY_FILE = "ontology/glossary.md"
+GLOSSARY_COLUMNS = ("Term (code name)", "Definition", "Not to be confused with", "Display name")
+GLOSSARY_COMMENT = "<!-- Add your terms above"
+DEFAULT_GLOSSARY_HEAD = """# Glossary
+
+One line per business term. If two people could understand a word differently,
+it belongs here. Code, docs and agents must use these exact names.
+"""
+ADD_TERM_HINT = 'Put it in a fragment instead: python3 tools/ledgers.py add-term <Term> --definition "<text>"'
+
+
+class Term:
+    """One glossary fragment as read from disk; `problems` is empty when it is well formed."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.problems: list[str] = []
+        fields, self.definition = read_fragment(path)
+        self.term = fields.get("term", "")
+        self.display = fields.get("display", "")
+        self.not_confused_with = fields.get("not_confused_with", "")
+        rel = f"{GLOSSARY_DIR}/{path.name}"
+        if fields.get("__broken__"):
+            self.problems.append(f"{rel}: no front matter (lines term:, display:, not_confused_with: between --- lines)")
+            return
+        if not self.term:
+            self.problems.append(f"{rel}: term is missing")
+        elif path.name != f"{self.term}.md":
+            self.problems.append(f"{rel}: the file name is not the term '{self.term}' ({self.term}.md)")
+        if not self.display:
+            self.problems.append(f"{rel}: display is missing")
+        if not self.definition:
+            self.problems.append(f"{rel}: the definition (the text after the front matter) is missing")
+
+
+def read_fragment(path: Path) -> tuple[dict[str, str], str]:
+    """(front matter lines `key: value`, body as one line). Front matter is read as wiki_lint reads
+    page front matter: between two `---` lines, the standard library only."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return {"__broken__": "1"}, ""
+    if not lines or lines[0].strip() != "---":
+        return {"__broken__": "1"}, ""
+    fields: dict[str, str] = {}
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return fields, one_line(" ".join(lines[index + 1:]))
+        key, sep, value = lines[index].partition(":")
+        if sep:
+            fields[key.strip()] = value.strip()
+    return {"__broken__": "1"}, ""
+
+
+def glossary_files(root: Path) -> list[Path]:
+    folder = root / GLOSSARY_DIR
+    if not folder.is_dir():
+        return []
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.name != ".gitkeep")
+
+
+def escape_cell(text: str) -> str:
+    return text.replace("|", "\\|")
+
+
+def glossary_row(term: Term) -> str:
+    cells = (f"`{term.term}`", term.definition, term.not_confused_with, term.display)
+    return "| " + " | ".join(escape_cell(c) for c in cells) + " |"
+
+
+def glossary_body(root: Path) -> str:
+    head_path = root / GLOSSARY_HEAD
+    head = head_path.read_text(encoding="utf-8") if head_path.is_file() else DEFAULT_GLOSSARY_HEAD
+    terms = sorted((t for t in map(Term, glossary_files(root)) if t.term), key=lambda t: t.term)
+    table = ["| " + " | ".join(GLOSSARY_COLUMNS) + " |", "| " + " | ".join("---" for _ in GLOSSARY_COLUMNS) + " |"]
+    table += [glossary_row(t) for t in terms]
+    return head.rstrip("\n") + "\n\n" + "\n".join(table) + "\n"
+
+
+def draw_glossary(root: Path, quiet: bool) -> int | None:
+    """Draw ontology/glossary.md, even with no term (wiki_lint reads it). None when not fragments."""
+    if not (root / "ontology").is_dir() or shape_of(root, "glossary") != FRAGMENTS:
+        return None
+    return draw_ledger(root, GLOSSARY_FILE, f"{GLOSSARY_DIR}/", bool(glossary_files(root)),
+                       glossary_body(root), ADD_TERM_HINT, quiet)
+
+
+def check_glossary(root: Path) -> list[str]:
+    problems: list[str] = []
+    files = glossary_files(root)
+    for path in files:
+        if path.suffix != ".md":
+            problems.append(f"{GLOSSARY_DIR}/{path.name}: a term is a .md file named after the term")
+        else:
+            problems += Term(path).problems
+    if files and shape_of(root, "glossary") == ONE_FILE:
+        problems.append(
+            f"{GLOSSARY_FILE} is kept by hand and {GLOSSARY_DIR}/ has terms: two sources for the glossary; "
+            f"git rm --cached {GLOSSARY_FILE} and delete it, or move the terms out"
+        )
+    return problems
+
+
+def bad_term_character(term: str) -> str | None:
+    """The first character a term cannot have in a file name, or None."""
+    if term.startswith("."):
+        return "."
+    for char in term:
+        if char in "/\\" or ord(char) < 32:
+            return char
+    return None
+
+
+def add_term_row(root: Path, term: Term) -> int:
+    """One-file shape: the row goes under the last row of the table, above the closing comment."""
+    path = root / GLOSSARY_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    if any(ln.startswith(f"| `{term.term}` |") for ln in lines):
+        print(f"ledgers.py: {GLOSSARY_FILE} already has the term {term.term}", file=sys.stderr)
+        return 1
+    row = glossary_row(term) + "\n"
+    at = next((i for i, ln in enumerate(lines) if ln.startswith(GLOSSARY_COMMENT)), None)
+    if at is None:
+        rows = [i for i, ln in enumerate(lines) if ln.startswith("|")]
+        at = rows[-1] + 1 if rows else len(lines)
+    if at and not lines[at - 1].endswith("\n"):
+        lines[at - 1] += "\n"
+    lines.insert(at, row)
+    path.write_text("".join(lines), encoding="utf-8")
+    print(f"added to {GLOSSARY_FILE}")
+    return 0
+
+
+def cmd_add_term(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    name = args.term.strip()
+    definition = one_line(args.definition)
+    if not name or not definition:
+        print("ledgers.py: add-term needs a term and a --definition", file=sys.stderr)
+        return 2
+    bad = bad_term_character(name)
+    if bad is not None:
+        shown = "a leading dot" if bad == "." else repr(bad) if ord(bad) < 32 else f"'{bad}'"
+        print(f"ledgers.py: the term '{name}' cannot be a file name: {shown} is not allowed", file=sys.stderr)
+        return 2
+    term = Term.__new__(Term)
+    term.term, term.definition = name, definition
+    term.display = one_line(args.display) if args.display else name
+    term.not_confused_with = one_line(args.not_confused_with or "")
+    if shape_of(root, "glossary") == ONE_FILE:
+        return add_term_row(root, term)
+    path = root / GLOSSARY_DIR / f"{name}.md"
+    if path.exists():
+        print(f"ledgers.py: {GLOSSARY_DIR}/{path.name} already exists: the term {name} is defined", file=sys.stderr)
+        return 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nterm: {name}\ndisplay: {term.display}\nnot_confused_with: {term.not_confused_with}\n---\n"
+        f"{definition}\n",
+        encoding="utf-8",
+    )
+    print(f"wrote {GLOSSARY_DIR}/{path.name}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ledgers.py", description=__doc__.split("\n")[0])
     parser.add_argument("--root", default=".", help="repository root (default: the current folder)")
@@ -346,6 +526,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_log.add_argument("text")
     add_log.add_argument("--date", help="YYYY-MM-DD (default: today)")
     add_log.set_defaults(run=cmd_add_log)
+
+    add_term = sub.add_parser("add-term", help="add one term to the glossary")
+    add_term.add_argument("term")
+    add_term.add_argument("--definition", required=True, help="one sentence")
+    add_term.add_argument("--display", help="display name (default: the term)")
+    add_term.add_argument("--not-confused-with", dest="not_confused_with", help="what the term is not")
+    add_term.set_defaults(run=cmd_add_term)
     return parser
 
 
