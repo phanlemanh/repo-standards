@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Ledgers as fragments (RS2b), the shared mechanism
+Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
+
+- New `make derived` (`mk/derived.mk`, `tools/ledgers.py`): it draws every file a repository keeps
+  out of git. Layers add to `DERIVED_TARGETS` (targets that draw) and `DERIVED_FILES` (files they
+  draw). `derived` waits for `upgrade`; in each preset `lint`, `typecheck`, `test`, `ontology`,
+  `build` and `dev` wait for `derived`. No ledger is drawn yet: `make derived` says "nothing to
+  draw".
+- New `make check` step `derived-untracked`: red when a file in `DERIVED_FILES` is in git and
+  opens with the stamp `tools/ledgers.py` writes, with the path and `git rm --cached <path>`.
+- `tools/ledgers.py shape <ledger>` prints `one-file` or `fragments`.
+- What breaks on upgrade: nothing. A repository that keeps `wiki/log.md`, `wiki/index.md` and
+  `ontology/glossary.md` in git and edits them by hand has no stamp, so they stay `one-file` and
+  `derived-untracked` skips them. `Makefile` gains one line (`... : | derived`) after
+  `-include mk/*.mk`; a Makefile edited here gets that line merged in, or marked on conflict.
+
 ## 0.7.0 — 2026-11-17
 
 ### Upgrade path

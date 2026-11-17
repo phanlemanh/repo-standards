@@ -11,6 +11,9 @@ CHECK_TARGETS := lint typecheck test ontology
 # They append to CHECK_TARGETS / PYTEST_ARGS, so `make check` grows with the setup.
 -include mk/*.mk
 
+# Everything that reads a drawn file waits for `make derived` (mk/derived.mk).
+lint typecheck test ontology dev: | derived
+
 .PHONY: help setup dev format lint typecheck test gen ontology check clean
 
 help: ## Show available commands

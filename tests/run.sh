@@ -1003,7 +1003,7 @@ out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starte
   --var project_name=Sample --var description=x --var owner=acme --json)
 [ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
-padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/upgrade.mk', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/derived.mk', 'mk/upgrade.mk', 'tools/ledgers.py', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
 padopt "d['merged'] == ['.gitignore']"
 padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
 padopt "d['conflict'] == ['LICENSE', 'README.md']"
@@ -2206,6 +2206,66 @@ import sys; sys.path.insert(0, 'tools'); import sdlc_metrics as s
 print(s.capped({'merged': [0] * s.PR_LIMIT, 'open': [0]}))" 2>/dev/null || true)
 [ "$partial" = "['merged']" ] || miss "flow: a list of pull requests cut at the limit is taken for the whole list"
 echo "ok  flow (or misses reported above)"
+
+# 48. ledgers as fragments (docs/superpowers/specs/2026-11-17-ledger-fragments-design.md, 5.1 and 5.2):
+#     `make derived` draws every file the repository keeps out of git, in an order every other step
+#     waits for, and a drawn file that is still in git turns `make check` red.
+dv="$TMP/derived"; mkdir -p "$dv" && git -C "$dv" init -q -b main
+python3 "$S/apply.py" --target "$dv" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+dv_git() { git -C "$dv" -c user.name=t -c user.email=t@example.com "$@"; }
+dv_ledger() { ( cd "$dv" && python3 tools/ledgers.py "$@" ); }
+# 48a. a target a later file adds to DERIVED_TARGETS still runs before `make test`, on a clean clone
+printf 'DERIVED_TARGETS += zz\n.PHONY: zz\nzz: ; @touch zz.done\n' > "$dv/mk/zz.mk"
+dv_git add -A && dv_git commit -q -m "chore: base"
+git clone -q "$dv" "$TMP/derived-clone" 2>/dev/null
+( cd "$TMP/derived-clone" && make test >/dev/null 2>&1 || true )
+[ -f "$TMP/derived-clone/zz.done" ] || miss "derived: a target added to DERIVED_TARGETS by a later mk file did not run before make test"
+dv_out=$(cd "$TMP/derived-clone" && make derived 2>&1 || true)
+case "$dv_out" in *"nothing to draw"*) ;; *) false ;; esac || miss "derived: make derived on a repository with no drawn ledger does not say there is nothing to draw"
+dv_out=$(cd "$TMP/derived-clone" && make -n check 2>/dev/null || true)
+case "$dv_out" in *"ledgers.py untracked"*) ;; *) false ;; esac || miss "derived: derived-untracked is not part of make check"
+# 48b. the shape of a ledger is read from git and from the stamp, never from a folder
+dv_git rm -q --cached wiki/log.md; rm -f "$dv/wiki/log.md"
+[ "$(dv_ledger shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments when wiki/log.md is absent"
+printf '# Log\n\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"
+[ "$(dv_ledger shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments while wiki/log.md is not in git"
+dv_git add wiki/log.md
+[ "$(dv_ledger shape log 2>&1)" = one-file ] || miss "derived: shape log is not one-file when an unstamped wiki/log.md is in git"
+dv_nogit="$TMP/derived-nogit"; mkdir -p "$dv_nogit/wiki" "$dv_nogit/tools"
+cp "$dv/tools/ledgers.py" "$dv_nogit/tools/" 2>/dev/null || true
+[ "$(cd "$dv_nogit" && python3 tools/ledgers.py shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments outside git with no wiki/log.md"
+printf '# Log\n' > "$dv_nogit/wiki/log.md"
+[ "$(cd "$dv_nogit" && python3 tools/ledgers.py shape log 2>&1)" = one-file ] || miss "derived: shape log is not one-file outside git when an unstamped wiki/log.md is there"
+rc=0; ( cd "$dv_nogit" && python3 tools/ledgers.py nonsense >/dev/null 2>&1 ) || rc=$?
+[ "$rc" = 2 ] || miss "derived: ledgers.py exits $rc, not 2, on wrong usage"
+rc=0; ( cd "$dv_nogit" && python3 tools/ledgers.py shape nonsense >/dev/null 2>&1 ) || rc=$?
+[ "$rc" = 2 ] || miss "derived: ledgers.py shape exits $rc, not 2, for an unknown ledger"
+# 48c. a drawn (stamped) file that is in git is red and says how to leave git; an unstamped one is a
+#      one-file ledger and stays green
+dv_untracked() { ( cd "$dv" && make derived-untracked 2>&1 ); }
+dv_untracked >/dev/null || miss "derived: derived-untracked is red for an unstamped wiki/log.md in git (a one-file ledger)"
+dv_git commit -q -m "docs: one-file log"
+( cd "$dv" && python3 -c "
+import pathlib, sys; sys.path.insert(0, 'tools'); import ledgers
+pathlib.Path('wiki/log.md').write_text(ledgers.stamp('- 2026-01-01 — start\n', 'wiki/log/'), encoding='utf-8')" )
+dv_git add -f wiki/log.md
+if out=$(dv_untracked); then miss "derived: derived-untracked is green for a stamped wiki/log.md in git"; fi
+case "$out" in *wiki/log.md*"git rm --cached wiki/log.md"*) ;; *) miss "derived: derived-untracked does not name wiki/log.md and git rm --cached wiki/log.md ($out)" ;; esac
+dv_git rm -q --cached wiki/log.md
+dv_untracked >/dev/null || miss "derived: derived-untracked stays red after git rm --cached"
+# the stamp: a hand edit is seen, and a file that carries no stamp reads as none
+( cd "$dv" && python3 -c "
+import pathlib, sys; sys.path.insert(0, 'tools'); import ledgers
+path = pathlib.Path('wiki/log.md')
+body, edited = ledgers.read_stamped(path)
+assert body == '- 2026-01-01 — start\n' and edited is False, (body, edited)
+path.write_text(path.read_text(encoding='utf-8') + 'by hand\n', encoding='utf-8')
+body, edited = ledgers.read_stamped(path)
+assert edited is True, edited
+assert ledgers.read_stamped(pathlib.Path('wiki/nothing.md')) == (None, False)
+assert ledgers.read_stamped(pathlib.Path('README.md')) == (None, False)
+" ) || miss "derived: stamp and read_stamped do not round-trip, or a hand edit is not seen"
+echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
 . "$ROOT/tests/upgrade.sh"

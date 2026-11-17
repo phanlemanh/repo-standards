@@ -8,6 +8,9 @@ CHECK_TARGETS := lint test
 # They append to CHECK_TARGETS, so `make check` grows with the setup.
 -include mk/*.mk
 
+# Everything that reads a drawn file waits for `make derived` (mk/derived.mk).
+lint test: | derived
+
 .PHONY: help setup lint test check validate bump
 
 help: ## Show available commands

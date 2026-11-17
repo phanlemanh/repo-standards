@@ -10,6 +10,9 @@ CHECK_TARGETS := lint typecheck test ontology
 # step prints the tool's full report.
 -include mk/*.mk
 
+# Everything that reads a drawn file waits for `make derived` (mk/derived.mk).
+lint typecheck test ontology build dev: | derived
+
 .PHONY: help setup dev build format lint typecheck test gen ontology check clean
 
 help: ## Show available commands
