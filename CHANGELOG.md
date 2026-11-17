@@ -59,7 +59,11 @@ should merge without "Update branch" (not yet measured on the probe repository).
   derived` draws `ontology/glossary.md` (stamp, `ontology/glossary.head.md` or a built-in head, a
   four-column table sorted by term, `|` escaped), even with no term, so `wiki_lint.py` still reads
   it. A hand-kept `ontology/glossary.md` beside fragments is two sources, with the same message as
-  the log (the rows no fragment holds, then `git rm ontology/glossary.md`, then `add-term`).
+  the log: every line the drawn glossary lacks is listed, a row to be copied, then
+  `git rm ontology/glossary.md`, then added with `add-term`, any other line (a hand paragraph, a
+  comment) into `ontology/glossary.head.md`. Only the template's own example row and closing
+  comment, word for word, are left out; an edited or new `_Example:_` row is listed. Only when no
+  such line is left does it say the file is safe to delete.
 - **Index.** `make derived` draws `wiki/index.md` in the `fragments` shape: stamp,
   `wiki/index.head.md` (or a built-in head), one `## <Types>` section per page type of
   `ontology/page-types.yaml` in file order (types it does not know last), a line
@@ -105,7 +109,9 @@ should merge without "Update branch" (not yet measured on the probe repository).
   fails part way puts every file and the git index back as they were. Then it writes the fragments
   and the head file, moves each index description to the `summary` of its page, runs `git rm
   --cached` on the old file, adds its path to `.gitignore` and puts the drawn file in its place. The
-  glossary's `_Example:_` row and closing comment are dropped, and said so. `gen` has no fragments:
+  glossary's `_Example:_` row and closing comment are dropped, and said so, only as the template
+  wrote them, word for word: an `_Example:_` row that differs is refused (make it a row of its own or
+  delete it), and a closing comment with more in it stays in `ontology/glossary.head.md`. `gen` has no fragments:
   the committed generated file (it must match what `ontology_codegen.py` writes) leaves git and is
   drawn, stamped. `--verify-against FILE` runs the comparison alone against a copy of the old file.
 - `doctor` lists the ledgers still kept as one file (`ledgers_split` in `--json`, a block in the text

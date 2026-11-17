@@ -28,6 +28,15 @@ HEADING_RE = re.compile(r"^## (?P<name>.+?)\s*$")
 SEPARATOR_RE = re.compile(r"^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
 EXAMPLE_MARK = "_Example:_"
+# The example row and the closing comment of the glossary the template gave, word for word (the
+# example had three columns before 0.4). Only these are dropped; an edited one is the team's.
+TEMPLATE_EXAMPLE = (
+    "_Example:_ `Customer`",
+    "A person who has bought at least once.",
+    "`Visitor` (has not bought)",
+    "Customer",
+)
+TEMPLATE_COMMENT = "<!-- Add your terms above. Keep definitions to one sentence. -->"
 LOG_SENTENCE = led.INDEX_LOG_SECTION.splitlines()[-1]
 MAX_PER_DAY = 99
 
@@ -180,6 +189,15 @@ def find_table(lines: list[str]) -> int | None:
     return None
 
 
+def is_template_example(cells: list[str]) -> bool:
+    flat = tuple(led.one_line(cell) for cell in cells)
+    return flat in (TEMPLATE_EXAMPLE, TEMPLATE_EXAMPLE[:3])
+
+
+def is_template_comment(line: str) -> bool:
+    return led.one_line(line) == TEMPLATE_COMMENT
+
+
 def row_entry(cells: list[str]) -> tuple[tuple[str, str, str, str], list[str]]:
     """A row in the form add-term writes: every run of whitespace in a cell one space, the display
     name the term when the cell is empty. Also a notice for each such change."""
@@ -218,14 +236,20 @@ def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, lis
             kept[i] = False
             if i >= start + 2:
                 cells = split_cells(line)
-                if len(cells) != len(led.GLOSSARY_COLUMNS):
+                if is_template_example(cells):
+                    notes.append(
+                        f"dropped the template's example row ({EXAMPLE_MARK}): {line.strip()}"
+                    )
+                elif len(cells) != len(led.GLOSSARY_COLUMNS):
                     problems.append(
                         f"line {i + 1} is a row of {len(cells)} cells, not "
                         f"{len(led.GLOSSARY_COLUMNS)}: {line}"
                     )
                 elif cells[0].startswith(EXAMPLE_MARK):
-                    notes.append(
-                        f"dropped the template's example row ({EXAMPLE_MARK}): {line.strip()}"
+                    problems.append(
+                        f"line {i + 1} is an example row ({EXAMPLE_MARK}) that is not the "
+                        "template's: make it a row of its own (the term in backticks) or delete "
+                        f"it, then split: {line}"
                     )
                 else:
                     row, row_notes = row_entry(cells)
@@ -236,7 +260,7 @@ def parse_glossary(text: str) -> tuple[list[tuple[str, str, str, str]], str, lis
                 f"line {i + 1} is a table row outside the glossary table "
                 f"(| {' | '.join(led.GLOSSARY_COLUMNS)} |): {line}"
             )
-        elif line.startswith(led.GLOSSARY_COMMENT):
+        elif is_template_comment(line):
             kept[i] = False
             notes.append(f"dropped the template's comment: {line.strip()}")
     head, raised = assemble_head(lines, kept)
@@ -513,14 +537,16 @@ def head_lines(ledger: str, lines: list[str]) -> list[str]:
 
 
 def held_row(line: str, held: set[str]) -> bool:
-    """A table row a split leaves out on purpose (header, separator, the template's example) or
-    one a fragment holds, whatever its padding."""
+    """A table row a split leaves out on purpose (header, separator, the template's own example
+    row, word for word) or one a fragment holds, whatever its padding."""
     cells = split_cells(line)
     if tuple(cells) == led.GLOSSARY_COLUMNS or SEPARATOR_RE.match(line.strip()):
         return True
+    if is_template_example(cells):
+        return True
     if len(cells) != len(led.GLOSSARY_COLUMNS):
         return False
-    return cells[0].startswith(EXAMPLE_MARK) or entry_text(row_entry(cells)[0]) in held
+    return entry_text(row_entry(cells)[0]) in held
 
 
 def unmoved(root: Path, ledger: str, text: str) -> tuple[list[str], list[str]]:
@@ -534,7 +560,7 @@ def unmoved(root: Path, ledger: str, text: str) -> tuple[list[str], list[str]]:
         missing = [
             line
             for line in missing
-            if not line.startswith(led.GLOSSARY_COMMENT)
+            if not is_template_comment(line)
             and not (line.lstrip().startswith("|") and held_row(line, held))
         ]
     heads = head_lines(ledger, missing)
@@ -549,20 +575,29 @@ def unmoved_in(root: Path, ledger: str, rel: str) -> tuple[list[str], list[str]]
         return [], []
 
 
-def head_note(ledger: str, rel: str, heads: list[str]) -> str:
-    if not heads:
+def listed(lines: list[str]) -> str:
+    return "".join(f"\n  + {line}" for line in lines)
+
+
+def listing(rel: str, ledger: str | None, entries: list[str], heads: list[str], way: str) -> str:
+    """One header for every line of `rel` that no source holds, then where each group goes: the
+    entries `way`, the other lines into the head file."""
+    if not entries and not heads:
         return ""
-    return (
-        f"These lines of {rel} are in no source yet:{led.listed(heads)}\n"
-        f"Move them into {HEAD_FILES[ledger]}.\n"
-    )
+    text = f"These lines of {rel} are in no source yet:"
+    if entries:
+        text += f"{listed(entries)}\n  -> {way}"
+    if heads:
+        text += f"{listed(heads)}\n  -> move them into {HEAD_FILES[ledger]}"
+    return text + "\n"
 
 
-def unmoved_note(root: Path, ledger: str, rel: str) -> str:
-    """For an untracked hand-kept file: what of it no source holds, and where each part goes."""
+def unmoved_note(root: Path, ledger: str, rel: str, source: str, how: str) -> str:
+    """For an untracked hand-kept file: what of it no source holds and where each part goes; the
+    command alone when nothing is listed."""
     entries, heads = unmoved_in(root, ledger, rel)
-    listing = f"These entries of {rel} are in no fragment yet:{led.listed(entries)}\n"
-    return (listing if entries else "") + head_note(ledger, rel, heads)
+    text = listing(rel, ledger, entries, heads, f"add each one: {how}")
+    return text.rstrip("\n") or f"A line goes into {source} with: {how}."
 
 
 def two_sources_way(root: Path, ledger: str, rel: str, folder: str, how: str) -> str:
@@ -575,10 +610,6 @@ def two_sources_way(root: Path, ledger: str, rel: str, folder: str, how: str) ->
             f"Every line of {rel} is in {folder}/ or its head file, so it is safe to delete: "
             f"git rm {rel}."
         )
-    text = head_note(ledger, rel, heads)
-    if not entries:
-        return f"{text}Then git rm {rel} and run make derived."
-    return (
-        f"{text}These entries of {rel} are in no fragment yet:{led.listed(entries)}\n"
-        f"Copy them, git rm {rel}, then add each one: {how}; then make derived."
-    )
+    way = f"copy them, git rm {rel}, then add each one: {how}"
+    end = "Then run make derived." if entries else f"Then git rm {rel} and run make derived."
+    return listing(rel, ledger, entries, heads, way) + end

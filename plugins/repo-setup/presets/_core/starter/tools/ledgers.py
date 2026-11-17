@@ -268,24 +268,19 @@ def _sibling(name: str) -> types.ModuleType | None:
         return None
 
 
-def listed(lines: list[str]) -> str:
-    return "".join(f"\n  + {line}" for line in lines)
-
-
 def hand_edit_refusal(
     rel: str, source: str, added: list[str], how: str, ledger: str | None = None
 ) -> str:
     """An entry-shaped line goes in with `how`; any other log or glossary line, to its head."""
-    read = _sibling("ledgers_split_read") if ledger else None
-    heads = read.head_lines(ledger, added) if read else []
+    read = _sibling("ledgers_split_read")
+    heads = read.head_lines(ledger, added) if read and ledger else []
     entries = [line for line in added if line not in heads]
-    text = f"{rel} was edited by hand; it is drawn from {source}, so nothing was written.\n"
-    if entries:
-        text += f"These lines are in no source yet:{listed(entries)}\nMove each one: {how} (a "
-        text += f"changed line: edit its file in {source}).\n"
-    if heads:
-        text += read.head_note(ledger, rel, heads)
-    return f"{text}Then delete {rel} and run make derived."
+    way = f"move each one: {how} (a changed line: edit its file in {source})"
+    lines = read.listing(rel, ledger, entries, heads, way) if read else f"{added}: {way}\n"
+    return (
+        f"{rel} was edited by hand; it is drawn from {source}, so nothing was written.\n"
+        f"{lines}Then delete {rel} and run make derived."
+    )
 
 
 def unstamped_refusal(
@@ -300,7 +295,7 @@ def unstamped_refusal(
     read = _sibling("ledgers_split_read") if ledger else None
     if read is None:
         return text
-    return f"{text}\n{read.unmoved_note(root, ledger, rel)}A line goes into {source} with: {how}."
+    return f"{text}\n{read.unmoved_note(root, ledger, rel, source, how)}"
 
 
 def draw_ledger(

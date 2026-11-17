@@ -3291,6 +3291,58 @@ rc=0; out=$(rs_tool draw 2>&1) || rc=$?
 case "$out" in *'make log m='*) miss "residual: a head line typed into the drawn log is sent to make log ($out)" ;; esac
 printf 'A note typed above the entries.\n' >> "$rs/wiki/log.head.md"
 rs_tool draw >/dev/null 2>&1 || miss "residual: draw stays red once the typed head line is in wiki/log.head.md ($(rs_tool draw 2>&1))"
+# 48zo. only the template's own example row and closing comment, exactly as it wrote them, are dropped from a
+#       hand-kept glossary: an edited or new example row, or a comment with more in it, is listed (check, the
+#       untracked draw) or kept (split's head file) or refused (split, for an example row that is not the template's)
+rs_gl_check() { # <line>: a tracked hand-kept glossary with the template's lines and <line>; check must list it
+  { cat "$TMP/rs.gl"; printf '%s\n' "$1"; } > "$rs/ontology/glossary.md"; rs_git add -f ontology/glossary.md
+  rc=0; out=$(rs_tool check 2>&1) || rc=$?
+  [ "$rc" = 1 ] && case "$out" in *"$1"*) true ;; *) false ;; esac || miss "glossary exact: check exits $rc, or does not list: $1 ($out)"
+  case "$out" in *"safe to delete"*) miss "glossary exact: check says safe to delete beside: $1" ;; esac
+  rs_git rm -q -f ontology/glossary.md
+}
+rs_gl_check '<!-- Add your terms above. Pricing terms: ask finance first. -->'
+rs_gl_check '<!-- Add your terms above. Keep definitions to one sentence. --> VIP means a customer with 10+ orders.'
+rs_gl_check '| _Example:_ `Customer` | A person who has bought at least twice (finance rule, 2026). | `Visitor` (has not bought) | Customer |'
+rs_gl_check '| _Example:_ `Refund` | Money returned after a return. | `Discount` | Refund |'
+cp "$TMP/rs.gl" "$rs/ontology/glossary.md"; rs_git add -f ontology/glossary.md
+out=$(rs_tool check 2>&1 || true)
+case "$out" in *"ontology/glossary.md"*"safe to delete"*) ;; *) miss "glossary exact: the untouched template example row and comment alone are not safe to delete ($out)" ;; esac
+rs_git rm -q -f ontology/glossary.md
+{ cat "$TMP/rs.gl"; printf '%s\n' '<!-- Add your terms above. Pricing terms: ask finance first. -->'; } > "$rs/ontology/glossary.md"
+rc=0; out=$(rs_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"Pricing terms: ask finance first."*"ontology/glossary.head.md"*) true ;; *) false ;; esac || miss "glossary exact: the untracked draw does not list a comment with more in it ($out)"
+case "$out" in *"A line goes into"*) miss "glossary exact: the untracked draw gives the add-term command when only head lines are listed ($out)" ;; esac
+rm -f "$rs/ontology/glossary.md"; rs_tool draw >/dev/null 2>&1 || true
+# split: the template's own lines are dropped and said; an edited example row is refused; a longer comment stays in the head
+se="$TMP/split-exact"; sp_new "$se"
+se_tool() { ( cd "$se" && python3 tools/ledgers.py "$@" ); }
+cp "$se/ontology/glossary.md" "$TMP/se.gl"
+python3 - "$se/ontology/glossary.md" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text(encoding="utf-8")
+old = "A person who has bought at least once."
+assert old in t; p.write_text(t.replace(old, "A person who has bought at least twice (finance rule, 2026).", 1), encoding="utf-8")
+PY
+rc=0; out=$(se_tool split glossary --dry-run 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"_Example:_"*"at least twice"*) true ;; *) false ;; esac || miss "glossary exact: split does not refuse an edited example row, naming it (rc $rc, $out)"
+python3 - "$se/ontology/glossary.md" "$TMP/se.gl" <<'PY'
+import pathlib, sys
+t = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
+old = "<!-- Add your terms above. Keep definitions to one sentence. -->"
+assert old in t; pathlib.Path(sys.argv[1]).write_text(t.replace(old, "<!-- Add your terms above. Pricing terms: ask finance first. -->", 1), encoding="utf-8")
+PY
+rc=0; out=$(se_tool split glossary 2>&1) || rc=$?
+[ "$rc" = 0 ] || miss "glossary exact: split refuses a glossary with a longer closing comment ($out)"
+grep -qF 'Pricing terms: ask finance first.' "$se/ontology/glossary.head.md" || miss "glossary exact: split dropped a closing comment with more in it instead of keeping it in ontology/glossary.head.md"
+case "$out" in *"dropped the template's example row"*) ;; *) miss "glossary exact: split does not say it dropped the template's example row ($out)" ;; esac
+# the hand-edit refusal: one header for both lists; the untracked refusal: no command when only head lines are listed
+awk 'NR == 2 { print "A note typed above the entries, again." } { print } END { print "- 2026-11-18 — typed below" }' "$rs/wiki/log.md" > "$TMP/rs.edit2"; cp "$TMP/rs.edit2" "$rs/wiki/log.md"
+out=$(rs_tool draw 2>&1 || true)
+[ "$(printf '%s\n' "$out" | grep -c 'in no source yet')" = 1 ] || miss "hand edit: the refusal prints its header more than once ($out)"
+case "$out" in *"typed below"*'make log m='*) ;; *) miss "hand edit: the refusal does not send the entry line to make log ($out)" ;; esac
+case "$out" in *"again."*"wiki/log.head.md"*) ;; *) miss "hand edit: the refusal does not send the head line to wiki/log.head.md ($out)" ;; esac
+rm -f "$rs/wiki/log.md"; rs_tool draw >/dev/null 2>&1 || true
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
