@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-11-17
 
 ### Upgrade path
 Step C of the plan in `docs/three-repo-overview-design.md` (package RS8). Design:
@@ -53,6 +53,24 @@ What changes on upgrade:
   marked; `check` stayed red at the `upgrade` step, naming the files and lines, until the markers
   were merged by hand, then green. The first push showed the wall hidden behind `lint` and Prettier
   removing it, fixed above.
+- Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI,
+  including a new one: install from the last release's tag, edit in place, upgrade with this
+  code, `make check`.
+- Not yet run: an upgrade between two published releases that change a template (the probe run
+  used a stand-in release, so two of its files now carry hashes no release gives); the PR
+  pipeline of `github-agents` on GitHub; CodeQL on a public repository after the upgrade.
+
+### Known gaps
+- A file without a final newline gets conflict markers when the template adds a last line,
+  instead of a clean merge.
+- `apply.py --dry-run` ends with exit code 1 when a file would be marked; the setup skills do not
+  say so.
+- The marker check misses a closing marker that Prettier turned into a quote (`> > > > > > >`).
+  The opening marker is still found, so the file is still reported.
+- `doctor`'s `upgrade_wall` check looks for the `include` lines of the Makefile exactly as the
+  template writes them.
+- The 0.6.0 gap on `production` without a reviewer, on a private repository on the free plan, is
+  still open.
 
 ## 0.6.0 — 2026-11-17
 
