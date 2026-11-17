@@ -437,8 +437,9 @@ def draw_index(root: Path, quiet: bool) -> int | None:
     """Draw wiki/index.md. None when the index is not kept as fragments (nothing was drawn).
 
     A page with no type or title is left out and named on stderr; it does not stop the others.
-    The head file is what marks an index as drawn: an unstamped wiki/index.md beside it is two
-    sources; alone it is left as it is (a new repository that has not made its first commit).
+    The index has no fragment folder, so it is never two sources: an unstamped wiki/index.md that
+    is not in git (a new repository before its first commit) is left as it is, and so is a head
+    file beside a hand-kept one. The head file is no entry.
     """
     if not (root / "wiki").is_dir() or shape_of(root, "index") != FRAGMENTS:
         return None
@@ -446,17 +447,13 @@ def draw_index(root: Path, quiet: bool) -> int | None:
         for page in wiki_pages(root):
             if page.problem:
                 print(f"skipped {page.problem}", file=sys.stderr)
-    return draw_ledger(root, INDEX_FILE, "wiki/", (root / INDEX_HEAD).is_file(), index_body(root),
+    return draw_ledger(root, INDEX_FILE, "wiki/", False, index_body(root),
                        f"Put it in a page, or in {INDEX_HEAD} for the part above the sections", quiet)
 
 
 def check_index(root: Path) -> list[str]:
-    if not (root / "wiki").is_dir():
-        return []
-    if shape_of(root, "index") == ONE_FILE:
-        if (root / INDEX_HEAD).is_file():
-            return [f"{INDEX_FILE} is kept by hand and {INDEX_HEAD} is there: two sources for the index; "
-                    f"git rm --cached {INDEX_FILE} and delete it, or delete {INDEX_HEAD}"]
+    """Page problems, in the fragments shape only: a hand-kept index keeps every old rule."""
+    if not (root / "wiki").is_dir() or shape_of(root, "index") == ONE_FILE:
         return []
     return [page.problem for page in wiki_pages(root) if page.problem]
 

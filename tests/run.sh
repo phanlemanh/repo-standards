@@ -2482,6 +2482,21 @@ metrics_link "$ix1" && grep -qF -- '- [2026-W07](metrics/2026-W07.md)' "$ix1/wik
 mkdir -p "$ix/wiki/log" "$ix/ontology/glossary"; printf 'x\n' > "$ix/wiki/log/.DS_Store"; printf 'x\n' > "$ix/ontology/glossary/.DS_Store"
 ix_tool check >/dev/null 2>&1 || miss "index: a .DS_Store in wiki/log/ or ontology/glossary/ turns check red ($(ix_tool check 2>&1))"
 ix_tool draw >/dev/null 2>&1 || miss "index: a .DS_Store in a fragment folder makes draw refuse"
+# 48r. the index has no fragment folder, so it is never two sources: a head file beside a hand-kept wiki/index.md
+#      (tracked, or untracked before the first commit) is no reason to refuse
+printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n' > "$ix1/wiki/index.head.md"; cp "$ix1/wiki/index.md" "$TMP/ix1.before"
+rc=0; out=$( cd "$ix1" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, for a tracked hand-kept wiki/index.md beside wiki/index.head.md ($out)"
+rc=0; out=$( cd "$ix1" && python3 tools/ledgers.py check 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "index: check exits $rc, not 0, for a tracked hand-kept wiki/index.md beside wiki/index.head.md ($out)"
+cmp -s "$TMP/ix1.before" "$ix1/wiki/index.md" || miss "index: draw or check changed a tracked hand-kept wiki/index.md"
+ix0="$TMP/indexrepo0"; mkdir -p "$ix0" && git -C "$ix0" init -q -b main
+python3 "$S/apply.py" --target "$ix0" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n' > "$ix0/wiki/index.head.md"; cp "$ix0/wiki/index.md" "$TMP/ix0.before"
+rc=0; out=$( cd "$ix0" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, for an untracked wiki/index.md beside wiki/index.head.md before the first commit ($out)"
+cmp -s "$TMP/ix0.before" "$ix0/wiki/index.md" || miss "index: draw changed an untracked unstamped wiki/index.md"
+case "$out" in *"two sources"*) miss "index: draw says two sources for the index ($out)" ;; esac
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
