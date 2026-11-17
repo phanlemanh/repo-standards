@@ -125,4 +125,29 @@ PY2
 )
 case "$cut" in "unreadable "?*) ;; *) miss "upgrade: an archive cut short is not unreadable ($cut)" ;; esac
 
+# 47g. three-way merge: both sides kept when apart, labelled markers when they meet, an empty
+#      base for a file with no matching base, and a binary file refused
+merge=$(python3 - "$S" <<'PY2' 2>&1 || true
+import sys
+sys.path.insert(0, sys.argv[1])
+import upgrade_merge as um
+base = b"a\nb\nc\nd\ne\n"
+out, clean = um.three_way(b"ours\n" + base, base, base + b"theirs\n", um.release_label("0.0.1"), um.release_label("0.0.2"))
+print("apart", clean and b"ours\n" in out and b"theirs\n" in out)
+out, clean = um.three_way(b"a\nB1\nc\nd\ne\n", base, b"a\nB2\nc\nd\ne\n", um.release_label("0.0.1"), um.release_label("0.0.2"))
+labels = [b"<<<<<<< this repository", b"||||||| repo-setup 0.0.1", b"=======", b">>>>>>> repo-setup 0.0.2"]
+print("meet", (not clean) and all(l in out for l in labels))
+out, clean = um.three_way(b"x\ny\n", b"", b"x\nz\n", um.NO_BASE_LABEL, um.release_label("0.0.2"))
+print("nobase", (not clean) and b"||||||| repo-setup: no matching base" in out)
+try:
+    um.three_way(b"\x00bin\n", b"\x00base\n", b"\x00new\n", um.release_label("0.0.1"), um.release_label("0.0.2"))
+    print("binary False")
+except um.MergeUnavailable:
+    print("binary True")
+PY2
+)
+for case in apart meet nobase binary; do
+  echo "$merge" | grep -qx "$case True" || miss "upgrade: three_way case '$case' is wrong ($(echo "$merge" | tail -1))"
+done
+
 echo "ok  upgrade path (or misses reported above)"
