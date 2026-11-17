@@ -169,4 +169,49 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
   esac
   echo "ok  $spec"
 done
+
+# Upgrade from the previous release (docs/superpowers/specs/2026-11-17-upgrade-path-design.md):
+# build a repository with the last tagged release, edit two files in place, upgrade with this
+# tree. The fresh installs above never take this path. The base is downloaded, as a user's is.
+if [ -z "${PRESETS:-}" ]; then
+  tag=$(git -C "$ROOT" describe --tags --abbrev=0 --match 'repo-setup-v*')
+  prev="$TMP/prev"; mkdir -p "$prev"
+  python3 - "$tag" "$prev" <<'PY'
+import io, sys, tarfile, urllib.request
+tag, dest = sys.argv[1], sys.argv[2]
+url = f"https://codeload.github.com/phanlemanh/repo-standards/tar.gz/refs/tags/{tag}"
+data = urllib.request.urlopen(url, timeout=60).read()
+with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+    tar.extractall(dest, filter="data")
+PY
+  old_apply=$(find "$prev" -path '*/plugins/repo-setup/scripts/apply.py' | head -1)
+  [ -n "$old_apply" ] || { echo "FAIL: $tag has no apply.py"; exit 1; }
+  d="$TMP/upgrade-from-$tag"; mkdir -p "$d"; cd "$d"; git init -q -b main
+  python3 "$old_apply" --preset python --level team --var "project_name=Coffee Shop" \
+    --var "description=E2E upgrade" --var owner=acme >/dev/null
+  printf '# kept by the repository\n' | cat - .editorconfig > x && mv x .editorconfig
+  echo "Kept by the repository." >> README.md
+  rc=0; out=$(python3 "$S/apply.py" --json) || rc=$?
+  field() { python3 -c "import json,sys; print(json.dumps(json.loads(sys.argv[1])[sys.argv[2]]))" "$out" "$1"; }
+  [ "$(field base_unread)" = "[]" ] || { echo "FAIL: upgrade from $tag could not read a base: $(field base_reasons)"; exit 1; }
+  grep -q '^# kept by the repository' .editorconfig || { echo "FAIL: upgrade from $tag lost an edit in .editorconfig"; exit 1; }
+  grep -q '^Kept by the repository.' README.md || { echo "FAIL: upgrade from $tag lost an edit in README.md"; exit 1; }
+  install=$(python3 -c 'import json,sys;[print(c) for c in json.loads(sys.argv[1])["next_commands"]["install"]]' "$out")
+  while IFS= read -r c; do
+    case "$c" in "") continue ;; *"pre-commit install"*) continue ;; esac
+    echo "[upgrade-from-$tag] \$ $c"; bash -c "$c" >/dev/null </dev/null
+  done <<<"$install"
+  git add -A
+  marked=$(field marked)
+  if [ "$marked" = "[]" ]; then
+    [ "$rc" = 0 ] || { echo "FAIL: upgrade from $tag ended with $rc and nothing marked"; exit 1; }
+    make check >/dev/null || { echo "FAIL: make check is red after the upgrade from $tag"; exit 1; }
+  else
+    [ "$rc" = 1 ] || { echo "FAIL: upgrade from $tag marked $marked but ended with $rc"; exit 1; }
+    wall=$(make upgrade 2>&1) && { echo "FAIL: make upgrade is green with $marked marked"; exit 1; }
+    first=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])[0])" "$marked")
+    grep -qF "$first:" <<<"$wall" || { echo "FAIL: make upgrade does not name $first"; exit 1; }
+  fi
+  echo "ok  upgrade from $tag (marked: $marked)"
+fi
 echo "E2E passed."
