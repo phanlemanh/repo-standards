@@ -241,8 +241,8 @@ def draw_ledger(root: Path, rel: str, source: str, has_entries: bool, body: str,
     if target.is_file() and current is None:
         if not has_entries:
             return 0
-        print(f"{rel} is not a drawn file and {source} has entries: two sources for the ledger; "
-              f"git rm --cached {rel} and delete it, or move the entries out", file=sys.stderr)
+        print(f"{rel} is not a drawn file and {source} has entries: two sources for the ledger; move {rel} "
+              f"aside, or delete it once its lines are copied. {hint}", file=sys.stderr)
         return 1
     if edited and current is not None:
         expected = set(body.splitlines())

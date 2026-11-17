@@ -6,14 +6,17 @@ for people, code and AI agents.
 
 | File              | Contains                                            |
 | ----------------- | --------------------------------------------------- |
-| `glossary.md`     | Plain-language definitions of every business term   |
+| `glossary/*.md`   | One file per business term, in plain language       |
+| `glossary.md`     | Same terms in one table, drawn by `make derived`    |
 | `entities/*.yaml` | One file per concept: properties, rules, subtypes   |
 | `relations.yaml`  | How concepts connect (`Customer -places-> Order`)   |
 | `page-types.yaml` | Allowed wiki page types and their required sections |
 
 ## How to change it
 
-1. Edit the YAML / glossary in the same PR as the code that depends on it.
+1. Edit the YAML and the glossary in the same PR as the code that depends on it. A new term:
+   `python3 tools/ledgers.py add-term <Term> --definition "..."` (it writes `glossary/<Term>.md`;
+   `glossary.md` is drawn from the fragments, so do not edit it).
 2. Ontology changes change the meaning of the system: say so in the PR description.
 3. Start small: 3–5 core entities. Add more only when they cause confusion.
 

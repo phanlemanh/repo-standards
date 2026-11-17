@@ -6,3 +6,8 @@ CHANGELOG.md
 src/generated/
 contracts/openapi.json
 .repo-setup.json
+
+# Drawn by `make derived`
+wiki/log.md
+wiki/index.md
+ontology/glossary.md

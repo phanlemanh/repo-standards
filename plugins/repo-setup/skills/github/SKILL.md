@@ -70,8 +70,8 @@ Things only the human can do (give exact steps):
 - Add **one** secret: `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`
   (`gh secret set ANTHROPIC_API_KEY`). Never ask the user to paste a secret into the chat.
 
-Smoke test: create a small intent issue with the "Intent" form (e.g. "add a log line to
-wiki/log.md"), add `agent:implement`, and follow the run (`gh run watch`). Expected: a low-tier PR
+Smoke test: create a small intent issue with the "Intent" form (e.g. "add a log entry with
+`make log m=...`"), add `agent:implement`, and follow the run (`gh run watch`). Expected: a low-tier PR
 that the PR pipeline reviews and auto-merges. Report what actually happened.
 
 ## 4. A proof instead of a person (optional)

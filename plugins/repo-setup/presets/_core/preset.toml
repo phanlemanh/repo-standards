@@ -3,6 +3,11 @@
 # Line-based files: in --adopt mode, missing lines are appended instead of a conflict.
 merge_lines = [".gitignore", ".gitattributes"]
 
+# The head files of the three ledgers (wiki/log.head.md ...): `make split` rewrites one of them from the
+# hand-kept file it replaces and takes it out of .repo-setup.json. From then on it is the repo's own, and
+# an upgrade keeps it instead of merging the template into it.
+user_owned = ["wiki/log.head.md", "wiki/index.head.md", "ontology/glossary.head.md"]
+
 # In --adopt mode a preset file is skipped when the repo already has an equivalent.
 [[equivalents]]
 files = ["README.md"]

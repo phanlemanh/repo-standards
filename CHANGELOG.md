@@ -71,6 +71,38 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   match what `ontology_codegen.py` writes) leaves git and is drawn, stamped. `--verify-against FILE`
   runs the comparison alone against a copy of the old file. What breaks on upgrade: nothing, the
   command runs only when called.
+- **Breaking for new repositories:** a repository set up from now on keeps its wiki log, wiki index
+  and glossary as fragments. The starter no longer gives `wiki/log.md`, `wiki/index.md` (`wiki/+index.md/`)
+  or `ontology/glossary.md`; it gives `wiki/log.head.md`, `wiki/index.head.md`, `ontology/glossary.head.md`
+  and the empty folders `wiki/log/` and `ontology/glossary/`. The three drawn files and the generated
+  code (`src/generated/ontology.ts`, `src/<pkg>/ontology_types.py`) are in `.gitignore`; the two Node
+  and Python presets add the lines, and `.prettierignore` lists the drawn markdown. The archetypes
+  `service-api` and `modular-monolith` no longer add `wiki/+index.md/50-decisions.md`: the decision
+  pages are listed by the drawn index. The three head files are `user_owned`: once `make split`
+  rewrites one, it is taken out of `.repo-setup.json` (it is the repository's own), and `apply.py`
+  keeps it.
+- `.claude/settings.json` gets a `SessionStart` hook that runs `make -s derived` (always exit 0; the
+  error of a failed draw is printed for the agent; nothing happens when `make` or the Makefile is
+  missing), so a session starts with the drawn files present. `tools/wiki_lint.py` draws a ledger that is
+  kept as fragments when its drawn file is absent (a clean clone), so `/repo-setup:doctor` does not
+  report a missing glossary or index before `make derived`.
+- Every writer calls the commands instead of editing a drawn file: `AGENTS.md` (the guide says the
+  three files are drawn by `make derived`; a new page needs only `type` and `title`; one sentence for a
+  repository whose `wiki/index.md` is still in git), the skills `ontology-add` (`add-term`),
+  `wiki-ingest` (the date of the last ingest is the newest file in `wiki/log/`, or the top line of
+  `wiki/log.md` in an old repository), `wiki-health`, `adopt` and `github`, the agent workflow
+  `agent-ci-fix.yml` (`make log m="..."`), and `ontology/README.md`. The `ontology` and `wiki` checks of
+  `checklists/top-tier.toml` accept the head files and `ontology/glossary/`.
+- `draw` on an untracked hand-kept `wiki/log.md` or `ontology/glossary.md` beside fragments no longer
+  says `git rm --cached` (the file is not in git): it says to move the file aside, or delete it once its
+  lines are copied.
+- What breaks on upgrade: nothing visible. `apply.py` reports `wiki/log.md`, `wiki/index.md` and
+  `ontology/glossary.md` as `dropped` (the template no longer gives them) and leaves them in place, so a
+  repository that keeps them in git stays `one-file`; `wiki/log.md merge=union` stays in
+  `.gitattributes`. It also creates the head files, the two folders (`.gitkeep`) and the hook, and
+  merges the new `.gitignore` lines; a tracked file is not affected by `.gitignore`. A repository that
+  edited `.claude/settings.json` has the hook merged in or marked on conflict. Run `make split L=<ledger>`
+  per ledger, in a pull request of its own, to move to the fragments shape.
 
 ## 0.7.0 — 2026-11-17
 

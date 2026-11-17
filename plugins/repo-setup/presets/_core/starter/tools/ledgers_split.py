@@ -16,7 +16,8 @@ place.
   gen       no fragments: the generated file leaves git and is drawn, stamped
 
 A head file that is already there is overwritten only while it is as repo-setup wrote it (its
-sha256 is the one .repo-setup.json records for it).
+sha256 is the one .repo-setup.json records for it). Once split rewrites it, it is taken out of
+.repo-setup.json: the head file is the repository's own, and a later repo-setup run keeps it.
 """
 
 from __future__ import annotations
@@ -134,6 +135,25 @@ def manifest_hash(root: Path, rel: str) -> str | None:
         return None
     files = data.get("files") if isinstance(data, dict) else None
     return files.get(rel) if isinstance(files, dict) else None
+
+
+def manifest_without(root: Path, rels: list[str]) -> str | None:
+    """The text of .repo-setup.json without the entries for `rels` (`files` and `file_versions`);
+    None when there is no manifest to read or it records none of them. A head file that split
+    rewrites is the repository's own from then on: a later repo-setup run keeps it."""
+    try:
+        data = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    found = False
+    for key in ("files", "file_versions"):
+        section = data.get(key)
+        if isinstance(section, dict):
+            for rel in rels:
+                found = section.pop(rel, None) is not None or found
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n" if found else None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -566,6 +586,9 @@ def prepare(root: Path, old: str, writes: dict[str, str], drawn: str) -> tuple[d
         return files, [f".gitignore cannot be read: {error}"]
     if gitignore is not None:
         files[".gitignore"] = gitignore
+    manifest = manifest_without(root, [rel for rel in writes if rel.endswith(".head.md")])
+    if manifest is not None:
+        files[MANIFEST] = manifest
     files[old] = drawn
     return files, [problem for rel in files if (problem := target_problem(root, rel))]
 

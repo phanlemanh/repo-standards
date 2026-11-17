@@ -283,6 +283,16 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
             rep.warn(str(data["wiki"]), f"entity page for {name} is not linked from any wiki page")
 
 
+def draw_missing(root: Path) -> None:
+    """Draw the ledgers kept as fragments whose drawn file is absent (a clean clone that has not
+    run `make derived` yet), so that the lint reads them instead of reporting them missing. A drawn
+    file that is there is read as it is; a ledger kept in one file is not touched."""
+    if ledgers is None or not (root / "wiki").is_dir():
+        return
+    if any(not (root / rel).exists() for rel in ledgers.OLD_PATHS.values()):
+        ledgers.cmd_draw(argparse.Namespace(root=str(root), quiet=True))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -293,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else find_repo_root()
 
+    draw_missing(root)
     rep = Report()
     entities = check_ontology(root, rep)
     check_wiki(root, rep, entities)

@@ -15,6 +15,78 @@ subst() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
 misses=0
 miss() { echo "FAIL: $*" >&2; misses=$((misses + 1)); }
 
+# What a release before ledgers-as-fragments wrote: the wiki log, the wiki index and the glossary as hand-kept
+# files. A fixture that tests the one-file shape (an old repository) calls this; with a second word it also
+# puts them in git, past the .gitignore lines that keep a new repository's drawn copies out of it.
+onefile_ledgers() { # <dir> [track]
+  mkdir -p "$1/wiki" "$1/ontology"
+  cat > "$1/wiki/log.md" <<'LEDGER'
+---
+type: log
+title: Change log of the wiki and notable code changes
+---
+
+# Log
+
+Newest first. One line each: `YYYY-MM-DD — what changed — link`.
+
+- 2026-01-01 — Repository created with repo-setup (test).
+LEDGER
+  cat > "$1/ontology/glossary.md" <<'LEDGER'
+# Glossary — P
+
+One line per business term. If two people could understand a word differently,
+it belongs here. Code, docs and agents must use these exact names.
+
+| Term (code name)      | Definition                             | Not to be confused with    | Display name |
+| --------------------- | -------------------------------------- | -------------------------- | ------------ |
+| _Example:_ `Customer` | A person who has bought at least once. | `Visitor` (has not bought) | Customer     |
+
+<!-- Add your terms above. Keep definitions to one sentence. -->
+LEDGER
+  cat > "$1/wiki/index.md" <<'LEDGER'
+---
+type: index
+title: P wiki
+---
+
+# P wiki
+
+Short, linked pages about the _why_ of this project. Agents read this page
+first; keep it under ~60 lines. Page formats: `ontology/page-types.yaml`.
+
+## Entities
+
+<!-- - [Customer](entities/customer.md) — who buys; VIP rules -->
+
+## Flows
+
+<!-- - [Checkout](flows/checkout.md) -->
+
+## Specs
+
+<!-- - [0001 VIP discount](specs/0001-vip-discount.md) -->
+
+## Decisions
+
+- [0001 Record decisions in the wiki](decisions/0001-record-decisions-in-the-wiki.md)
+
+## Incidents
+
+<!-- - [2026-01-15 Double charge](incidents/2026-01-15-double-charge.md) -->
+
+## Metrics
+
+<!-- weekly reports from tools/sdlc_metrics.py (team level) -->
+
+## Log
+
+See [log.md](log.md) for a chronological list of changes.
+LEDGER
+  [ "${2:-}" = track ] && git -C "$1" add -f wiki/log.md wiki/index.md ontology/glossary.md
+  return 0
+}
+
 PRESETS=$(python3 "$S/apply.py" --list-presets --json | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)))")
 for preset in $PRESETS; do
   for level in starter team; do
@@ -104,7 +176,7 @@ check "'src/greet.ts' in d['skipped']" "'src/greet.ts' in d['skipped']"
 check "'README.md' in d['conflict']" "'README.md' in d['conflict']"
 check "'.gitignore' in d['merged']" "'.gitignore' in d['merged']"
 check "'package.json' in d['kept']" "'package.json' in d['kept']"
-check "'AGENTS.md' in d['created'] and 'ontology/glossary.md' in d['created']" "'AGENTS.md' in d['created'] and 'ontology/glossary.md' in d['created']"
+check "'AGENTS.md' in d['created'] and 'ontology/glossary.head.md' in d['created'] and 'ontology/glossary.md' not in d['created']" "'AGENTS.md' in d['created'] and 'ontology/glossary.head.md' in d['created'] and 'ontology/glossary.md' not in d['created']"
 grep -q '^node_modules/$' "$a/.gitignore" && grep -q '^\.env$' "$a/.gitignore" || fail "adopt: .gitignore not merged"
 [ "$(grep -c '^\.env$' "$a/.gitignore")" = 1 ] || fail "adopt: duplicate lines"
 again=$(python3 "$S/apply.py" --target "$a" --json | json 'len(d["created"])+len(d["merged"])')
@@ -530,6 +602,7 @@ PY
 la="$TMP/lang"; mkdir -p "$la"
 python3 "$S/apply.py" --target "$la" --preset python --var project_name=L --var description=x --var owner=a --var conversation_language=vi --var docs_language=en >/dev/null
 grep -q '^## Language' "$la/AGENTS.md" && grep -q 'Conversation: vi' "$la/AGENTS.md" && grep -q 'Documents: en' "$la/AGENTS.md" || miss "AGENTS.md lacks the language rule"
+( cd "$la" && python3 tools/ledgers.py draw >/dev/null 2>&1 )   # the glossary is drawn from its fragments
 grep -q 'Display name' "$la/ontology/glossary.md" || miss "glossary lacks a display name column"
 git -C "$la" init -q -b main; git -C "$la" add -A
 python3 "$S/doctor.py" --target "$la" --json | json '",".join(r["id"] for r in d["failed"])' | grep -q language_policy && miss "doctor rejects the language section"
@@ -2007,6 +2080,7 @@ fl="$TMP/flow"; mkdir -p "$fl" && git -C "$fl" init -q -b main
 python3 "$S/apply.py" --target "$fl" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
 fl_git() { git -C "$fl" -c user.name=t -c user.email=t@example.com "$@"; }
 fl_save() { fl_git add -A && fl_git commit -q -m "$1"; }
+onefile_ledgers "$fl" track   # the merge=union rule is for a repository that keeps wiki/log.md in git (one-file shape)
 # The log is "newest first": every branch adds its line at the same place.
 fl_log() {
   python3 - "$fl/wiki/log.md" "$1" <<'PY'
@@ -2212,6 +2286,7 @@ echo "ok  flow (or misses reported above)"
 #     waits for, and a drawn file that is still in git turns `make check` red.
 dv="$TMP/derived"; mkdir -p "$dv" && git -C "$dv" init -q -b main
 python3 "$S/apply.py" --target "$dv" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$dv" track   # an older repository: the three ledgers are hand-kept files in git
 dv_git() { git -C "$dv" -c user.name=t -c user.email=t@example.com "$@"; }
 dv_ledger() { ( cd "$dv" && python3 tools/ledgers.py "$@" ); }
 # 48a. a target a later file adds to DERIVED_TARGETS still runs before `make test`, on a clean clone
@@ -2234,9 +2309,9 @@ dv_git rm -q --cached wiki/log.md; rm -f "$dv/wiki/log.md"
 [ "$(dv_ledger shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments when wiki/log.md is absent"
 printf '# Log\n\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"
 [ "$(dv_ledger shape log 2>&1)" = fragments ] || miss "derived: shape log is not fragments while wiki/log.md is not in git"
-dv_git add wiki/log.md
+dv_git add -f wiki/log.md
 [ "$(dv_ledger shape log 2>&1)" = one-file ] || miss "derived: shape log is not one-file when an unstamped wiki/log.md is in git"
-printf 'x sha256:abc\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"; dv_git add wiki/log.md
+printf 'x sha256:abc\n- 2026-01-01 — start\n' > "$dv/wiki/log.md"; dv_git add -f wiki/log.md
 [ "$(dv_ledger shape log 2>&1)" = one-file ] || miss "derived: a wiki/log.md whose first line only contains sha256: is not one-file"
 dv_nogit="$TMP/derived-nogit"; mkdir -p "$dv_nogit/wiki" "$dv_nogit/tools"
 cp "$dv/tools/ledgers.py" "$dv_nogit/tools/" 2>/dev/null || true
@@ -2275,6 +2350,7 @@ assert ledgers.read_stamped(pathlib.Path('README.md')) == (None, False)
 # 48d-48g. the wiki log: one file per entry, drawn into wiki/log.md
 lg="$TMP/logrepo"; mkdir -p "$lg" && git -C "$lg" init -q -b main
 python3 "$S/apply.py" --target "$lg" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$lg" track
 lg_git() { git -C "$lg" -c user.name=t -c user.email=t@example.com "$@"; }
 lg_tool() { ( cd "$lg" && python3 tools/ledgers.py "$@" ); }
 lg_git add -A && lg_git commit -q -m "chore: base"
@@ -2330,6 +2406,7 @@ cmp -s "$TMP/log.edit" "$lg/wiki/log.md" || miss "log: draw changed a hand-edite
 #      untracked; make derived is green and leaves it alone
 nc="$TMP/nocommit"; mkdir -p "$nc" && git -C "$nc" init -q -b main
 python3 "$S/apply.py" --target "$nc" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$nc"   # a hand-kept wiki/log.md that git does not know yet
 cp "$nc/wiki/log.md" "$TMP/nc.log"
 ( cd "$nc" && make derived >/dev/null 2>&1 ) || miss "log: make derived is red in a new repository with no commit yet"
 cmp -s "$TMP/nc.log" "$nc/wiki/log.md" || miss "log: make derived changed an unstamped wiki/log.md"
@@ -2342,6 +2419,7 @@ frag=$(ls "$lg"/wiki/log/*.md 2>/dev/null | head -1 || true)
 # 48j. two sources: a tracked hand-kept wiki/log.md beside an entry is red in check and in make check
 ts="$TMP/twosrc"; mkdir -p "$ts" && git -C "$ts" init -q -b main
 python3 "$S/apply.py" --target "$ts" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$ts" track
 git -C "$ts" add -A && git -C "$ts" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
 mkdir -p "$ts/wiki/log" && printf 'x\n' > "$ts/wiki/log/2026-01-01-01-x.md"
 rc=0; out=$(cd "$ts" && python3 tools/ledgers.py check 2>&1) || rc=$?
@@ -2352,13 +2430,14 @@ if ( cd "$ts" && make ledgers-check >/dev/null 2>&1 ); then miss "log: make ledg
 #      table, sorted by term, a pipe escaped
 gl="$TMP/glossrepo"; mkdir -p "$gl" && git -C "$gl" init -q -b main
 python3 "$S/apply.py" --target "$gl" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$gl" track
 gl_git() { git -C "$gl" -c user.name=t -c user.email=t@example.com "$@"; }
 gl_tool() { ( cd "$gl" && python3 tools/ledgers.py "$@" ); }
 gl_git add -A && gl_git commit -q -m "chore: base"
 # one-file shape: the row goes into the table of ontology/glossary.md, above the closing comment
 gl_tool add-term Order --definition "A confirmed purchase." --not-confused-with "Cart" >/dev/null || miss "glossary: add-term failed in the one-file shape"
 grep -qF '| `Order` | A confirmed purchase. | Cart | Order |' "$gl/ontology/glossary.md" || miss "glossary: add-term in the one-file shape wrote no row"
-[ ! -d "$gl/ontology/glossary" ] || miss "glossary: add-term in the one-file shape wrote a fragment"
+[ -z "$(ls "$gl/ontology/glossary" 2>/dev/null)" ] || miss "glossary: add-term in the one-file shape wrote a fragment"
 if gl_tool add-term Order --definition "again" >/dev/null 2>&1; then miss "glossary: add-term twice for one term is green in the one-file shape"; fi
 gl_git checkout -q -- ontology/glossary.md && gl_git rm -q --cached ontology/glossary.md && rm -f "$gl/ontology/glossary.md"
 gl_git commit -q -m "docs: glossary becomes fragments"
@@ -2366,7 +2445,7 @@ gl_tool draw >/dev/null || miss "glossary: draw failed with no term"
 [ "$(sed -n '2,$p' "$gl/ontology/glossary.md" | grep -c '^| ')" = 2 ] || miss "glossary: with no term the drawn file is not the head, a header row and a separator"
 gl_tool add-term Order --definition "A confirmed | purchase." --display "Customer order" >/dev/null || miss "glossary: add-term failed in the fragments shape"
 gl_tool add-term Customer --definition "A person who has bought." --not-confused-with '`Visitor`' >/dev/null || miss "glossary: add-term Customer failed"
-[ "$(gl_git status --porcelain | grep -vc ' ontology/glossary.md$')" = 1 ] || miss "glossary: add-term touched more than the fragment folder ($(gl_git status --porcelain | tr '\n' ';'))"
+[ "$(gl_git status --porcelain | grep -vc -e ' ontology/glossary.md$' -e '^?? ontology/glossary/')" = 0 ] || miss "glossary: add-term touched more than the fragment folder ($(gl_git status --porcelain | tr '\n' ';'))"
 grep -qx 'term: Order' "$gl/ontology/glossary/Order.md" || miss "glossary: the fragment has no term: line"
 gl_tool draw >/dev/null || miss "glossary: draw failed on two fragments"
 head -1 "$gl/ontology/glossary.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from ontology/glossary/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' || miss "glossary: ontology/glossary.md does not open with the stamp line"
@@ -2414,6 +2493,7 @@ rc=0; out=$(gl_tool draw 2>&1) || rc=$?
 # 48n (plan 48j). the wiki index: head, one section per page type in page-types.yaml order, one line per page
 ix="$TMP/indexrepo"; mkdir -p "$ix" && git -C "$ix" init -q -b main
 python3 "$S/apply.py" --target "$ix" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$ix" track
 ix_git() { git -C "$ix" -c user.name=t -c user.email=t@example.com "$@"; }
 ix_tool() { ( cd "$ix" && python3 tools/ledgers.py "$@" ); }
 ix_git add -A && ix_git commit -q -m "chore: base"
@@ -2461,6 +2541,7 @@ rm -f "$ix/wiki/entities/untitled.md" "$ix/wiki/entities/bare.md"
 # a one-file repository keeps the old rules: a page the hand-kept index does not link is still a warning
 ix1="$TMP/indexrepo1"; mkdir -p "$ix1" && git -C "$ix1" init -q -b main
 python3 "$S/apply.py" --target "$ix1" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$ix1" track
 git -C "$ix1" add -A && git -C "$ix1" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
 printf -- '---\ntype: entity\ntitle: Basket\n---\n# Basket\n' > "$ix1/wiki/entities/basket.md"
 lint=$(cd "$ix1" && python3 tools/wiki_lint.py 2>&1 || true)
@@ -2492,6 +2573,7 @@ rc=0; out=$( cd "$ix1" && python3 tools/ledgers.py check 2>&1 ) || rc=$?
 cmp -s "$TMP/ix1.before" "$ix1/wiki/index.md" || miss "index: draw or check changed a tracked hand-kept wiki/index.md"
 ix0="$TMP/indexrepo0"; mkdir -p "$ix0" && git -C "$ix0" init -q -b main
 python3 "$S/apply.py" --target "$ix0" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$ix0"
 printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n' > "$ix0/wiki/index.head.md"; cp "$ix0/wiki/index.md" "$TMP/ix0.before"
 rc=0; out=$( cd "$ix0" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
 [ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, for an untracked wiki/index.md beside wiki/index.head.md before the first commit ($out)"
@@ -2517,7 +2599,7 @@ gn_git() { git -C "$gn" -c user.name=t -c user.email=t@example.com "$@"; }
 gn_out=src/generated/ontology.ts
 # one-file: the file is committed, as today; make derived leaves it alone and make ontology still compares it
 ( cd "$gn" && python3 tools/ontology_codegen.py --lang ts --out $gn_out >/dev/null )
-gn_git add -A && gn_git commit -q -m "chore: base"
+gn_git add -A && gn_git add -f "$gn_out" && gn_git commit -q -m "chore: base"
 [ "$(cd "$gn" && python3 tools/ledgers.py shape gen --gen-out $gn_out)" = one-file ] || miss "gen: shape gen is not one-file for a committed unstamped $gn_out"
 cp "$gn/$gn_out" "$TMP/gn.before"
 gn_make "$gn" derived >/dev/null || miss "gen: make derived fails in the one-file shape"
@@ -2581,7 +2663,7 @@ out=$(gq_make -n test); case "$out" in *"ledgers.py draw-gen"*"pytest"*) ;; *) m
 gq_make ontology >/dev/null || miss "gen: python: make ontology is red in the fragments shape"
 # python one-file: committed and edited, make ontology is red as today
 rm -f "$gq/$gq_out"; ( cd "$gq" && python3 tools/ontology_codegen.py --lang python --out $gq_out >/dev/null )
-git -C "$gq" add -A; git -C "$gq" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+git -C "$gq" add -A; git -C "$gq" add -f "$gq_out"; git -C "$gq" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
 printf '# x\n' >> "$gq/$gq_out"
 if gq_make ontology >/dev/null; then miss "gen: python: make ontology is green for an out of date committed file (one-file shape)"; fi
 # 48t (plan 48n). the image waits for derived; the drawn file reaches the build context
@@ -2602,7 +2684,7 @@ sp_new() { # <dir>: a ts-node repository with the fixture ledgers and a committe
   python3 "$S/apply.py" --target "$1" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
   cp -R "$LF/." "$1/"
   ( cd "$1" && python3 tools/ontology_codegen.py --lang ts --out src/generated/ontology.ts >/dev/null )
-  git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+  git -C "$1" add -A && git -C "$1" add -f wiki/log.md wiki/index.md ontology/glossary.md src/generated/ontology.ts && git -C "$1" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
 }
 sp_snap() { # <dir>: one hash of every file outside .git and of the git index
   python3 - "$1" <<'PY'
@@ -2779,6 +2861,8 @@ grep -qx 'summary: goods in, counted twice' "$sc/wiki/flows/receiving.md" || mis
 sc_tool check >/dev/null 2>&1 || miss "split: ledgers.py check is red after a split that collapsed whitespace ($(sc_tool check 2>&1))"
 # 48y (fix round 1). an error while writing leaves nothing half done: git and every file as before
 if [ "$(id -u)" != 0 ]; then
+  # an older repository: its .gitignore has no line for the drawn glossary yet, so split has to write one
+  grep -vxF 'ontology/glossary.md' "$sb/.gitignore" > "$sb/.gitignore.tmp"; mv "$sb/.gitignore.tmp" "$sb/.gitignore"
   chmod 444 "$sb/.gitignore"; st=$(sb_git status --porcelain)
   sb_refused "a read-only .gitignore" glossary; case "$out" in *.gitignore*) ;; *) miss "split: a read-only .gitignore is not named ($out)" ;; esac
   [ "$(sb_git status --porcelain)" = "$st" ] || miss "split: a read-only .gitignore changed git status ($(sb_git status --porcelain | tr '\n' ';'))"
@@ -2805,6 +2889,157 @@ PY
 [ "$(sp_snap "$sb")" = "$before" ] || miss "split: a write that fails half way left a file behind or changed one"
 [ "$(sb_git status --porcelain)" = "$st" ] || miss "split: a write that fails half way left git changed ($(sb_git status --porcelain | tr '\n' ';'))"
 [ "$(sb_tool shape glossary)" = one-file ] || miss "split: after a write that failed half way the glossary is not one-file again"
+# 48z (plan 48r). a new repository keeps its three ledgers as fragments, in every preset: nothing the
+#      machine draws is in git after the first commit, and a clean clone draws it and passes the checks.
+#      The real `make check` per preset (npm ci, uv sync) is left to tests/e2e.sh.
+for nw_preset in $PRESETS; do
+  nw="$TMP/newrepo-$nw_preset"; mkdir -p "$nw" && git -C "$nw" init -q -b main
+  python3 "$S/apply.py" --target "$nw" --preset "$nw_preset" --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+  nw_git() { git -C "$nw" -c user.name=t -c user.email=t@example.com "$@"; }
+  case $nw_preset in ts-node|ts-api|react-vite) nw_gen=src/generated/ontology.ts ;; python|fastapi) nw_gen=src/p/ontology_types.py ;; *) nw_gen="" ;; esac
+  for nw_l in log index glossary; do
+    [ "$(cd "$nw" && python3 tools/ledgers.py shape $nw_l 2>&1)" = fragments ] || miss "new repo ($nw_preset): shape $nw_l is not fragments"
+  done
+  ( cd "$nw" && make derived PYTHON=python3 >/dev/null 2>&1 ) || miss "new repo ($nw_preset): make derived is red before the first commit"
+  nw_git add -A && nw_git commit -q -m "chore: base"
+  nw_tracked=$(nw_git ls-files | grep -xE "wiki/log.md|wiki/index.md|ontology/glossary.md|${nw_gen:-no-gen-file}" || true)
+  [ -z "$nw_tracked" ] || miss "new repo ($nw_preset): the first commit holds drawn files: $(echo $nw_tracked)"
+  if [ "$nw_preset" != claude-plugin ]; then
+    for nw_f in wiki/log.head.md wiki/index.head.md ontology/glossary.head.md wiki/log/.gitkeep ontology/glossary/.gitkeep; do
+      nw_git ls-files --error-unmatch "$nw_f" >/dev/null 2>&1 || miss "new repo ($nw_preset): $nw_f is not part of the first commit"
+    done
+    for nw_f in wiki/log.md.tmpl ontology/glossary.md.tmpl wiki/+index.md; do
+      [ ! -e "$nw/$nw_f" ] || miss "new repo ($nw_preset): $nw_f is still given"
+    done
+  fi
+  nw_clone="$TMP/newrepo-$nw_preset-clone"; git clone -q "$nw" "$nw_clone" 2>/dev/null
+  ( cd "$nw_clone" && make derived PYTHON=python3 >/dev/null 2>&1 ) || miss "new repo ($nw_preset): make derived is red on a clean clone"
+  ( cd "$nw_clone" && python3 tools/ledgers.py check >/dev/null 2>&1 ) || miss "new repo ($nw_preset): ledgers.py check is red on a clean clone"
+  ( cd "$nw_clone" && make derived-untracked PYTHON=python3 >/dev/null 2>&1 ) || miss "new repo ($nw_preset): make derived-untracked is red on a clean clone"
+  [ -z "$nw_gen" ] || [ -f "$nw_clone/$nw_gen" ] || miss "new repo ($nw_preset): a clean clone does not draw $nw_gen"
+  if [ "$nw_preset" != claude-plugin ]; then
+    for nw_f in wiki/log.md wiki/index.md ontology/glossary.md; do
+      [ -f "$nw_clone/$nw_f" ] || miss "new repo ($nw_preset): a clean clone does not draw $nw_f"
+    done
+    ( cd "$nw_clone" && python3 tools/wiki_lint.py >/dev/null 2>&1 ) || miss "new repo ($nw_preset): wiki_lint is red on a clean clone ($(cd "$nw_clone" && python3 tools/wiki_lint.py 2>&1 | head -5))"
+    grep -qF 'Newest first.' "$nw_clone/wiki/log.md" || miss "new repo ($nw_preset): the drawn log has no head"
+    if grep -qF 'Repository created' "$nw_clone/wiki/log.md"; then miss "new repo ($nw_preset): the drawn log has a first line nobody wrote"; fi
+    grep -qF -- '(decisions/0001-record-decisions-in-the-wiki.md)' "$nw_clone/wiki/index.md" || miss "new repo ($nw_preset): the drawn index lacks the first decision"
+    grep -qxF '| Term (code name) | Definition | Not to be confused with | Display name |' "$nw_clone/ontology/glossary.md" || miss "new repo ($nw_preset): the drawn glossary has no header row"
+    grep -qF '# Glossary — P' "$nw_clone/ontology/glossary.md" || miss "new repo ($nw_preset): the drawn glossary lost the project name"
+  fi
+done
+# 48za (plan 48s). no writer is told to edit a drawn file: the guide, the skills and the agent workflow call
+#      make log and add-term, and keep one sentence for a repository that has not split yet
+nw_guide="$TMP/newrepo-ts-node/AGENTS.md"; wr="$ROOT/plugins/repo-setup"
+for nw_f in "$nw_guide" "$wr/presets/_core/starter/dot.claude/skills/wiki-ingest/SKILL.md" "$wr/presets/_core/starter/dot.claude/skills/wiki-health/SKILL.md" \
+  "$wr/presets/_core/starter/dot.claude/skills/ontology-add/SKILL.md" "$wr/skills/adopt/SKILL.md" "$wr/skills/github/SKILL.md" \
+  "$wr/capabilities/github-agents/team/dot.github/workflows/agent-ci-fix.yml"; do
+  grep -qF 'make log' "$nw_f" || miss "writers: ${nw_f#$ROOT/} does not tell to run make log"
+  if grep -nE 'wiki/log\.md' "$nw_f" | grep -iE 'append|add (one|a) line|one line at the top|table row|at the top of the list' >/dev/null; then
+    miss "writers: ${nw_f#$ROOT/} still tells to edit wiki/log.md by hand"
+  fi
+done
+grep -qF 'ledgers.py add-term' "$wr/presets/_core/starter/dot.claude/skills/ontology-add/SKILL.md" || miss "writers: ontology-add does not call add-term"
+if grep -qF 'one table row' "$wr/presets/_core/starter/dot.claude/skills/ontology-add/SKILL.md"; then miss "writers: ontology-add still writes a table row of the glossary by hand"; fi
+grep -qF 'are drawn by `make derived`; edit the fragments, not the drawn files' "$nw_guide" || miss "writers: AGENTS.md does not say that the three ledgers are drawn"
+for nw_f in "$nw_guide" "$wr/presets/_core/starter/dot.claude/skills/wiki-ingest/SKILL.md" "$wr/presets/_core/starter/dot.claude/skills/ontology-add/SKILL.md"; do
+  grep -qF 'still in git' "$nw_f" || miss "writers: ${nw_f#$ROOT/} has no sentence for a repository whose wiki/index.md is still in git"
+done
+grep -qF 'needs only `type` and `title`' "$nw_guide" || miss "writers: AGENTS.md does not say that a new page needs only type and title"
+grep -q 'wiki/log/' "$wr/presets/_core/starter/dot.claude/skills/wiki-ingest/SKILL.md" || miss "writers: wiki-ingest does not read the date of the last ingest from wiki/log/"
+grep -qF 'glossary/' "$wr/checklists/top-tier.toml" || miss "writers: the ontology check of top-tier.toml does not accept ontology/glossary/"
+# 48zb (plan 48t). settings.json opens every session by drawing; the hook always exits 0 and prints what went wrong
+hk="$TMP/newrepo-ts-node"; hk_cmd="$TMP/hook.cmd"
+python3 - "$hk/.claude/settings.json" "$hk_cmd" <<'PY' || miss "hook: .claude/settings.json has no SessionStart hook that runs make -s derived"
+import json, sys
+groups = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]["SessionStart"]
+cmds = [h["command"] for g in groups for h in g["hooks"] if h["type"] == "command"]
+assert len(cmds) == 1 and "make -s derived" in cmds[0], cmds
+assert cmds[0].rstrip().endswith("exit 0"), cmds[0]
+open(sys.argv[2], "w", encoding="utf-8").write(cmds[0])
+PY
+hk_work="$TMP/hook-work"; git clone -q "$hk" "$hk_work" 2>/dev/null
+rc=0; ( cd "$hk_work" && /bin/sh -c "$(cat "$hk_cmd")" >/dev/null 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "hook: the SessionStart command exits $rc on a clean clone"
+[ -f "$hk_work/wiki/log.md" ] || miss "hook: the SessionStart command did not draw wiki/log.md"
+printf 'DERIVED_TARGETS += zz\n.PHONY: zz\nzz: ; @echo zz-broke >&2; false\n' > "$hk_work/mk/zz.mk"
+rc=0; out=$( cd "$hk_work" && /bin/sh -c "$(cat "$hk_cmd")" 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "hook: the SessionStart command exits $rc when make derived fails"
+case "$out" in *zz-broke*) ;; *) miss "hook: the SessionStart command hides the error of make derived ($out)" ;; esac
+rc=0; ( cd "$hk_work" && env PATH=/nonexistent /bin/sh -c "$(cat "$hk_cmd")" >/dev/null 2>&1 ) || rc=$?
+[ "$rc" = 0 ] || miss "hook: the SessionStart command exits $rc when make is not installed"
+hk_mk="$TMP/hook-market"; mkdir -p "$hk_mk"
+python3 "$S/apply.py" --target "$hk_mk" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme --var marketplace=acme/standards >/dev/null
+python3 - "$hk_mk/.claude/settings.json" <<'PY' || miss "hook: with a marketplace, settings.json is not one JSON object with the hook and the plugin keys"
+import json, sys
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+assert "SessionStart" in s["hooks"] and "extraKnownMarketplaces" in s and "enabledPlugins" in s, list(s)
+PY
+# 48zc. split takes a head file out of the manifest once it rewrites it, so a later repo-setup run keeps it
+mf="$TMP/manifest"; mkdir -p "$mf" && git -C "$mf" init -q -b main
+python3 "$S/apply.py" --target "$mf" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+mf_git() { git -C "$mf" -c user.name=t -c user.email=t@example.com "$@"; }
+onefile_ledgers "$mf" track
+awk '/^Newest first\./ { print "A note the team added."; print "" } { print }' "$mf/wiki/log.md" > "$mf/wiki/log.tmp" && mv "$mf/wiki/log.tmp" "$mf/wiki/log.md"   # a head that differs from the template
+printf -- '- 2026-01-02 — typed by hand\n' >> "$mf/wiki/log.md"
+mf_git add -f -A && mf_git commit -q -m "chore: base"
+( cd "$mf" && python3 - <<'PY'
+import json, pathlib
+d = json.loads(pathlib.Path(".repo-setup.json").read_text())
+assert "wiki/log.head.md" in d["files"], "the template gives wiki/log.head.md"
+PY
+) || miss "split manifest: .repo-setup.json does not record wiki/log.head.md"
+( cd "$mf" && python3 tools/ledgers.py split log >/dev/null 2>&1 ) || miss "split manifest: split log failed on a head file as the template wrote it ($(cd "$mf" && python3 tools/ledgers.py split log 2>&1 | head -3))"
+mf_git add -A && mf_git commit -q -m "docs: split"
+( cd "$mf" && python3 - <<'PY'
+import json, pathlib
+d = json.loads(pathlib.Path(".repo-setup.json").read_text())
+assert "wiki/log.head.md" not in d["files"] and "wiki/log.head.md" not in d.get("file_versions", {}), list(d["files"])
+assert "wiki/index.head.md" in d["files"] and d["tool"] == "repo-setup"
+PY
+) || miss "split manifest: split log left wiki/log.head.md in .repo-setup.json, or lost another key"
+cp "$mf/wiki/log.head.md" "$TMP/mf.head"
+mf_out=$(python3 "$S/apply.py" --target "$mf" --json)
+printf '%s' "$mf_out" | json '"wiki/log.head.md" in d["kept"] and not [k for k in ("created","updated","merged","edited","marked","conflict") if "wiki/log.head.md" in d[k]]' | grep -q True || miss "split manifest: apply.py does not report the split wiki/log.head.md as kept ($(printf '%s' "$mf_out" | json 'd["kept"]'))"
+cmp -s "$TMP/mf.head" "$mf/wiki/log.head.md" || miss "split manifest: apply.py changed a split wiki/log.head.md"
+# a dry run leaves the manifest as it was
+mf2="$TMP/manifest2"; mkdir -p "$mf2" && git -C "$mf2" init -q -b main
+python3 "$S/apply.py" --target "$mf2" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$mf2" track; git -C "$mf2" add -f -A; git -C "$mf2" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+cp "$mf2/.repo-setup.json" "$TMP/mf2.manifest"
+( cd "$mf2" && python3 tools/ledgers.py split log --dry-run >/dev/null 2>&1 )
+cmp -s "$TMP/mf2.manifest" "$mf2/.repo-setup.json" || miss "split manifest: split --dry-run changed .repo-setup.json"
+# 48zd. a repository from an earlier release keeps its tracked one-file ledgers when it upgrades
+od="$TMP/oldrepo"; mkdir -p "$od" && git -C "$od" init -q -b main
+python3 "$S/apply.py" --target "$od" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+onefile_ledgers "$od" track
+python3 - "$od" <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1]); m = root / ".repo-setup.json"; d = json.loads(m.read_text())
+for rel in ("wiki/log.md", "wiki/index.md", "ontology/glossary.md"):   # what the earlier release recorded
+    d["files"][rel] = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+    d["file_versions"][rel] = d["version"]
+m.write_text(json.dumps(d, indent=2) + "\n")
+PY
+git -C "$od" add -f -A; git -C "$od" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+cp "$od/wiki/log.md" "$TMP/od.log"; cp "$od/wiki/index.md" "$TMP/od.index"; cp "$od/ontology/glossary.md" "$TMP/od.gl"
+od_out=$(python3 "$S/apply.py" --target "$od" --json)
+printf '%s' "$od_out" | json 'sorted(set(d["dropped"]) & {"wiki/log.md","wiki/index.md","ontology/glossary.md"})' | grep -qF "['ontology/glossary.md', 'wiki/index.md', 'wiki/log.md']" || miss "old repo: apply.py does not report the three one-file ledgers as dropped ($(printf '%s' "$od_out" | json 'd["dropped"]'))"
+cmp -s "$TMP/od.log" "$od/wiki/log.md" && cmp -s "$TMP/od.index" "$od/wiki/index.md" && cmp -s "$TMP/od.gl" "$od/ontology/glossary.md" || miss "old repo: an upgrade changed a hand-kept ledger"
+for od_l in log index glossary; do
+  [ "$(cd "$od" && python3 tools/ledgers.py shape $od_l)" = one-file ] || miss "old repo: shape $od_l is not one-file after the upgrade (the new .gitignore lines must not matter to a tracked file)"
+done
+grep -qxF 'wiki/log.md' "$od/.gitignore" || miss "old repo: the upgrade did not bring the new .gitignore lines"
+( cd "$od" && python3 tools/ledgers.py check >/dev/null 2>&1 && make derived-untracked PYTHON=python3 >/dev/null 2>&1 && make derived PYTHON=python3 >/dev/null 2>&1 ) || miss "old repo: check, derived-untracked or derived is red after the upgrade"
+cmp -s "$TMP/od.log" "$od/wiki/log.md" || miss "old repo: make derived changed a tracked hand-kept wiki/log.md"
+( cd "$od" && make log m="still works" >/dev/null 2>&1 ) && grep -qF -- '— still works' "$od/wiki/log.md" || miss "old repo: make log does not add the line to the hand-kept wiki/log.md"
+# 48ze. an untracked hand-kept wiki/log.md beside entries: the refusal does not say git rm --cached (the file is not in git)
+nw_clone="$TMP/newrepo-ts-node-clone"; ( cd "$nw_clone" && rm -f wiki/log.md && printf '# Log\n' > wiki/log.md && python3 tools/ledgers.py add-log "one" >/dev/null )
+rc=0; out=$( cd "$nw_clone" && python3 tools/ledgers.py draw 2>&1 ) || rc=$?
+[ "$rc" = 1 ] || miss "two sources: draw exits $rc, not 1, for an untracked wiki/log.md beside entries"
+case "$out" in *"two sources"*"move wiki/log.md aside"*'make log m='*) ;; *) miss "two sources: the refusal does not say to move wiki/log.md aside and use make log ($out)" ;; esac
+case "$out" in *"git rm --cached"*) miss "two sources: the refusal says git rm --cached for a file that is not in git ($out)" ;; esac
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

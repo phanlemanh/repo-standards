@@ -48,6 +48,7 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `.devcontainer/` | A ready-made dev environment (VS Code / Codespaces), handy on Windows |
 | `ontology/` | The dictionary + map of business concepts (one meaning for everyone) |
 | `wiki/` | Why things are the way they are: decisions, incidents, notes |
+| `wiki/log/`, `ontology/glossary/`, `make derived` | One small file per log entry and per glossary term (`make log m="..."`, `ledgers.py add-term`). `make derived` draws `wiki/log.md`, `wiki/index.md` and `ontology/glossary.md` from them; those are not in git and are never edited by hand |
 | `.repo-setup.json` | Remembers how the repo was set up and which release wrote each file, so an upgrade can merge its fixes into files you edited |
 | `governance/autonomy.yaml` | Who decides that a change may merge: the checks alone (low), a person (medium), a code owner (high). `proof.check` names the check that proves a change, so a person need not |
 | `risk:low/medium/high` label | The tier the PR pipeline computed for this PR from the files it changes |

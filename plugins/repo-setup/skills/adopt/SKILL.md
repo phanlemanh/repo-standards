@@ -70,7 +70,9 @@ Read the main models/schemas/types (ORM models, DB migrations, API schemas). Pro
 3–7 core entities with definitions, properties and relations, confirm with the user, then
 write them following `.claude/skills/ontology-add/SKILL.md` (glossary, `ontology/entities/*.yaml`,
 `relations.yaml`, `wiki/entities/*.md`). Record the adoption itself as
-`wiki/decisions/0002-adopt-repo-standard.md` and a line in `wiki/log.md`.
+`wiki/decisions/0002-adopt-repo-standard.md` and a log entry: `make log m="adopted the repo standard"`
+(it writes one file in `wiki/log/`; never edit the drawn `wiki/log.md`). If the repo already keeps
+`wiki/log.md` or `wiki/index.md` in git, leave them as they are and edit them in place.
 Do not replace existing hand-written types with generated ones in this PR — note it as a
 follow-up.
 

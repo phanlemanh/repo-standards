@@ -33,5 +33,5 @@ Read `wiki/index.md`, every entity page, and the decision list. Look for:
 Report in the user's language: score-like summary (errors / warnings / content issues),
 then a short prioritised list. Fix with the user's approval, smallest changes first.
 Ontology meaning changes go through ontology-add and need domain review.
-After fixing, re-run wiki-lint and add one line to `wiki/log.md`:
-`YYYY-MM-DD — wiki health check: <n> fixes`.
+After fixing, re-run wiki-lint and add one entry to the log:
+`make log m="wiki health check: <n> fixes"`.

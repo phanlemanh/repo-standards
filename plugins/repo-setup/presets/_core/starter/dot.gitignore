@@ -17,3 +17,8 @@ Thumbs.db
 # Bytecode of the Python tools in tools/
 __pycache__/
 *.pyc
+
+# Drawn by `make derived` from their fragments; never committed
+wiki/log.md
+wiki/index.md
+ontology/glossary.md
