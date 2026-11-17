@@ -176,7 +176,9 @@ done
 # build a repository with the last tagged release, edit two files in place, upgrade with this
 # tree. The fresh installs above never take this path. The base is downloaded, as a user's is.
 if [ -z "${PRESETS:-}" ]; then
-  tag=$(git -C "$ROOT" describe --tags --abbrev=0 --match 'repo-setup-v*')
+  # The newest release, read the way apply.py reads it (git ls-remote): CI checks out one commit
+  # and no tags, so `git describe` finds none.
+  tag=$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import upgrade_base; print(upgrade_base.TAG_PREFIX + upgrade_base.released_versions(None)[0])" "$ROOT/plugins/repo-setup/scripts")
   prev="$TMP/prev"; mkdir -p "$prev"
   python3 - "$tag" "$prev" <<'PY'
 import io, sys, tarfile, urllib.request
