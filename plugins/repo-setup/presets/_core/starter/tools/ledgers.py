@@ -13,9 +13,12 @@ with, and the check that a drawn file does not sit in git.
 
   python3 tools/ledgers.py shape <log|index|glossary|gen> [--gen-out PATH]
   python3 tools/ledgers.py untracked [PATH ...]
-  python3 tools/ledgers.py draw
+  python3 tools/ledgers.py draw [--quiet]
+  python3 tools/ledgers.py check
+  python3 tools/ledgers.py add-log <text> [--date YYYY-MM-DD]
 
-Exit codes: 0 done, 1 refused (a drawn file is in git), 2 wrong usage.
+Exit codes: 0 done, 1 refused (a drawn file is in git, a drawn file edited by hand, a fragment
+that is wrong, two sources for one ledger), 2 wrong usage.
 
 Only the Python standard library is used.
 """
@@ -23,6 +26,7 @@ Only the Python standard library is used.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import re
 import subprocess
@@ -149,9 +153,167 @@ def cmd_untracked(args: argparse.Namespace) -> int:
     return 1 if found else 0
 
 
+# ---------------------------------------------------------------------------------------------
+# The log: wiki/log/YYYY-MM-DD-NN-<slug>.md, one entry each; wiki/log.md is drawn from them.
+# ---------------------------------------------------------------------------------------------
+
+LOG_DIR = "wiki/log"
+LOG_HEAD = "wiki/log.head.md"
+LOG_FILE = "wiki/log.md"
+LOG_NAME_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<nn>\d{2})-(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
+SLUG_MAX = 40
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DEFAULT_LOG_HEAD = """---
+type: log
+title: Change log of the wiki and notable code changes
+---
+
+# Log
+
+Newest first. One line each: `YYYY-MM-DD — what changed — link`.
+"""
+
+
+def log_entries(root: Path) -> list[Path]:
+    """The files in wiki/log/ that are entries: not .gitkeep, not a *.head.md, not a folder."""
+    folder = root / LOG_DIR
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (p for p in folder.iterdir() if p.is_file() and p.name != ".gitkeep" and not p.name.endswith(".head.md")),
+        key=lambda p: p.name,
+    )
+
+
+def slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:SLUG_MAX].strip("-")
+    return slug or "entry"
+
+
+def one_line(text: str) -> str:
+    return " ".join(text.split())
+
+
+def next_log_name(root: Path, date: str, text: str) -> str:
+    """`<date>-NN-<slug>.md`: NN is one more than the largest NN of that day, two digits."""
+    taken = [
+        int(m.group("nn"))
+        for m in (LOG_NAME_RE.match(p.name) for p in log_entries(root))
+        if m and m.group("date") == date
+    ]
+    return f"{date}-{max(taken, default=0) + 1:02d}-{slugify(text)}.md"
+
+
+def log_line(path: Path) -> str | None:
+    """The drawn line of an entry: `- <date from the file name> — <text>`; None for a wrong name."""
+    match = LOG_NAME_RE.match(path.name)
+    if match is None:
+        return None
+    text = one_line(path.read_text(encoding="utf-8"))
+    return f"- {match.group('date')} — {text}"
+
+
+def log_body(root: Path) -> str:
+    head_path = root / LOG_HEAD
+    head = head_path.read_text(encoding="utf-8") if head_path.is_file() else DEFAULT_LOG_HEAD
+    lines = [ln for ln in (log_line(p) for p in reversed(log_entries(root))) if ln is not None]
+    return head.rstrip("\n") + "\n\n" + "".join(f"{ln}\n" for ln in lines)
+
+
+def draw_log(root: Path, quiet: bool) -> int | None:
+    """Draw wiki/log.md. None when the log is not kept as fragments (nothing was drawn)."""
+    if not (root / "wiki").is_dir() or shape_of(root, "log") != FRAGMENTS:
+        return None
+    target = root / LOG_FILE
+    body = log_body(root)
+    current, edited = read_stamped(target)
+    if target.is_file() and current is None:
+        print(f"{LOG_FILE} is not a drawn file; move it aside (or `git rm --cached {LOG_FILE}` and delete it) "
+              f"and run make derived again", file=sys.stderr)
+        return 1
+    if edited and current is not None:
+        # read_stamped gave the body as written; show what was added by hand
+        expected = set(body.splitlines())
+        added = [ln for ln in current.splitlines() if ln and ln not in expected]
+        print(f"{LOG_FILE} was edited by hand; it is drawn from {LOG_DIR}/ and a hand edit is lost.", file=sys.stderr)
+        for ln in added:
+            print(f"  + {ln}", file=sys.stderr)
+        print('Put it in an entry instead: make log m="<text>"', file=sys.stderr)
+        return 1
+    text = stamp(body, f"{LOG_DIR}/")
+    if not target.is_file() or target.read_text(encoding="utf-8") != text:
+        target.write_text(text, encoding="utf-8")
+        if not quiet:
+            print(f"drew {LOG_FILE}")
+    return 0
+
+
 def cmd_draw(args: argparse.Namespace) -> int:
-    # No ledger is drawn yet: each one is added with the ledger it draws.
-    print("nothing to draw")
+    root = Path(args.root)
+    results = [draw_log(root, args.quiet)]
+    drawn = [r for r in results if r is not None]
+    if not drawn and not args.quiet:
+        print("nothing to draw")
+    return 1 if any(drawn) else 0
+
+
+def check_log(root: Path) -> list[str]:
+    problems: list[str] = []
+    entries = log_entries(root)
+    for path in entries:
+        if LOG_NAME_RE.match(path.name) is None:
+            problems.append(f"{LOG_DIR}/{path.name}: the name is not YYYY-MM-DD-NN-<slug>.md")
+    if entries and shape_of(root, "log") == ONE_FILE:
+        problems.append(
+            f"{LOG_FILE} is kept by hand and {LOG_DIR}/ has entries: two sources for the log; "
+            f"git rm --cached {LOG_FILE} and delete it, or move the entries out"
+        )
+    return problems
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    problems = check_log(Path(args.root))
+    for line in problems:
+        print(line, file=sys.stderr)
+    return 1 if problems else 0
+
+
+def add_log_line(root: Path, date: str, text: str) -> None:
+    """One-file shape: the new line goes above the newest one, as the hand-kept log is written."""
+    path = root / LOG_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    new = f"- {date} — {text}\n"
+    for index, line in enumerate(lines):
+        if line.startswith("- "):
+            lines.insert(index, new)
+            break
+    else:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        if lines and lines[-1].strip():
+            lines.append("\n")
+        lines.append(new)
+    path.write_text("".join(lines), encoding="utf-8")
+
+
+def cmd_add_log(args: argparse.Namespace) -> int:
+    root = Path(args.root)
+    text = one_line(args.text)
+    date = args.date or datetime.date.today().isoformat()
+    if not text:
+        print('ledgers.py: add-log needs a text: make log m="<text>"', file=sys.stderr)
+        return 2
+    if not DATE_RE.match(date):
+        print("ledgers.py: --date is YYYY-MM-DD", file=sys.stderr)
+        return 2
+    if shape_of(root, "log") == ONE_FILE:
+        add_log_line(root, date, text)
+        print(f"added to {LOG_FILE}")
+        return 0
+    name = next_log_name(root, date, text)
+    (root / LOG_DIR).mkdir(parents=True, exist_ok=True)
+    (root / LOG_DIR / name).write_text(text + "\n", encoding="utf-8")
+    print(f"wrote {LOG_DIR}/{name}")
     return 0
 
 
@@ -170,7 +332,16 @@ def build_parser() -> argparse.ArgumentParser:
     untracked.set_defaults(run=cmd_untracked)
 
     draw = sub.add_parser("draw", help="draw every ledger that is kept as fragments")
+    draw.add_argument("--quiet", action="store_true", help="print nothing unless a file is refused")
     draw.set_defaults(run=cmd_draw)
+
+    check = sub.add_parser("check", help="fail on a wrong fragment or two sources for a ledger")
+    check.set_defaults(run=cmd_check)
+
+    add_log = sub.add_parser("add-log", help="add one entry to the wiki log")
+    add_log.add_argument("text")
+    add_log.add_argument("--date", help="YYYY-MM-DD (default: today)")
+    add_log.set_defaults(run=cmd_add_log)
     return parser
 
 

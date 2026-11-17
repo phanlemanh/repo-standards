@@ -17,6 +17,13 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   `ontology/glossary.md` in git and edits them by hand has no stamp, so they stay `one-file` and
   `derived-untracked` skips them. `Makefile` gains one line (`... : | derived`) after
   `-include mk/*.mk`; a Makefile edited here gets that line merged in, or marked on conflict.
+- New `make log m="<text>"` (`ledgers.py add-log`): in the `one-file` shape it puts a line at the top of
+  `wiki/log.md`; in the `fragments` shape it writes one file, `wiki/log/YYYY-MM-DD-NN-<slug>.md`.
+  `make derived` draws `wiki/log.md` from those files (stamp line, then `wiki/log.head.md`, then
+  one line per entry, newest first). A hand edit of the drawn file makes `draw` exit 1 and print
+  the added lines. New `make check` step `ledgers-check`: a fragment with a wrong name, or a
+  hand-kept `wiki/log.md` beside entries in `wiki/log/` (two sources), is red. What breaks on
+  upgrade: nothing, a tracked unstamped `wiki/log.md` stays `one-file`.
 
 ## 0.7.0 — 2026-11-17
 

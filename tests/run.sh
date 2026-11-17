@@ -2272,6 +2272,60 @@ assert edited is True, edited
 assert ledgers.read_stamped(pathlib.Path('wiki/nothing.md')) == (None, False)
 assert ledgers.read_stamped(pathlib.Path('README.md')) == (None, False)
 " ) || miss "derived: stamp and read_stamped do not round-trip, or a hand edit is not seen"
+# 48d-48g. the wiki log: one file per entry, drawn into wiki/log.md
+lg="$TMP/logrepo"; mkdir -p "$lg" && git -C "$lg" init -q -b main
+python3 "$S/apply.py" --target "$lg" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+lg_git() { git -C "$lg" -c user.name=t -c user.email=t@example.com "$@"; }
+lg_tool() { ( cd "$lg" && python3 tools/ledgers.py "$@" ); }
+lg_git add -A && lg_git commit -q -m "chore: base"
+# 48d. one-file: the line goes to the top of the list; fragments: exactly one new file
+today=$(date +%Y-%m-%d)
+( cd "$lg" && make log m="x — #1" >/dev/null 2>&1 ) || miss "log: make log failed in the one-file shape"
+sed -n '/^- /p' "$lg/wiki/log.md" | head -1 | grep -qxF -- "- $today — x — #1" \
+  || miss "log: make log in the one-file shape did not put '- <today> — x — #1' at the top of the list"
+[ -z "$(ls "$lg/wiki/log" 2>/dev/null)" ] || miss "log: make log in the one-file shape wrote a fragment"
+lg_git checkout -q -- wiki/log.md && lg_git rm -q --cached wiki/log.md && rm -f "$lg/wiki/log.md"
+lg_git commit -q -m "docs: log becomes fragments"
+( cd "$lg" && make log m="x — #1" >/dev/null 2>&1 ) || miss "log: make log failed in the fragments shape"
+[ "$(lg_git status --porcelain | wc -l | tr -d ' ')" = 1 ] || miss "log: make log in the fragments shape did not touch exactly one file ($(lg_git status --porcelain | tr '\n' ';'))"
+[ -f "$lg/wiki/log/$today-01-x-1.md" ] || miss "log: the fragment is not wiki/log/$today-01-x-1.md ($(ls "$lg/wiki/log" 2>&1 | tr '\n' ' '))"
+# 48e. three fragments, one with a dash and a pipe: the stamp, the head, three lines newest first
+rm -f "$lg"/wiki/log/*.md
+printf 'Head of the log\n' > "$lg/wiki/log.head.md"
+lg_tool add-log --date 2026-02-01 "first" >/dev/null
+lg_tool add-log --date 2026-02-03 "third — with a | pipe and a dash" >/dev/null
+lg_tool add-log --date 2026-02-02 "second" >/dev/null
+lg_tool draw >/dev/null || miss "log: draw failed on three fragments"
+want=$(printf '%s\n' 'Head of the log' '' '- 2026-02-03 — third — with a | pipe and a dash' '- 2026-02-02 — second' '- 2026-02-01 — first')
+got=$(tail -n +2 "$lg/wiki/log.md")
+[ "$got" = "$want" ] || miss "log: the drawn log is not the head and three lines, newest first ($got)"
+head -1 "$lg/wiki/log.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from wiki/log/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' \
+  || miss "log: wiki/log.md does not open with the stamp line"
+[ "$(grep -c '^- ' "$lg/wiki/log.md")" = 3 ] || miss "log: a dash or a pipe in an entry split it into more than one line"
+cp "$lg/wiki/log.md" "$TMP/log.once"; lg_tool draw >/dev/null
+cmp -s "$TMP/log.once" "$lg/wiki/log.md" || miss "log: drawing a second time changed a byte"
+lg_tool check || miss "log: check fails on good fragments"
+# a wrong name, and two sources
+printf 'x\n' > "$lg/wiki/log/notes.md"
+if lg_tool check >/dev/null 2>&1; then miss "log: check is green for a fragment named notes.md"; fi
+rm "$lg/wiki/log/notes.md"
+# 48f. two branches, one make log each on the same day: no conflict, no shared file, both lines drawn
+rm -f "$lg"/wiki/log/*.md "$lg/wiki/log.md"; lg_git add -A; lg_git commit -q -m "docs: head" || true
+lg_git checkout -q -b branch-a; lg_tool add-log --date 2026-03-01 "from a" >/dev/null; lg_git add -A; lg_git commit -q -m "docs: a"
+lg_git checkout -q main; lg_git checkout -q -b branch-b; lg_tool add-log --date 2026-03-01 "from b" >/dev/null; lg_git add -A; lg_git commit -q -m "docs: b"
+common=$(comm -12 <(lg_git diff --name-only main branch-a | sort) <(lg_git diff --name-only main branch-b | sort))
+[ -z "$common" ] || miss "log: two make log on two branches changed a common file ($common)"
+lg_git merge -q --no-edit branch-a >/dev/null 2>&1 || miss "log: merging two branches that each added an entry conflicted"
+lg_tool draw >/dev/null
+grep -qF -- "- 2026-03-01 — from a" "$lg/wiki/log.md" && grep -qF -- "- 2026-03-01 — from b" "$lg/wiki/log.md" \
+  || miss "log: the merged log does not carry both lines"
+lg_git checkout -q main
+# 48g. a line added by hand to the drawn file: draw refuses, says what and how, and leaves the file as it was
+cp "$lg/wiki/log.md" "$TMP/log.edit"; printf -- '- 2026-03-09 — typed by hand\n' >> "$TMP/log.edit"; cp "$TMP/log.edit" "$lg/wiki/log.md"
+rc=0; out=$(lg_tool draw 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "log: draw exits $rc, not 1, on a hand-edited wiki/log.md"
+case "$out" in *"typed by hand"*'make log m='*) ;; *) miss "log: draw does not print the added line and the make log command ($out)" ;; esac
+cmp -s "$TMP/log.edit" "$lg/wiki/log.md" || miss "log: draw changed a hand-edited wiki/log.md"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

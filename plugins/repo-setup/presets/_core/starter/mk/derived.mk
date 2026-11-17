@@ -9,8 +9,8 @@
 PYTHON ?= python3
 DERIVED_TARGETS += wiki-derived
 DERIVED_FILES += wiki/log.md wiki/index.md ontology/glossary.md
-CHECK_TARGETS += derived-untracked
-.PHONY: derived wiki-derived derived-untracked
+CHECK_TARGETS += derived-untracked ledgers-check
+.PHONY: derived wiki-derived derived-untracked ledgers-check log
 
 .SECONDEXPANSION:
 
@@ -22,3 +22,11 @@ wiki-derived: ## Draw the wiki log, the wiki index and the glossary from their f
 
 derived-untracked: ## Fail when a drawn file is in git
 	@$(PYTHON) tools/ledgers.py untracked $(DERIVED_FILES)
+
+ledgers-check: ## Fail on a wrong ledger fragment or two sources for one ledger
+	@$(PYTHON) tools/ledgers.py check
+
+# The text goes through the environment so quotes and $ in it reach the tool as typed.
+export LOG_ENTRY = $(m)
+log: ## Add a line to the wiki log: make log m="what changed — link"
+	@$(PYTHON) tools/ledgers.py add-log -- "$$LOG_ENTRY"
