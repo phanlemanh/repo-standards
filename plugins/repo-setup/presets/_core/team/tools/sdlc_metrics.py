@@ -34,6 +34,11 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from repo_ontology import find_repo_root
 
+try:  # an older repository may not have the tool: its index is then kept by hand
+    import ledgers
+except ImportError:
+    ledgers = None
+
 DEFAULT_AGENTS = "claude[bot] dependabot[bot]"
 # The job that says a pull request may merge (.github/workflows/pr-pipeline.yml).
 GATE_JOB = "gate"
@@ -499,6 +504,9 @@ branch count every attempt of a run: a run made green by running it again still 
 
 
 def link_in_index(root: Path, week: str) -> None:
+    """Add the week to a hand-kept wiki/index.md. A drawn index lists the page by itself."""
+    if ledgers is not None and ledgers.shape_of(root, "index") == ledgers.FRAGMENTS:
+        return
     index = root / "wiki" / "index.md"
     if not index.exists():
         return

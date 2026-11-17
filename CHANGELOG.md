@@ -33,6 +33,16 @@ Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`.
   `ontology/glossary.md` beside fragments, makes `draw` exit 1. `ledgers-check` is red for a fragment
   whose `term` is not its file name or that has no `display`. What breaks on upgrade: nothing, a
   tracked unstamped `ontology/glossary.md` stays `one-file`.
+- `make derived` draws `wiki/index.md` in the `fragments` shape: stamp, `wiki/index.head.md` (or a
+  built-in head), one `## <Types>` section per page type of `ontology/page-types.yaml` in file order
+  (types it does not know last), a line `- [<title>](<path>)` (plus ` — <summary>`) for each page, and
+  the link to `log.md`. A page with no `type` or `title` is left out of the index, named by `draw`
+  (exit 0), by `ledgers-check` (red) and by `wiki_lint.py` ("page has no type or title"). In the
+  `fragments` shape `wiki_lint.py` no longer warns "not linked from wiki/index.md", treats the drawn
+  `wiki/index.md` and `wiki/log.md` and the entries of `wiki/log/` as no page, and `sdlc_metrics.py
+  --write` no longer edits `wiki/index.md` (the weekly page is listed by itself). Hidden files
+  (`.DS_Store`) in `wiki/log/` and `ontology/glossary/` are no fragments. What breaks on upgrade:
+  nothing, a tracked unstamped `wiki/index.md` stays `one-file` and keeps every old rule.
 
 ## 0.7.0 — 2026-11-17
 

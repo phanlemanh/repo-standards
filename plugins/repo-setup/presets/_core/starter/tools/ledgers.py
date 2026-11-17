@@ -176,12 +176,13 @@ Newest first. One line each: `YYYY-MM-DD — what changed — link`.
 
 
 def log_entries(root: Path) -> list[Path]:
-    """The files in wiki/log/ that are entries: not .gitkeep, not a *.head.md, not a folder."""
+    """The files in wiki/log/ that are entries: not a hidden file (.gitkeep, .DS_Store), not a
+    *.head.md, not a folder."""
     folder = root / LOG_DIR
     if not folder.is_dir():
         return []
     return sorted(
-        (p for p in folder.iterdir() if p.is_file() and p.name != ".gitkeep" and not p.name.endswith(".head.md")),
+        (p for p in folder.iterdir() if p.is_file() and not p.name.startswith(".") and not p.name.endswith(".head.md")),
         key=lambda p: p.name,
     )
 
@@ -262,7 +263,7 @@ def draw_log(root: Path, quiet: bool) -> int | None:
 
 def cmd_draw(args: argparse.Namespace) -> int:
     root = Path(args.root)
-    results = [draw_log(root, args.quiet), draw_glossary(root, args.quiet)]
+    results = [draw_log(root, args.quiet), draw_index(root, args.quiet), draw_glossary(root, args.quiet)]
     drawn = [r for r in results if r is not None]
     if not drawn and not args.quiet:
         print("nothing to draw")
@@ -285,7 +286,7 @@ def check_log(root: Path) -> list[str]:
 
 def cmd_check(args: argparse.Namespace) -> int:
     root = Path(args.root)
-    problems = check_log(root) + check_glossary(root)
+    problems = check_log(root) + check_index(root) + check_glossary(root)
     for line in problems:
         print(line, file=sys.stderr)
     return 1 if problems else 0
@@ -328,6 +329,136 @@ def cmd_add_log(args: argparse.Namespace) -> int:
     (root / LOG_DIR / name).write_text(text + "\n", encoding="utf-8")
     print(f"wrote {LOG_DIR}/{name}")
     return 0
+
+
+# ---------------------------------------------------------------------------------------------
+# The index: wiki/index.head.md and the wiki pages themselves; wiki/index.md is drawn from them.
+# ---------------------------------------------------------------------------------------------
+
+INDEX_HEAD = "wiki/index.head.md"
+INDEX_FILE = "wiki/index.md"
+PAGE_TYPES_FILE = "ontology/page-types.yaml"
+DEFAULT_INDEX_HEAD = """---
+type: index
+title: Wiki
+---
+
+# Wiki
+
+Short, linked pages about the _why_ of this project. Agents read this page
+first; keep it under ~60 lines. Page formats: `ontology/page-types.yaml`.
+"""
+INDEX_LOG_SECTION = "## Log\n\nSee [log.md](log.md) for a chronological list of changes.\n"
+TOP_LEVEL_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_-]*):")
+
+
+def page_type_names(root: Path) -> list[str]:
+    """The top-level keys of ontology/page-types.yaml, in file order ([] when the file is absent)."""
+    try:
+        lines = (root / PAGE_TYPES_FILE).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return []
+    names = [m.group(1) for m in (TOP_LEVEL_KEY_RE.match(line) for line in lines) if m]
+    return list(dict.fromkeys(names))
+
+
+def pluralise(name: str) -> str:
+    """`metrics` -> Metrics, `entity` -> Entities, `decision` -> Decisions."""
+    if name.endswith("s"):
+        plural = name
+    elif len(name) > 1 and name.endswith("y") and name[-2] not in "aeiou":
+        plural = name[:-1] + "ies"
+    else:
+        plural = name + "s"
+    return plural[:1].upper() + plural[1:]
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+class Page:
+    """One wiki page as the index reads it: type, title and the optional summary."""
+
+    def __init__(self, root: Path, path: Path) -> None:
+        self.rel = path.relative_to(root / "wiki").as_posix()
+        fields, _ = read_fragment(path)
+        self.type = _unquote(fields.get("type", ""))
+        self.title = one_line(_unquote(fields.get("title", "")))
+        self.summary = one_line(_unquote(fields.get("summary", "")))
+        self.problem = None
+        if not self.type or not self.title:
+            self.problem = (f"wiki/{self.rel}: page has no type or title "
+                            "(front matter with type: and title: between --- lines)")
+
+    def line(self) -> str:
+        suffix = f" — {self.summary}" if self.summary else ""
+        return f"- [{self.title}]({self.rel}){suffix}"
+
+
+def wiki_pages(root: Path) -> list[Page]:
+    """Every page of the wiki the index lists: not the two drawn files, not a *.head.md, not an
+    entry of wiki/log/, not a hidden file or anything inside a hidden folder."""
+    folder = root / "wiki"
+    if not folder.is_dir():
+        return []
+    pages = []
+    for path in sorted(folder.rglob("*.md")):
+        parts = path.relative_to(folder).parts
+        if (not path.is_file() or any(part.startswith(".") for part in parts)
+                or parts in (("index.md",), ("log.md",)) or parts[0] == "log"
+                or path.name.endswith(".head.md")):
+            continue
+        pages.append(Page(root, path))
+    return pages
+
+
+def index_body(root: Path) -> str:
+    head_path = root / INDEX_HEAD
+    head = head_path.read_text(encoding="utf-8") if head_path.is_file() else DEFAULT_INDEX_HEAD
+    by_type: dict[str, list[Page]] = {}
+    for page in wiki_pages(root):
+        if page.problem is None:
+            by_type.setdefault(page.type, []).append(page)
+    known = page_type_names(root)
+    order = known + sorted(t for t in by_type if t not in known)
+    sections = []
+    for name in order:
+        pages = sorted(by_type.get(name, []), key=lambda p: (p.title, p.rel))
+        if pages:
+            sections.append(f"## {pluralise(name)}\n\n" + "".join(f"{p.line()}\n" for p in pages))
+    sections.append(INDEX_LOG_SECTION)
+    return head.rstrip("\n") + "\n\n" + "\n".join(sections)
+
+
+def draw_index(root: Path, quiet: bool) -> int | None:
+    """Draw wiki/index.md. None when the index is not kept as fragments (nothing was drawn).
+
+    A page with no type or title is left out and named on stderr; it does not stop the others.
+    The head file is what marks an index as drawn: an unstamped wiki/index.md beside it is two
+    sources; alone it is left as it is (a new repository that has not made its first commit).
+    """
+    if not (root / "wiki").is_dir() or shape_of(root, "index") != FRAGMENTS:
+        return None
+    if not quiet:
+        for page in wiki_pages(root):
+            if page.problem:
+                print(f"skipped {page.problem}", file=sys.stderr)
+    return draw_ledger(root, INDEX_FILE, "wiki/", (root / INDEX_HEAD).is_file(), index_body(root),
+                       f"Put it in a page, or in {INDEX_HEAD} for the part above the sections", quiet)
+
+
+def check_index(root: Path) -> list[str]:
+    if not (root / "wiki").is_dir():
+        return []
+    if shape_of(root, "index") == ONE_FILE:
+        if (root / INDEX_HEAD).is_file():
+            return [f"{INDEX_FILE} is kept by hand and {INDEX_HEAD} is there: two sources for the index; "
+                    f"git rm --cached {INDEX_FILE} and delete it, or delete {INDEX_HEAD}"]
+        return []
+    return [page.problem for page in wiki_pages(root) if page.problem]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -394,7 +525,7 @@ def glossary_files(root: Path) -> list[Path]:
     folder = root / GLOSSARY_DIR
     if not folder.is_dir():
         return []
-    return sorted(p for p in folder.iterdir() if p.is_file() and p.name != ".gitkeep")
+    return sorted(p for p in folder.iterdir() if p.is_file() and not p.name.startswith("."))
 
 
 def escape_cell(text: str) -> str:

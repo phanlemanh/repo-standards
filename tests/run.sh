@@ -2411,6 +2411,77 @@ printf '# Glossary\n' > "$gl/ontology/glossary.md"
 rc=0; out=$(gl_tool draw 2>&1) || rc=$?
 [ "$rc" = 1 ] && case "$out" in *"two sources"*) true ;; *) false ;; esac || miss "glossary: draw exits $rc, or does not say two sources, for a hand-kept glossary beside fragments ($out)"
 [ "$(cat "$gl/ontology/glossary.md")" = "# Glossary" ] || miss "glossary: draw overwrote an unstamped ontology/glossary.md"
+# 48n (plan 48j). the wiki index: head, one section per page type in page-types.yaml order, one line per page
+ix="$TMP/indexrepo"; mkdir -p "$ix" && git -C "$ix" init -q -b main
+python3 "$S/apply.py" --target "$ix" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+ix_git() { git -C "$ix" -c user.name=t -c user.email=t@example.com "$@"; }
+ix_tool() { ( cd "$ix" && python3 tools/ledgers.py "$@" ); }
+ix_git add -A && ix_git commit -q -m "chore: base"
+ix_git rm -q --cached wiki/index.md && rm -f "$ix/wiki/index.md"
+printf -- '---\ntype: entity\ntitle: Customer\nsummary: who buys; VIP rules\n---\n# Customer\n' > "$ix/wiki/entities/customer.md"
+printf -- '---\ntype: entity\ntitle: Basket\n---\n# Basket\n' > "$ix/wiki/entities/basket.md"
+printf -- '---\ntype: note\ntitle: Odd page\n---\n# Odd\n' > "$ix/wiki/odd.md"
+printf 'noise\n' > "$ix/wiki/.DS_Store"; printf -- '---\ntype: entity\ntitle: Hidden\n---\n' > "$ix/wiki/entities/.hidden.md"
+printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n\nHand-written head.\n' > "$ix/wiki/index.head.md"
+ix_tool draw >/dev/null || miss "index: draw failed on the pages"
+head -1 "$ix/wiki/index.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from wiki/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' || miss "index: wiki/index.md does not open with the stamp line"
+want=$(printf '%s\n' '---' 'type: index' 'title: Mine' '---' '' '# Mine' '' 'Hand-written head.' '' \
+  '## Entities' '' '- [Basket](entities/basket.md)' '- [Customer](entities/customer.md) — who buys; VIP rules' '' \
+  '## Decisions' '' '- [Record decisions in the wiki](decisions/0001-record-decisions-in-the-wiki.md)' '' \
+  '## Notes' '' '- [Odd page](odd.md)' '' \
+  '## Log' '' 'See [log.md](log.md) for a chronological list of changes.')
+got=$(tail -n +2 "$ix/wiki/index.md")
+[ "$got" = "$want" ] || miss "index: the drawn index is not the head, Entities, Decisions, a type page-types.yaml does not know and the log link ($got)"
+case "$got" in *Hidden*|*"index.head"*|*"[Mine]"*|*"## Metrics"*) miss "index: the index lists a dot-file, the head, itself or a type with no page" ;; esac
+cp "$ix/wiki/index.md" "$TMP/ix.once"; ix_tool draw >/dev/null
+cmp -s "$TMP/ix.once" "$ix/wiki/index.md" || miss "index: drawing a second time changed a byte"
+# with no head file the built-in head is used, and it carries no placeholder
+rm -f "$ix/wiki/index.head.md"; ix_tool draw >/dev/null || miss "index: draw failed without a head file"
+sed -n '2,4p' "$ix/wiki/index.md" | grep -qx 'title: Wiki' || miss "index: the built-in head does not carry title: Wiki"
+if grep -q '{{' "$ix/wiki/index.md"; then miss "index: the built-in head has a placeholder"; fi
+# wiki_lint: the drawn index is not a page, and nothing is unlinked in the fragments shape
+ix_tool check >/dev/null || miss "index: check fails on good pages ($(ix_tool check 2>&1))"
+lint=$(cd "$ix" && python3 tools/wiki_lint.py 2>&1 || true)
+case "$lint" in *"not linked from wiki/index.md"*) miss "index: wiki_lint says a page is not linked from the index in the fragments shape ($lint)" ;; esac
+case "$lint" in *"ERROR wiki/index.md"*|*"ERROR wiki/log.md"*) miss "index: wiki_lint treats a drawn file as a page ($lint)" ;; esac
+# 48o (plan 48k). a page with no title and a page with broken front matter: draw still draws the others, check and wiki_lint name them
+printf -- '---\ntype: entity\n---\n# No title\n' > "$ix/wiki/entities/untitled.md"
+printf 'no front matter at all\n' > "$ix/wiki/entities/bare.md"
+rc=0; out=$(ix_tool draw 2>&1) || rc=$?
+[ "$rc" = 0 ] || miss "index: draw exits $rc, not 0, with a page that has no title ($out)"
+grep -qF -- '- [Customer](entities/customer.md) — who buys; VIP rules' "$ix/wiki/index.md" || miss "index: draw did not draw the other pages around a page with no title"
+if grep -qE 'untitled|bare' "$ix/wiki/index.md"; then miss "index: the index lists a page with no title"; fi
+rc=0; out=$(ix_tool check 2>&1) || rc=$?
+[ "$rc" = 1 ] || miss "index: check exits $rc, not 1, for a page with no title"
+case "$out" in *entities/untitled.md*) ;; *) miss "index: check does not name wiki/entities/untitled.md ($out)" ;; esac
+case "$out" in *entities/bare.md*) ;; *) miss "index: check does not name wiki/entities/bare.md ($out)" ;; esac
+lint=$(cd "$ix" && python3 tools/wiki_lint.py 2>&1 || true)
+case "$lint" in *"ERROR wiki/entities/untitled.md: page has no type or title"*) ;; *) miss "index: wiki_lint does not say 'page has no type or title' for untitled.md ($lint)" ;; esac
+rm -f "$ix/wiki/entities/untitled.md" "$ix/wiki/entities/bare.md"
+# a one-file repository keeps the old rules: a page the hand-kept index does not link is still a warning
+ix1="$TMP/indexrepo1"; mkdir -p "$ix1" && git -C "$ix1" init -q -b main
+python3 "$S/apply.py" --target "$ix1" --preset ts-node --level team --var project_name=P --var description=x --var owner=acme >/dev/null
+git -C "$ix1" add -A && git -C "$ix1" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+printf -- '---\ntype: entity\ntitle: Basket\n---\n# Basket\n' > "$ix1/wiki/entities/basket.md"
+lint=$(cd "$ix1" && python3 tools/wiki_lint.py 2>&1 || true)
+case "$lint" in *"entities/basket.md: not linked from wiki/index.md"*) ;; *) miss "index: wiki_lint dropped 'not linked from wiki/index.md' in the one-file shape ($lint)" ;; esac
+# 48p (plan 48l). sdlc_metrics leaves wiki/index.md alone in the fragments shape and edits it in the one-file shape
+metrics_link() { ( cd "$1" && python3 -c "
+import sys; sys.path.insert(0, 'tools'); import sdlc_metrics as s, pathlib
+s.link_in_index(pathlib.Path('.'), '2026-W07')" ); }
+ix_tool draw >/dev/null; cp "$ix/wiki/index.md" "$TMP/ix.before"; ix_status=$(ix_git status --porcelain wiki/index.md)
+metrics_link "$ix" || miss "index: link_in_index failed in the fragments shape"
+cmp -s "$TMP/ix.before" "$ix/wiki/index.md" || miss "index: link_in_index changed the drawn wiki/index.md"
+[ "$(ix_git status --porcelain wiki/index.md)" = "$ix_status" ] || miss "index: link_in_index changed wiki/index.md in git status ($(ix_git status --porcelain wiki/index.md))"
+mkdir -p "$ix/wiki/metrics"
+printf -- '---\ntype: metrics\ntitle: Delivery metrics 2026-W07\n---\n# m\n\n## Summary\n\n## Delivery\n\n## Agents\n\n## Notes\n' > "$ix/wiki/metrics/2026-W07.md"
+ix_tool draw >/dev/null
+grep -qF -- '- [Delivery metrics 2026-W07](metrics/2026-W07.md)' "$ix/wiki/index.md" || miss "index: the weekly metrics page does not show up in the drawn index"
+metrics_link "$ix1" && grep -qF -- '- [2026-W07](metrics/2026-W07.md)' "$ix1/wiki/index.md" || miss "index: link_in_index no longer adds its line in the one-file shape"
+# 48q. hidden files (.DS_Store) in the two fragment folders are not fragments
+mkdir -p "$ix/wiki/log" "$ix/ontology/glossary"; printf 'x\n' > "$ix/wiki/log/.DS_Store"; printf 'x\n' > "$ix/ontology/glossary/.DS_Store"
+ix_tool check >/dev/null 2>&1 || miss "index: a .DS_Store in wiki/log/ or ontology/glossary/ turns check red ($(ix_tool check 2>&1))"
+ix_tool draw >/dev/null 2>&1 || miss "index: a .DS_Store in a fragment folder makes draw refuse"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
