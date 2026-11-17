@@ -46,7 +46,7 @@ gen: ## Regenerate types from ontology/
 	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT); fi
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
-	uv run python tools/wiki_lint.py
+	$(PYTHON) tools/wiki_lint.py
 	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
 
 check: $(CHECK_TARGETS) ## Everything CI runs
