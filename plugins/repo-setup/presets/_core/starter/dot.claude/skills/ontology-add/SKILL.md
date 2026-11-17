@@ -26,8 +26,12 @@ changes what the whole system means, so do it completely and make it easy to rev
 
 ## 2. Write the files
 
-1. `ontology/glossary.md`: one table row `| \`Name\` | definition | not to be confused with | display name |`.
-The code name is English. The display name and definition follow the repo's `docs_language`.
+1. The glossary: `python3 tools/ledgers.py add-term <Name> --definition "..."`, plus
+   `--display "..."` and `--not-confused-with "..."` (both optional). It writes one file,
+   `ontology/glossary/<Name>.md`; `ontology/glossary.md` is drawn from those files by
+   `make derived`, so never edit it. The code name is English. The display name and definition
+   follow the repo's `docs_language`. If `ontology/glossary.md` is still in git (this repository
+   has not split it yet), the same command adds the row to it.
 2. `ontology/entities/<Name>.yaml` — same shape as `_template.yaml`:
    - `name` must equal the file name; `description` required.
    - property `type`: `string text integer number boolean date datetime uuid enum ref`
@@ -41,7 +45,8 @@ The code name is English. The display name and definition follow the repo's `doc
 4. `wiki/entities/<name>.md` with front matter
    `type: entity`, `title`, `links: [ontology/entities/<Name>.yaml]`, `sources: [...]`
    and sections `## Definition`, `## Rules`, `## Where in the code`, `## History`.
-   Link it from `wiki/index.md` under Entities.
+   `type` and `title` are all the index needs: it lists the page under Entities by itself. If
+   `wiki/index.md` is still in git, add the link there under Entities.
 5. **Personal data**: mark properties that identify or describe a person with `pii: true`
    (name, phone, email, address, national id, birth date...). Generated helpers redact them in
    logs and in anything returned to AI agents.
@@ -77,7 +82,7 @@ The code name is English. The display name and definition follow the repo's `doc
      they are derived), `import: [...]` (only an import writes them),
      `later: { <property>: <where it is planned> }`, and
      `never: { <property>: { reason: ..., decided_by: ... } }`. `never` follows the rule of step 7.
-10. Append one line to `wiki/log.md`.
+10. `make log m="ontology: <what changed>"` (one entry of the wiki log; never edit `wiki/log.md`).
 
 ## 3. Regenerate and verify
 

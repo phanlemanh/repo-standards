@@ -175,7 +175,8 @@ done
 # Upgrade from the previous release (docs/superpowers/specs/2026-11-17-upgrade-path-design.md):
 # build a repository with the last tagged release, edit two files in place, upgrade with this
 # tree. The fresh installs above never take this path. The base is downloaded, as a user's is.
-if [ -z "${PRESETS:-}" ]; then
+# It runs with the default list; UPGRADE=1 runs it also when PRESETS narrows the list above.
+if [ -z "${PRESETS:-}" ] || [ -n "${UPGRADE:-}" ]; then
   # The newest release, read the way apply.py reads it (git ls-remote): CI checks out one commit
   # and no tags, so `git describe` finds none.
   tag=$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import upgrade_base; print(upgrade_base.TAG_PREFIX + upgrade_base.released_versions(None)[0])" "$ROOT/plugins/repo-setup/scripts")
@@ -193,6 +194,12 @@ PY
   d="$TMP/upgrade-from-$tag"; mkdir -p "$d"; cd "$d"; git init -q -b main
   python3 "$old_apply" --preset python --level team --var "project_name=Coffee Shop" \
     --var "description=E2E upgrade" --var owner=acme >/dev/null
+  # What a repository of that release looks like: the three ledgers and the generated code are
+  # hand-kept files in git (the release has no fragments).
+  gen_out=$(sed -n 's/^GEN_OUT := //p' Makefile | sed "s/\$(PKG)/$(sed -n 's/^PKG := //p' Makefile)/")
+  mkdir -p "$(dirname "$gen_out")"
+  python3 tools/ontology_codegen.py --lang python --out "$gen_out" >/dev/null
+  git add -f -A; git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: base from $tag"
   printf '# kept by the repository\n' | cat - .editorconfig > x && mv x .editorconfig
   echo "Kept by the repository." >> README.md
   rc=0; out=$(python3 "$S/apply.py" --json) || rc=$?
@@ -210,6 +217,29 @@ PY
   if [ "$marked" = "[]" ]; then
     [ "$rc" = 0 ] || { echo "FAIL: upgrade from $tag ended with $rc and nothing marked"; exit 1; }
     make check >/dev/null || { echo "FAIL: make check is red after the upgrade from $tag"; exit 1; }
+    # The upgrade created no fragment and moved nothing: the four ledgers are still one file each.
+    for l in log index glossary; do
+      [ "$(python3 tools/ledgers.py shape $l)" = one-file ] || { echo "FAIL: shape $l is not one-file after the upgrade from $tag"; exit 1; }
+    done
+    [ "$(python3 tools/ledgers.py shape gen --gen-out "$gen_out")" = one-file ] || { echo "FAIL: shape gen is not one-file after the upgrade from $tag"; exit 1; }
+    # Then the owner splits them, one at a time, and a clean clone still passes make check.
+    for l in log index glossary gen; do
+      make split L=$l >/dev/null || { echo "FAIL: make split L=$l failed after the upgrade from $tag"; exit 1; }
+    done
+    for l in log index glossary; do
+      [ "$(python3 tools/ledgers.py shape $l)" = fragments ] || { echo "FAIL: shape $l is not fragments after its split"; exit 1; }
+    done
+    [ "$(python3 tools/ledgers.py shape gen --gen-out "$gen_out")" = fragments ] || { echo "FAIL: shape gen is not fragments after its split"; exit 1; }
+    git add -A; git -c user.name=e2e -c user.email=e2e@example.com commit -qm "feat: split the ledgers"
+    drawn=$(git ls-files | grep -xE "wiki/log.md|wiki/index.md|ontology/glossary.md|$gen_out" || true)
+    [ -z "$drawn" ] || { echo "FAIL: git ls-files lists drawn files after the splits: $drawn"; exit 1; }
+    git clone -q "$d" "$TMP/upgrade-clone"; ( cd "$TMP/upgrade-clone"
+      while IFS= read -r c; do
+        case "$c" in "") continue ;; *"pre-commit install"*) continue ;; esac
+        bash -c "$c" >/dev/null </dev/null
+      done <<<"$install"
+      make check >/dev/null ) || { echo "FAIL: make check is red on a fresh clone after the splits"; exit 1; }
+    echo "ok  split all four ledgers after the upgrade from $tag"
   else
     [ "$rc" = 1 ] || { echo "FAIL: upgrade from $tag marked $marked but ended with $rc"; exit 1; }
     wall=$(make upgrade 2>&1) && { echo "FAIL: make upgrade is green with $marked marked"; exit 1; }

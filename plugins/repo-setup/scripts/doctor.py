@@ -303,6 +303,47 @@ def blueprint_report(root: Path, setup: dict) -> dict[str, list[str]]:
     return {"blueprint_drift": blueprint.drift(bp, setup), "manual_steps": blueprint.manual_steps(bp)}
 
 
+LEDGER_NAMES = ("log", "index", "glossary", "gen")
+
+
+def _gen_out(root: Path) -> str | None:
+    """GEN_OUT from the Makefile (`$(PKG)` resolved), or None when the repository draws no code."""
+    makefile = root / "Makefile"
+    if not makefile.is_file():
+        return None
+    text = makefile.read_text(encoding="utf-8", errors="replace")
+    gen = re.search(r"^GEN_OUT\s*:?=\s*(\S+)\s*$", text, re.M)
+    if not gen:
+        return None
+    out = gen.group(1)
+    pkg = re.search(r"^PKG\s*:?=\s*(\S+)\s*$", text, re.M)
+    return out.replace("$(PKG)", pkg.group(1)) if pkg else out
+
+
+def ledgers_split_report(root: Path) -> list[dict[str, str]]:
+    """The ledgers still kept as one hand-edited file, each with the command that splits it.
+    A notice, never a score: a repository that has not split yet is working as it did. A
+    repository without tools/ledgers.py (an install from before) gets nothing."""
+    tool = root / "tools" / "ledgers.py"
+    if not tool.is_file():
+        return []
+    gen_out = _gen_out(root)
+    found = []
+    for ledger in LEDGER_NAMES:
+        cmd = [sys.executable, str(tool), "--root", str(root), "shape", ledger]
+        if ledger == "gen":
+            if not gen_out:
+                continue
+            cmd += ["--gen-out", gen_out]
+        try:
+            done = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if done.returncode == 0 and done.stdout.strip() == "one-file":
+            found.append({"ledger": ledger, "command": f"make split L={ledger}"})
+    return found
+
+
 def changed_since_apply(repo: Repo, check: dict, recorded: dict[str, str]) -> list[str]:
     """Files of `unchanged` that differ from the hash apply.py recorded, or, when it recorded
     none, from the plugin's copy. A recorded hash wins, so a plugin upgrade alone fails nothing."""
@@ -525,6 +566,8 @@ def main(argv: list[str] | None = None) -> int:
         # Checks that do not fit this kind of repository: listed with the reason, never scored.
         "not_applicable": set_aside,
         **blueprint_report(root, setup),
+        # Ledgers still kept as one file: a notice with the command to split them, never scored.
+        "ledgers_split": ledgers_split_report(root),
         "upgrade": upgrade_report.report(root, setup).as_dict() if setup.get("files") else None,
     }
 
@@ -560,6 +603,10 @@ def main(argv: list[str] | None = None) -> int:
             print("\nManual steps from setup-blueprint.yaml (not scored):")
             for line in report["manual_steps"]:
                 print(f"  [ ] {line}")
+        if report["ledgers_split"]:
+            print("\nLedgers still kept as one file (not scored):")
+            for item in report["ledgers_split"]:
+                print(f"  - {item['ledger']}: {item['command']}  (one pull request each)")
         drift = report["upgrade"]
         if drift and (drift["edited"] or drift["behind"] or drift["removed"] or drift["marked"]):
             print("\nUpgrade (files repo-setup wrote):")

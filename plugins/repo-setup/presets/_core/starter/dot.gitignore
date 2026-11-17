@@ -4,6 +4,11 @@
 !.env.example
 *.pem
 
+# Drawn by `make derived` from their fragments; never committed
+wiki/log.md
+wiki/index.md
+ontology/glossary.md
+
 # OS / editors
 .DS_Store
 Thumbs.db

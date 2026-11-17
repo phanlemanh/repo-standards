@@ -190,7 +190,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
 | RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); đã chạy ở kho thử    |
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
-| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Đã thiết kế, chủ kho duyệt (2026-11-17); chờ dựng |
+| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Đã dựng (2026-11-17), mục 48 bộ kiểm; chờ đo trên kho thử |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Đã thiết kế, chủ kho duyệt (2026-11-17); chờ dựng |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
@@ -219,6 +219,31 @@ Hai điều bản thiết kế bước D đổi so với ghi chú bên dưới:
 
 Ghi chú cho các gói mới và gói đổi:
 
+- **RS2b đã dựng (bước D), chưa đo trên kho thử.** Kho này cấp `make derived` và
+  `tools/ledgers.py` (`add-log`, `add-term`, `draw`, `draw-gen`, `shape`, `split`): sổ log, sổ
+  thuật ngữ và mục lục wiki thành mảnh, mã sinh ra từ `ontology/` thành vật dẫn xuất; `split` chuyển
+  một kho đang giữ sổ một tệp, mỗi sổ một PR, và so từng mục trước sau. Mục 48 của bộ kiểm giữ phần
+  này; `bash tests/e2e.sh` chạy thật các tổ hợp preset và đường nâng cấp từ bản đã phát hành. Bốn điều
+  đổi so với bản thiết kế và kế hoạch:
+  - Hình dạng của một sổ đọc theo dấu, không đọc theo «có trong git». Sổ là `one-file` khi tệp cũ
+    nằm trong git mà dòng đầu không phải dòng dấu; mọi trường hợp khác là `fragments`. Đọc theo chữ
+    của bản thiết kế thì phép kiểm `derived-untracked` không bao giờ đỏ được, vì tệp ép thêm vào git
+    cũng «nằm trong git». Kho cũ chưa từng có dấu nên vẫn xanh sau khi nâng cấp.
+  - Tệp đầu (`wiki/log.head.md`, `wiki/index.head.md`, `ontology/glossary.head.md`) đi qua danh sách
+    kê của bản cài (`.repo-setup.json`). `split` chỉ ghi đè tệp đầu còn đúng băm bản cài ghi, rồi gỡ
+    nó khỏi danh sách kê; khoá mới `kept_quietly` của preset làm nâng cấp giữ các tệp này mà không
+    nhắc ai gộp tay.
+  - Mục lục không bao giờ là «hai nguồn»: nó không có thư mục mảnh, nên `wiki/index.md` viết tay
+    cạnh tệp `index.head.md` không bị chặn; kho nâng cấp giữ nguyên.
+  - `mk/derived.mk` chạy các công cụ sổ bằng `LEDGERS_PYTHON` (mặc định `python3`, chỉ thư viện chuẩn),
+    không bằng `PYTHON`, để móc `SessionStart` ở kho python không kéo `uv run`. Các công cụ này
+    cũng qua `ruff` của preset python, nên được tách thành `ledgers.py`, `ledgers_ontology.py`,
+    `ledgers_split.py`, `ledgers_split_read.py`, mỗi tệp dưới 800 dòng.
+- **RS2b chưa đo trên kho thử.** Bước đo trên kho thử `design-ci-probe` (nâng bằng nhánh này, `split` bốn sổ, hai PR
+  song song mỗi PR một `make log`, một `add-term`, một trang wiki, gộp PR đầu, mong PR hai gộp
+  được không cần «Update branch» và hai PR không chung tệp nào) chưa chạy: nó đẩy và gộp trong một
+  kho khác, nên cần lời chủ kho. Tới khi chạy, trạng thái ở bảng là «chờ đo», không phải «đã chạy
+  ở kho thử» như RS1 và RS8.
 - **RS2a đã thử.** Phát lại 99 lần gộp ngược với luật gộp kiểu hợp cho `wiki/log.md` và
   `wiki/index.md`: xung đột ở hai tệp này từ 60 và 3 về 0, số lần gộp ngược sạch từ 6 lên 22, một
   bản gộp soi tay không mất dòng nào. Nó chỉ gỡ xung đột; hai PR vẫn «cùng chạm một tệp», nên lối

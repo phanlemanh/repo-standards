@@ -34,6 +34,11 @@ from repo_ontology import (
     split_front_matter,
 )
 
+try:  # an older repository may not have the tool: its index is then kept by hand
+    import ledgers
+except ImportError:
+    ledgers = None
+
 PROPERTY_TYPES = {
     "string",
     "text",
@@ -161,6 +166,16 @@ def check_ontology(root: Path, rep: Report) -> dict[str, dict[str, Any]]:
     return entities
 
 
+def is_fragment_file(wiki: Path, page: Path) -> bool:
+    """A file of the wiki that is no page: a head file, an entry of wiki/log/, a hidden file."""
+    parts = page.relative_to(wiki).parts
+    return (
+        page.name.endswith(".head.md")
+        or parts[0] == "log"
+        or any(part.startswith(".") for part in parts)
+    )
+
+
 def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> None:
     wiki = root / "wiki"
     if not wiki.is_dir():
@@ -171,16 +186,35 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
         rep.error("ontology/page-types.yaml", "missing or empty: wiki pages cannot be checked")
         page_types = {}
 
-    pages = sorted(wiki.rglob("*.md"))
+    pages = [page for page in sorted(wiki.rglob("*.md")) if not is_fragment_file(wiki, page)]
     index = wiki / "index.md"
+    drawn_index = ledgers is not None and ledgers.shape_of(root, "index") == ledgers.FRAGMENTS
     if not index.exists():
         rep.error("wiki/index.md", "missing: agents start here")
     linked_from_index: set[Path] = set()
     reachable: set[Path] = set()
 
+    def scan_links(page: Path, body: str) -> None:
+        visible = re.sub(r"<!--.*?-->|```.*?```|`[^`\n]*`", "", body, flags=re.DOTALL)
+        for target in LINK.findall(visible):
+            if re.match(r"^[a-z]+:", target) or target.startswith("#"):
+                continue
+            dest = (page.parent / target.split("#", 1)[0]).resolve()
+            if not dest.exists():
+                rep.error(rel(root, page), f"broken link '{target}'")
+            elif dest.suffix == ".md":
+                reachable.add(dest)
+                if page == index:
+                    linked_from_index.add(dest)
+
     for page in pages:
         path = rel(root, page)
         text = page.read_text(encoding="utf-8")
+        if ledgers is not None and page.name in ("index.md", "log.md") and page.parent == wiki:
+            drawn_text, _ = ledgers.read_stamped(page)
+            if drawn_text is not None:  # a drawn file is not a page: only its links count
+                scan_links(page, drawn_text)
+                continue
         try:
             fm, body = split_front_matter(text)
         except YamlError as exc:
@@ -190,8 +224,10 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
             rep.error(path, "missing front matter (--- type: ... title: ... ---)")
             fm, body = {}, text
         ptype = fm.get("type")
-        if not fm.get("title"):
-            rep.error(path, "front matter needs a title")
+        if not ptype or not fm.get("title"):
+            rep.error(path, "page has no type or title")
+            scan_links(page, body)
+            continue
         if ptype in SPECIAL_PAGES:
             pass
         elif ptype not in page_types:
@@ -234,30 +270,30 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
         for x in fm.get("links") or []:
             if not (root / str(x)).exists():
                 rep.error(path, f"front matter link '{x}' does not exist (paths are repo-relative)")
-        visible = re.sub(r"<!--.*?-->|```.*?```|`[^`\n]*`", "", body, flags=re.DOTALL)
-        for target in LINK.findall(visible):
-            if re.match(r"^[a-z]+:", target) or target.startswith("#"):
-                continue
-            dest = (page.parent / target.split("#", 1)[0]).resolve()
-            if not dest.exists():
-                rep.error(path, f"broken link '{target}'")
-            elif dest.suffix == ".md":
-                reachable.add(dest)
-                if page == index:
-                    linked_from_index.add(dest)
+        scan_links(page, body)
 
     if index.exists():
         n = len(index.read_text(encoding="utf-8").splitlines())
         if n > 80:
             rep.warn("wiki/index.md", f"{n} lines; keep the entry page short (< 80)")
     for page in pages:
-        if page.name in ("index.md", "log.md"):
+        if page.name in ("index.md", "log.md") or drawn_index:
             continue
         if page.resolve() not in linked_from_index:
             rep.warn(rel(root, page), "not linked from wiki/index.md")
     for name, data in entities.items():
         if data.get("wiki") and (root / str(data["wiki"])).resolve() not in reachable:
             rep.warn(str(data["wiki"]), f"entity page for {name} is not linked from any wiki page")
+
+
+def draw_missing(root: Path) -> None:
+    """Draw the ledgers kept as fragments whose drawn file is absent (a clean clone that has not
+    run `make derived` yet), so that the lint reads them instead of reporting them missing. A drawn
+    file that is there is read as it is; a ledger kept in one file is not touched."""
+    if ledgers is None or not (root / "wiki").is_dir():
+        return
+    if any(not (root / rel).exists() for rel in ledgers.OLD_PATHS.values()):
+        ledgers.cmd_draw(argparse.Namespace(root=str(root), quiet=True))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else find_repo_root()
 
+    draw_missing(root)
     rep = Report()
     entities = check_ontology(root, rep)
     check_wiki(root, rep, entities)

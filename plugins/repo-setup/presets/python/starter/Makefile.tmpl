@@ -3,6 +3,7 @@
 PKG := {{package_name}}
 DEV_CMD := {{dev_cmd}}
 GEN_OUT := src/$(PKG)/ontology_types.py
+GEN_LANG := python
 PYTEST_ARGS :=
 PYTHON ?= uv run python
 CHECK_TARGETS := lint typecheck test ontology
@@ -10,6 +11,10 @@ CHECK_TARGETS := lint typecheck test ontology
 # Extra targets from repo-setup layers (architecture, governance, coverage...) live in mk/*.mk.
 # They append to CHECK_TARGETS / PYTEST_ARGS, so `make check` grows with the setup.
 -include mk/*.mk
+
+# Every check step, those layers added in mk/*.mk too, waits for `make derived` (mk/derived.mk).
+# `upgrade` runs first and `derived` waits for it, so it stays out of the list.
+$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) dev: | derived
 
 .PHONY: help setup dev format lint typecheck test gen ontology check clean
 
@@ -36,12 +41,13 @@ typecheck: ## Strict type check
 test: ## Run tests
 	uv run pytest $(PYTEST_ARGS)
 
+# The generated file is committed (one-file) or drawn and kept out of git (fragments): see mk/derived.mk.
 gen: ## Regenerate types from ontology/
-	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT)
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT); fi
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
-	uv run python tools/wiki_lint.py
-	uv run python tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check
+	$(PYTHON) tools/wiki_lint.py
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
 
 check: $(CHECK_TARGETS) ## Everything CI runs
 

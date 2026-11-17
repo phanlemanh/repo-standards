@@ -13,8 +13,9 @@ You compile raw material into short, linked, sourced pages. Humans read; you wri
 Pick what applies (ask if unclear):
 
 - current branch: `git diff --stat main...HEAD` and `git log main..HEAD --oneline`;
-- since the last ingest: the latest date in `wiki/log.md` (after a merge the newest line is not
-  always the first one), then
+- since the last ingest: the date in the name of the newest file in `wiki/log/`
+  (`YYYY-MM-DD-NN-<slug>.md`; in a repository that still keeps `wiki/log.md` in git, the latest
+  date in that file: after a merge the newest line is not always the first one), then
   `git log --since=<date> --oneline --merges` (or all commits);
 - a PR or issue: `gh pr view <n>` / `gh issue view <n>` if `gh` is available;
 - an incident or decision described in the conversation;
@@ -24,7 +25,8 @@ Pick what applies (ask if unclear):
 
 Read `wiki/index.md` and `ontology/page-types.yaml` first.
 
-- **Always**: one line at the top of the list in `wiki/log.md`: `YYYY-MM-DD — what — source`.
+- **Always**: one entry of the log: `make log m="what — source"` (it writes a file in `wiki/log/`;
+  `wiki/log.md` is drawn from them, never edit it).
 - **New technical choice** (library, architecture, protocol, data store, convention):
   `wiki/decisions/NNNN-short-title.md` (next number). If it replaces an older decision,
   set the old one's Status to `Superseded by NNNN`.
@@ -42,7 +44,8 @@ Read `wiki/index.md` and `ontology/page-types.yaml` first.
 - Short: a page should be readable in one minute. Link to code paths instead of pasting code.
 - Every claim must come from the material. If something is a guess, write
   "Needs confirmation:" and ask the user — never invent reasons.
-- Link new pages from `wiki/index.md` in the right section.
+- A new page needs only `type` and `title` in its front matter: `wiki/index.md` is drawn and lists
+  it under its type. If `wiki/index.md` is still in git, add the link there in the right section.
 
 ## 4. Verify
 

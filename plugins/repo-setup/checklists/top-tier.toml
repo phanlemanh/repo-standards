@@ -207,8 +207,9 @@ level = "starter"
 weight = 2
 title = "Domain ontology: glossary + entity definitions"
 why = "One shared meaning for business concepts, for people, code and agents."
-fix = "Add ontology/glossary.md and ontology/entities/*.yaml (/repo-setup:new creates the skeleton)."
-any = [{ paths = ["ontology/glossary.md"] }]
+fix = "Add a glossary (ontology/glossary.md, or ontology/glossary/ with ontology/glossary.head.md) and ontology/entities/*.yaml (/repo-setup:new creates the skeleton)."
+# A repository that keeps the glossary as fragments has the drawn ontology/glossary.md only after `make derived`.
+any = [{ paths = ["ontology/glossary.md", "ontology/glossary.head.md", "ontology/glossary/*"] }]
 [check.not_applicable.claude-plugin]
 reason = "A plugin marketplace has no business domain to model: its glossary and decision records stay in its own docs."
 
@@ -218,9 +219,9 @@ level = "starter"
 weight = 2
 title = "Project wiki with index and decision records"
 why = "Keeps the 'why' (decisions, incidents) next to the code, maintained by agents."
-fix = "Add wiki/index.md and wiki/decisions/0001-*.md."
+fix = "Add wiki/index.md (or wiki/index.head.md, which `make derived` draws it from) and wiki/decisions/0001-*.md."
 any = [
-  { paths = ["wiki/index.md"] },
+  { paths = ["wiki/index.md", "wiki/index.head.md"] },
   { paths = ["docs/adr/*.md", "docs/decisions/*.md"] },
 ]
 [check.not_applicable.claude-plugin]

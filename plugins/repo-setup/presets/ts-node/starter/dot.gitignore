@@ -4,6 +4,12 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Drawn by `make derived` from their fragments; never committed
+wiki/log.md
+wiki/index.md
+ontology/glossary.md
+src/generated/ontology.ts
+
 # Secrets
 .env
 .env.*

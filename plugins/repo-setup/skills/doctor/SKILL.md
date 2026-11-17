@@ -25,6 +25,10 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
      short to-do;
    - the `not_applicable` checks, in one short block with their reason. They are not gaps: do not
      offer to fix them (for example, no ontology or lockfile for a plugin marketplace).
+   - `ledgers_split`: the ledgers still kept as one hand-edited file (`log`, `index`, `glossary`,
+     `gen`), each with its split command (`make split L=<ledger>`). It is a notice, never a score:
+     say it in one line and leave the choice to the owner. Do not run a split unasked; each one is
+     a pull request of its own.
 
 3. Offer fixes, then act only on the ones the user approves:
    - If the stack has a preset (`detect.py` → `suggested_preset`): run

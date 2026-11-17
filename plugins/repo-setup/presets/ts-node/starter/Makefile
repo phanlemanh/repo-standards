@@ -1,6 +1,7 @@
 # One-command tasks. CI runs `make check`; run it before every PR.
 .DEFAULT_GOAL := help
 GEN_OUT := src/generated/ontology.ts
+GEN_LANG := ts
 PYTHON ?= python3
 CHECK_TARGETS := lint typecheck test ontology
 
@@ -9,6 +10,10 @@ CHECK_TARGETS := lint typecheck test ontology
 # Check steps run quietly: a passing step prints only its tool's short result, a failing
 # step prints the tool's full report.
 -include mk/*.mk
+
+# Every check step, those layers added in mk/*.mk too, waits for `make derived` (mk/derived.mk).
+# `upgrade` runs first and `derived` waits for it, so it stays out of the list.
+$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) build dev: | derived
 
 .PHONY: help setup dev build format lint typecheck test gen ontology check clean
 
@@ -36,12 +41,13 @@ typecheck: ## Strict type check
 test: ## Run tests
 	@npm run --silent test
 
+# The generated file is committed (one-file) or drawn and kept out of git (fragments): see mk/derived.mk.
 gen: ## Regenerate types from ontology/
-	python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT)
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = fragments ]; then $(MAKE) --no-print-directory gen-derived; else python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT); fi
 
 ontology: ## Check ontology/ + wiki/ consistency and generated code
 	@python3 tools/wiki_lint.py
-	@python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT) --check
+	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT) --check; fi
 
 check: $(CHECK_TARGETS) ## Everything CI runs
 	@echo "make check passed: $(CHECK_TARGETS)"

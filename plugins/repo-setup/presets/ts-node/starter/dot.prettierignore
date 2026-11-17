@@ -6,3 +6,11 @@ CHANGELOG.md
 src/generated/
 contracts/openapi.json
 .repo-setup.json
+
+# Drawn by `make derived`
+wiki/log.md
+wiki/index.md
+ontology/glossary.md
+# Written by tools/ledgers.py, one entry each; never formatted
+wiki/log/
+ontology/glossary/

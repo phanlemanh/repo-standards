@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Copy a sample domain (tests/fixtures/<name>) into a generated repo, the way an agent would:
-entities + relations + wiki page, glossary rows appended, wiki index linked."""
+entities + relations + wiki page, glossary terms added with `tools/ledgers.py add-term`. The wiki
+index lists the page by itself (a hand-kept index in an older repository is linked by hand)."""
+import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,16 +17,18 @@ for src in fixture.rglob("*"):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
 
-glossary = repo / "ontology" / "glossary.md"
-lines = glossary.read_text().splitlines()
-example = next(i for i, ln in enumerate(lines) if ln.startswith("| _Example:_"))
-rows = (fixture / "glossary-rows.md").read_text().splitlines()
-glossary.write_text("\n".join(lines[: example + 1] + rows + lines[example + 1 :]) + "\n")
+for row in (fixture / "glossary-rows.md").read_text().splitlines():
+    cells = [c.strip() for c in re.split(r"(?<!\\)\|", row.strip())[1:-1]]
+    term, definition, confused, display = cells
+    command = ["python3", "tools/ledgers.py", "add-term", term.strip("`"), "--definition", definition, "--display", display]
+    if confused:
+        command += ["--not-confused-with", confused]
+    subprocess.run(command, cwd=repo, check=True, capture_output=True)
 
 index = repo / "wiki" / "index.md"
-text = index.read_text().replace(
-    "<!-- - [Customer](entities/customer.md) — who buys; VIP rules -->",
-    "- [Customer](entities/customer.md) — who buys; VIP rules",
-)
-index.write_text(text)
+if index.is_file() and not index.read_text().startswith("<!-- Drawn by"):
+    index.write_text(index.read_text().replace(
+        "<!-- - [Customer](entities/customer.md) — who buys; VIP rules -->",
+        "- [Customer](entities/customer.md) — who buys; VIP rules",
+    ))
 print(f"fixture {sys.argv[1]} applied to {repo}")
