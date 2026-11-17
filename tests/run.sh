@@ -2592,6 +2592,162 @@ for t in image up deploy; do
   case "$out" in *"ledgers.py draw-gen"*"docker "*) ;; *) miss "gen: container: make $t does not draw before docker ($out)" ;; esac
 done
 if grep -qxE 'src/?|src/\*\*|src/generated/?|\*\.ts|\*\.py' "$gc/.dockerignore"; then miss "gen: container: .dockerignore leaves the drawn file out of the build context"; fi
+# 48u-48w. split moves a one-file ledger into fragments, in a pull request of its own, without losing
+#      an entry (spec section 6.3). The fixtures in tests/fixtures/ledgers/ imitate shapes seen in an
+#      older repository: an index in insertion order, 20 log lines on one day, a hand paragraph
+#      between the glossary intro and its table, terms with a space and a dot.
+LF="$ROOT/tests/fixtures/ledgers"
+sp_new() { # <dir>: a ts-node repository with the fixture ledgers and a committed generated file, all one-file
+  mkdir -p "$1" && git -C "$1" init -q -b main
+  python3 "$S/apply.py" --target "$1" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
+  cp -R "$LF/." "$1/"
+  ( cd "$1" && python3 tools/ontology_codegen.py --lang ts --out src/generated/ontology.ts >/dev/null )
+  git -C "$1" add -A && git -C "$1" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
+}
+sp_snap() { # <dir>: one hash of every file outside .git and of the git index
+  python3 - "$1" <<'PY'
+import hashlib, pathlib, subprocess, sys
+root = pathlib.Path(sys.argv[1]); h = hashlib.sha256()
+for p in sorted(q for q in root.rglob("*") if q.is_file() and ".git" not in q.relative_to(root).parts):
+    h.update(p.relative_to(root).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+h.update(subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True).stdout)
+print(h.hexdigest())
+PY
+}
+sp_rows() { # <glossary file>: the table rows as cells, read without the code under test
+  python3 - "$1" <<'PY'
+import re, sys
+rows = []
+for line in open(sys.argv[1], encoding="utf-8"):
+    if not line.startswith("|") or "Term (code name)" in line or re.match(r"^\|[\s|:-]+\|\s*$", line) or "_Example:_" in line:
+        continue
+    cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+    cells[0] = cells[0].strip("`")
+    rows.append(" | ".join(cells))
+print("\n".join(sorted(rows)))
+PY
+}
+sp_log_lines() { grep -E '^- [0-9]{4}-[0-9]{2}-[0-9]{2} — ' "$1" | LC_ALL=C sort; }
+sp="$TMP/split"; sp_new "$sp"
+sp_git() { git -C "$sp" -c user.name=t -c user.email=t@example.com "$@"; }
+sp_tool() { ( cd "$sp" && python3 tools/ledgers.py "$@" ); }
+sp_gen=src/generated/ontology.ts
+sp_lint_errors() { ( cd "$sp" && python3 tools/wiki_lint.py 2>&1 | grep '^ERROR' | LC_ALL=C sort || true ); }
+sp_lint_before=$(sp_lint_errors)
+# 48u (plan 48o). each of the four ledgers: --dry-run writes nothing; split leaves the fragments shape,
+#      the old path out of git and in .gitignore, every check green, and the drawn file with the same entries
+for L in log index glossary gen; do
+  case $L in log) old=wiki/log.md ;; index) old=wiki/index.md ;; glossary) old=ontology/glossary.md ;; gen) old=$sp_gen ;; esac
+  cp "$sp/$old" "$TMP/split.old.$L"
+  before=$(sp_snap "$sp")
+  rc=0
+  if [ $L = gen ]; then out=$( cd "$sp" && make -s PYTHON=python3 split L=gen DRY=1 2>&1 ) || rc=$?
+  else out=$(sp_tool split $L --dry-run 2>&1) || rc=$?; fi
+  [ "$rc" = 0 ] || miss "split: split $L --dry-run exits $rc ($out)"
+  [ "$(sp_snap "$sp")" = "$before" ] || miss "split: split $L --dry-run wrote or removed a file"
+  case "$out" in *"$old"*) ;; *) miss "split: split $L --dry-run does not name $old ($out)" ;; esac
+  rc=0
+  if [ $L = gen ]; then out=$( cd "$sp" && make -s PYTHON=python3 split L=gen 2>&1 ) || rc=$?
+  else out=$(sp_tool split $L 2>&1) || rc=$?; fi
+  [ "$rc" = 0 ] || miss "split: split $L exits $rc ($out)"
+  printf '%s\n' "$out" > "$TMP/split.out.$L"
+  gen_arg=""; [ $L = gen ] && gen_arg="--gen-out $sp_gen"
+  [ "$(sp_tool shape $L $gen_arg)" = fragments ] || miss "split: shape $L is not fragments after split"
+  [ -z "$(sp_git ls-files -- "$old")" ] || miss "split: $old is still in git after split $L"
+  grep -qxF "$old" "$sp/.gitignore" || miss "split: .gitignore has no line $old after split $L"
+  [ -f "$sp/$old" ] || miss "split: split $L left no drawn $old"
+  case "$out" in *"deleted here, modified there"*) ;; *) miss "split: split $L does not remind open pull requests of the conflict they get ($out)" ;; esac
+done
+case "$(cat "$TMP/split.out.log")" in *'make log m='*) ;; *) miss "split: split log does not say to run make log again on an open branch" ;; esac
+sp_tool check >/dev/null 2>&1 || miss "split: ledgers.py check is red after the four splits ($(sp_tool check 2>&1))"
+( cd "$sp" && make -s PYTHON=python3 derived >/dev/null 2>&1 ) || miss "split: make derived is red after the four splits ($(cd "$sp" && make -s PYTHON=python3 derived 2>&1))"
+( cd "$sp" && make -s PYTHON=python3 derived-untracked >/dev/null 2>&1 ) || miss "split: make derived-untracked is red after the four splits"
+[ "$(sp_lint_errors)" = "$sp_lint_before" ] || miss "split: wiki_lint reports other errors after the four splits ($(sp_lint_errors))"
+[ "$(sp_log_lines "$sp/wiki/log.md")" = "$(sp_log_lines "$TMP/split.old.log")" ] || miss "split: the drawn log does not carry the entries of the old one"
+[ "$(sp_rows "$sp/ontology/glossary.md")" = "$(sp_rows "$TMP/split.old.glossary")" ] || miss "split: the drawn glossary does not carry the rows of the old one ($(sp_rows "$sp/ontology/glossary.md"))"
+for page in entities/warehouse.md entities/bin.md entities/stock-move.md flows/receiving.md decisions/0001-record-decisions-in-the-wiki.md; do
+  grep -qF "]($page)" "$sp/wiki/index.md" || miss "split: the drawn index lost the link to $page"
+done
+head -1 "$sp/$sp_gen" | grep -q ' sha256:[0-9a-f]\{64\}$' || miss "split: the generated file is not drawn stamped after split gen"
+[ "$(tail -n +2 "$sp/$sp_gen")" = "$(tail -n +2 "$TMP/split.old.gen")" ] || miss "split: the drawn generated code differs from the committed one"
+rc=0; out=$(sp_tool split log 2>&1) || rc=$?
+[ "$rc" = 0 ] && case "$out" in *"already split"*) true ;; *) false ;; esac || miss "split: a second split log exits $rc or does not say it is already split ($out)"
+sp_git add -A && sp_git commit -q -m "docs: split the ledgers"
+[ -z "$(sp_git ls-files -- wiki/log.md wiki/index.md ontology/glossary.md "$sp_gen")" ] || miss "split: a drawn file was committed after split"
+# 48v (plan 48p). the three shapes of the fixtures
+gh="$sp/ontology/glossary.head.md"
+grep -qF 'Terms below follow the names used on the floor' "$gh" || miss "split: the hand paragraph of the glossary did not move to ontology/glossary.head.md"
+grep -qF 'One line per business term' "$gh" || miss "split: the glossary intro did not move to ontology/glossary.head.md"
+if grep -qE '^\||Add your terms above' "$gh"; then miss "split: ontology/glossary.head.md keeps a table row or the template comment"; fi
+case "$(cat "$TMP/split.out.glossary")" in *"_Example:_"*) ;; *) miss "split: split glossary does not say it dropped the _Example:_ row" ;; esac
+[ -f "$sp/ontology/glossary/Stock move.md" ] && [ -f "$sp/ontology/glossary/Lot.Code.md" ] || miss "split: a term with a space or a dot is not its fragment's file name ($(ls "$sp/ontology/glossary" | tr '\n' ';'))"
+grep -qx 'term: Stock move' "$sp/ontology/glossary/Stock move.md" || miss "split: the fragment of 'Stock move' does not carry term: Stock move"
+grep -qxF 'not_confused_with: `Transfer` | `Shipment`' "$sp/ontology/glossary/Stock move.md" || miss "split: the escaped pipe of a cell is not unescaped in the fragment"
+if grep -rq 'Customer' "$sp/ontology/glossary/"; then miss "split: the _Example:_ row became a fragment"; fi
+[ "$(grep '^- 2026-06-02 — ' "$sp/wiki/log.md")" = "$(grep '^- 2026-06-02 — ' "$TMP/split.old.log")" ] || miss "split: the 20 lines of one day are not in the same order after split"
+[ "$(ls "$sp/wiki/log" | grep -c '^2026-06-02-')" = 20 ] || miss "split: the 20 lines of one day are not 20 fragments"
+[ -f "$sp/wiki/log/2026-06-02-20-zone-codes-printed-on-every-bin-label-40.md" ] && [ -f "$sp/wiki/log/2026-06-02-01-first-entry-of-a-long-day.md" ] || miss "split: the top line of a day is not its highest NN ($(ls "$sp/wiki/log" | tr '\n' ';'))"
+grep -qF 'Repository created with repo-setup' "$sp/wiki/log.md" || miss "split: the template's first log line was dropped"
+grep -qx 'type: log' "$sp/wiki/log.head.md" && grep -qF 'Newest first.' "$sp/wiki/log.head.md" || miss "split: wiki/log.head.md is not the head of the old log"
+if grep -q '^- 20' "$sp/wiki/log.head.md"; then miss "split: an entry stayed in wiki/log.head.md"; fi
+grep -qx 'summary: a building that holds stock' "$sp/wiki/entities/warehouse.md" || miss "split: the description after — did not move to the summary of the page"
+grep -qx 'summary: the smallest place stock sits; one zone each' "$sp/wiki/entities/bin.md" && ! grep -q 'an older text' "$sp/wiki/entities/bin.md" || miss "split: the summary of a page was not replaced by the description of the index"
+grep -qx 'owner: stock team' "$sp/wiki/entities/bin.md" || miss "split: split index changed another key of a page"
+if grep -q '^summary:' "$sp/wiki/entities/stock-move.md"; then miss "split: a page linked with no description got a summary"; fi
+grep -qxF -- '- [Warehouse](entities/warehouse.md) — a building that holds stock' "$sp/wiki/index.md" || miss "split: the drawn index does not show the description as the summary"
+ih="$sp/wiki/index.head.md"
+grep -qF 'Read the receiving flow first' "$ih" && grep -qF '[Supplier portal](https://example.com/portal)' "$ih" || miss "split: a paragraph or a link to no page did not stay in wiki/index.head.md"
+if grep -qE '^## (Entities|Flows|Decisions|Log)$|^- \[Warehouse\]' "$ih"; then miss "split: wiki/index.head.md keeps a heading the index draws, or an entry"; fi
+[ "$(grep -c '^## Entities$' "$sp/wiki/index.md")" = 1 ] && [ "$(grep -c '^## Log$' "$sp/wiki/index.md")" = 1 ] || miss "split: the drawn index has a doubled section"
+case "$(cat "$TMP/split.out.index")" in *entities/zone.md*) ;; *) miss "split: split index does not name the page it adds (entities/zone.md)" ;; esac
+case "$(cat "$TMP/split.out.index")" in *moved*) ;; *) miss "split: split index does not print the entries whose order changed" ;; esac
+# 48w (plan 48q). a lost entry stops the comparison; a head file is overwritten only while it is as repo-setup wrote it
+rm "$sp"/wiki/log/2026-06-02-*-warehouse-page-opening-hours*.md
+rc=0; out=$(sp_tool split log --verify-against "$TMP/split.old.log" 2>&1) || rc=$?
+[ "$rc" = 1 ] && case "$out" in *"Warehouse page: opening hours"*) true ;; *) false ;; esac || miss "split: a missing fragment is not named, or the comparison exits $rc, not 1 ($out)"
+sp_git checkout -q -- wiki/log
+rc=0; sp_tool split log --verify-against "$TMP/split.old.log" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 0 ] || miss "split: the comparison exits $rc for a complete set of fragments"
+sb="$TMP/split-b"; sp_new "$sb"
+sb_git() { git -C "$sb" -c user.name=t -c user.email=t@example.com "$@"; }
+sb_tool() { ( cd "$sb" && python3 tools/ledgers.py "$@" ); }
+sb_refused() { # <label> <args...>: split exits 1 and writes nothing
+  label=$1; shift; before=$(sp_snap "$sb"); rc=0; out=$(sb_tool split "$@" 2>&1) || rc=$?
+  [ "$rc" = 1 ] || miss "split: $label: split exits $rc, not 1 ($out)"
+  [ "$(sp_snap "$sb")" = "$before" ] || miss "split: $label: split wrote or removed a file"
+}
+# two sources: the old file in git and a fragment beside it
+mkdir -p "$sb/wiki/log" && printf 'x\n' > "$sb/wiki/log/2026-01-01-01-x.md"
+sb_refused "two sources" log; case "$out" in *"two sources"*) ;; *) miss "split: two sources are not named ($out)" ;; esac
+rm -rf "$sb/wiki/log"
+# a term that cannot be a file name, and more than 99 entries on one day
+cp "$sb/ontology/glossary.md" "$TMP/sb.gl"
+awk '{ print } /^\| `Bin`/ { print "| `In/Out` | x. | | In out |" }' "$TMP/sb.gl" > "$sb/ontology/glossary.md"
+sb_refused "a term with a slash" glossary; case "$out" in *"In/Out"*) ;; *) miss "split: the term that cannot be a file name is not named ($out)" ;; esac
+cp "$TMP/sb.gl" "$sb/ontology/glossary.md"
+cp "$sb/wiki/log.md" "$TMP/sb.log"; i=0; while [ $i -lt 100 ]; do printf -- '- 2026-07-01 — line %s\n' $i >> "$sb/wiki/log.md"; i=$((i + 1)); done
+sb_refused "100 entries on one day" log; case "$out" in *99*) ;; *) miss "split: 100 entries on one day are refused without saying the limit is 99 ($out)" ;; esac
+cp "$TMP/sb.log" "$sb/wiki/log.md"
+# a page the index links that has no title: it would vanish from the drawn index
+cp "$sb/wiki/entities/warehouse.md" "$TMP/sb.wh"; printf -- '---\ntype: entity\n---\n# Warehouse\n' > "$sb/wiki/entities/warehouse.md"
+sb_refused "a linked page with no title" index; case "$out" in *entities/warehouse.md*) ;; *) miss "split: the page with no title is not named ($out)" ;; esac
+cp "$TMP/sb.wh" "$sb/wiki/entities/warehouse.md"
+# a head file: edited, refused; as repo-setup wrote it (its hash in .repo-setup.json), overwritten
+printf -- '---\ntype: log\ntitle: Log\n---\n\n# Log\n' > "$sb/wiki/log.head.md"
+( cd "$sb" && python3 - <<'PY'
+import hashlib, json, pathlib
+m = pathlib.Path(".repo-setup.json"); d = json.loads(m.read_text())
+d["files"]["wiki/log.head.md"] = hashlib.sha256(pathlib.Path("wiki/log.head.md").read_bytes()).hexdigest()
+m.write_text(json.dumps(d, indent=2) + "\n")
+PY
+)
+sb_git add -A && sb_git commit -q -m "chore: head file from the template"
+printf 'A line typed by hand.\n' >> "$sb/wiki/log.head.md"
+sb_refused "an edited head file" log; case "$out" in *wiki/log.head.md*) ;; *) miss "split: the edited head file is not named ($out)" ;; esac
+sb_git checkout -q -- wiki/log.head.md
+rc=0; out=$(sb_tool split log 2>&1) || rc=$?
+[ "$rc" = 0 ] || miss "split: a head file as repo-setup wrote it is refused ($out)"
+grep -qF 'Newest first.' "$sb/wiki/log.head.md" || miss "split: a head file as repo-setup wrote it was not overwritten"
 echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh

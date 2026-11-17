@@ -18,9 +18,13 @@ with, and the check that a drawn file does not sit in git.
   python3 tools/ledgers.py check
   python3 tools/ledgers.py add-log <text> [--date YYYY-MM-DD]
   python3 tools/ledgers.py add-term <Term> --definition <s> [--display <s>] [--not-confused-with <s>]
+  python3 tools/ledgers.py split <log|index|glossary|gen> [--dry-run] [--verify-against FILE]
+                                 [--gen-out PATH --gen-lang <ts|python>]
+
+`split` lives in tools/ledgers_split.py.
 
 Exit codes: 0 done, 1 refused (a drawn file is in git, a drawn file edited by hand, a fragment
-that is wrong, two sources for one ledger), 2 wrong usage.
+that is wrong, two sources for one ledger, a split that would lose an entry), 2 wrong usage.
 
 Only the Python standard library is used.
 """
@@ -163,6 +167,7 @@ def cmd_untracked(args: argparse.Namespace) -> int:
 LOG_DIR = "wiki/log"
 LOG_HEAD = "wiki/log.head.md"
 LOG_FILE = "wiki/log.md"
+LOG_SOURCE = f"{LOG_DIR}/"
 LOG_NAME_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<nn>\d{2})-(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.md$")
 SLUG_MAX = 40
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -259,7 +264,7 @@ def draw_log(root: Path, quiet: bool) -> int | None:
     """Draw wiki/log.md. None when the log is not kept as fragments (nothing was drawn)."""
     if not (root / "wiki").is_dir() or shape_of(root, "log") != FRAGMENTS:
         return None
-    return draw_ledger(root, LOG_FILE, f"{LOG_DIR}/", bool(log_entries(root)), log_body(root),
+    return draw_ledger(root, LOG_FILE, LOG_SOURCE, bool(log_entries(root)), log_body(root),
                        'Put it in an entry instead: make log m="<text>"', quiet)
 
 
@@ -339,6 +344,7 @@ def cmd_add_log(args: argparse.Namespace) -> int:
 
 INDEX_HEAD = "wiki/index.head.md"
 INDEX_FILE = "wiki/index.md"
+INDEX_SOURCE = "wiki/"
 PAGE_TYPES_FILE = "ontology/page-types.yaml"
 DEFAULT_INDEX_HEAD = """---
 type: index
@@ -449,7 +455,7 @@ def draw_index(root: Path, quiet: bool) -> int | None:
         for page in wiki_pages(root):
             if page.problem:
                 print(f"skipped {page.problem}", file=sys.stderr)
-    return draw_ledger(root, INDEX_FILE, "wiki/", False, index_body(root),
+    return draw_ledger(root, INDEX_FILE, INDEX_SOURCE, False, index_body(root),
                        f"Put it in a page, or in {INDEX_HEAD} for the part above the sections", quiet)
 
 
@@ -467,6 +473,7 @@ def check_index(root: Path) -> list[str]:
 GLOSSARY_DIR = "ontology/glossary"
 GLOSSARY_HEAD = "ontology/glossary.head.md"
 GLOSSARY_FILE = "ontology/glossary.md"
+GLOSSARY_SOURCE = f"{GLOSSARY_DIR}/"
 GLOSSARY_COLUMNS = ("Term (code name)", "Definition", "Not to be confused with", "Display name")
 GLOSSARY_COMMENT = "<!-- Add your terms above"
 DEFAULT_GLOSSARY_HEAD = """# Glossary
@@ -549,7 +556,7 @@ def draw_glossary(root: Path, quiet: bool) -> int | None:
     """Draw ontology/glossary.md, even with no term (wiki_lint reads it). None when not fragments."""
     if not (root / "ontology").is_dir() or shape_of(root, "glossary") != FRAGMENTS:
         return None
-    return draw_ledger(root, GLOSSARY_FILE, f"{GLOSSARY_DIR}/", bool(glossary_files(root)),
+    return draw_ledger(root, GLOSSARY_FILE, GLOSSARY_SOURCE, bool(glossary_files(root)),
                        glossary_body(root), ADD_TERM_HINT, quiet)
 
 
@@ -567,6 +574,11 @@ def check_glossary(root: Path) -> list[str]:
             f"git rm --cached {GLOSSARY_FILE} and delete it, or move the terms out"
         )
     return problems
+
+
+def term_fragment(term: str, display: str, not_confused_with: str, definition: str) -> str:
+    """The text of ontology/glossary/<term>.md, as add-term and split write it."""
+    return f"---\nterm: {term}\ndisplay: {display}\nnot_confused_with: {not_confused_with}\n---\n{definition}\n"
 
 
 def bad_term_character(term: str) -> str | None:
@@ -622,11 +634,7 @@ def cmd_add_term(args: argparse.Namespace) -> int:
         print(f"ledgers.py: {GLOSSARY_DIR}/{path.name} already exists: the term {name} is defined", file=sys.stderr)
         return 1
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        f"---\nterm: {name}\ndisplay: {term.display}\nnot_confused_with: {term.not_confused_with}\n---\n"
-        f"{definition}\n",
-        encoding="utf-8",
-    )
+    path.write_text(term_fragment(name, term.display, term.not_confused_with, definition), encoding="utf-8")
     print(f"wrote {GLOSSARY_DIR}/{path.name}")
     return 0
 
@@ -717,6 +725,17 @@ def cmd_draw_gen(args: argparse.Namespace) -> int:
     return result or 0
 
 
+def cmd_split(args: argparse.Namespace) -> int:
+    # ledgers_split imports this module by name; when it runs as a script that name is __main__.
+    sys.modules.setdefault("ledgers", sys.modules[__name__])
+    try:
+        import ledgers_split
+    except ImportError:
+        print("ledgers.py: tools/ledgers_split.py is missing: this repository keeps no ledger to split", file=sys.stderr)
+        return 2
+    return ledgers_split.run(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ledgers.py", description=__doc__.split("\n")[0])
     parser.add_argument("--root", default=".", help="repository root (default: the current folder)")
@@ -755,6 +774,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_term.add_argument("--display", help="display name (default: the term)")
     add_term.add_argument("--not-confused-with", dest="not_confused_with", help="what the term is not")
     add_term.set_defaults(run=cmd_add_term)
+
+    split = sub.add_parser("split", help="move a one-file ledger into fragments without losing an entry")
+    split.add_argument("ledger", choices=LEDGERS)
+    split.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
+    split.add_argument("--verify-against", metavar="FILE",
+                       help="compare the entries of FILE (a copy of the old file) with what the fragments draw; write nothing")
+    split.add_argument("--gen-out", help="path of the generated code file (for the gen ledger)")
+    split.add_argument("--gen-lang", choices=GEN_LANGS, help="language of the generated code (for the gen ledger)")
+    split.set_defaults(run=cmd_split)
     return parser
 
 

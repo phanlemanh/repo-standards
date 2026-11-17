@@ -17,7 +17,7 @@ ifneq ($(GEN_OUT),)
 DERIVED_TARGETS += gen-derived
 DERIVED_FILES += $(GEN_OUT)
 endif
-.PHONY: derived wiki-derived gen-derived derived-untracked ledgers-check log
+.PHONY: derived wiki-derived gen-derived derived-untracked ledgers-check log split
 
 .SECONDEXPANSION:
 
@@ -41,3 +41,8 @@ ledgers-check: ## Fail on a wrong ledger fragment or two sources for one ledger
 log: export LOG_ENTRY = $(value m)
 log: ## Add a line to the wiki log: make log m="what changed — link"
 	@$(PYTHON) tools/ledgers.py add-log -- "$$LOG_ENTRY"
+
+# One ledger at a time, in a pull request of its own: L=log, index, glossary or gen. DRY=1 prints
+# what would be written and the comparison, and writes nothing.
+split: ## Move a one-file ledger into fragments without losing an entry: make split L=log [DRY=1]
+	@$(PYTHON) tools/ledgers.py split $(L) $(if $(GEN_OUT),--gen-out $(GEN_OUT) --gen-lang $(GEN_LANG)) $(if $(DRY),--dry-run)
