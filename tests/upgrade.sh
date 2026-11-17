@@ -297,4 +297,34 @@ for preset in python ts-node claude-plugin; do
   echo "$dry" | grep -q 'upgrade_markers.py' || miss "upgrade: make check of $preset does not run the marker check ($(echo "$dry" | tail -2 | tr '\n' ' '))"
 done
 
+# 47j. doctor says which files drift from the plugin, and fails while an upgrade is unfinished
+up5="$TMP/up5"; up_install "$up5" "$old"
+subst 's|^- Procedures live in `.claude/skills/`; use them:$|- Our procedures are in `.claude/skills/`:|' "$up5/CLAUDE.md"
+printf '# repo note\n' | cat - "$up5/.editorconfig" > "$up5/x" && mv "$up5/x" "$up5/.editorconfig"
+rm "$up5/README.md"
+up_apply "$S/apply.py" "$up5" --base-from "$arch" >/dev/null
+doc() { python3 "$S/doctor.py" --target "$1" --json > "$1.doctor.json" 2>/dev/null || true; }
+failed() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if sys.argv[2] in [r['id'] for r in d['failed']] else 1)" "$1.doctor.json" "$2"; }
+drift() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))" "$1.doctor.json" "$2"; }
+doc "$up5"
+failed "$up5" setup_in_sync || miss "upgrade: doctor passes setup_in_sync while CLAUDE.md is marked"
+[ "$(drift "$up5" '[p for p, n in d["upgrade"]["marked"]]' 2>&1)" = "['CLAUDE.md', 'CLAUDE.md']" ] || miss "upgrade: doctor does not list the marked file ($(drift "$up5" 'd.get("upgrade")' 2>&1 | tail -1))"
+[ "$(drift "$up5" 'd["upgrade"]["removed"]' 2>&1)" = "['README.md']" ] || miss "upgrade: doctor does not list the removed file"
+[ "$(drift "$up5" '".editorconfig" in d["upgrade"]["edited"]' 2>&1)" = True ] || miss "upgrade: doctor does not list a file edited in place"
+python3 - "$up5/CLAUDE.md" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text("".join(l for l in p.read_text().splitlines(True) if not l.startswith(("<<<<<<< ", "||||||| ", "=======", ">>>>>>> "))))
+PY2
+doc "$up5"
+failed "$up5" setup_in_sync && miss "upgrade: doctor fails setup_in_sync once the markers are gone"
+manifest_set "$up5" 'm["file_versions"][".gitignore"] = "0.0.1"'
+doc "$up5"
+failed "$up5" setup_in_sync || miss "upgrade: doctor passes setup_in_sync with a file behind the release"
+[ "$(drift "$up5" 'd["upgrade"]["behind"]' 2>&1)" = "[['.gitignore', '0.0.1']]" ] || miss "upgrade: doctor does not say which release a file is behind at ($(drift "$up5" 'd["upgrade"]["behind"]' 2>&1 | tail -1))"
+python3 "$S/doctor.py" --target "$up5" 2>/dev/null | grep -qF "0.0.1 → $NOW" || miss "upgrade: doctor's text does not show the versions of a file behind"
+rm "$up5/mk/upgrade.mk"
+doc "$up5"
+failed "$up5" upgrade_wall || miss "upgrade: doctor passes upgrade_wall without the marker check in make check"
+
 echo "ok  upgrade path (or misses reported above)"

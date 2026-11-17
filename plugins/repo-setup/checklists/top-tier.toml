@@ -8,6 +8,7 @@
 #   why      one line: why top teams do this
 #   fix      how to fix (a repo-setup command or a manual step)
 #   type     "exists" (default) | "not_committed" | "manual" | "command" | "remote" | "plugin"
+#            | "setup" (reads .repo-setup.json; `probe` is "in_sync" or "wall")
 #   any      list of alternatives; the check passes if ANY alternative matches.
 #            Alternative fields: paths (globs, relative to repo root),
 #            pattern (regex searched in the matched files), min_lines,
@@ -587,6 +588,28 @@ why = "Without a floor, every screen an agent builds drifts a little further fro
 fix = "Run: python3 <plugin>/scripts/apply.py --target . --with design"
 skip_if_adopt = "not applicable: adopt does not support the design capability yet"
 needs_capability = "design"
+
+# ---------------------------------------------------------------- upgrades
+# Type "setup" reads .repo-setup.json; a repository without it skips these.
+[[check]]
+id = "setup_in_sync"
+level = "starter"
+weight = 2
+type = "setup"
+probe = "in_sync"
+title = "Every file repo-setup wrote follows the last upgrade, with no conflict markers left"
+why = "A marked file is a merge left half done, and a file behind the release misses its fixes."
+fix = "Resolve the marked parts, or run apply.py again with network access (or --base-from)"
+
+[[check]]
+id = "upgrade_wall"
+level = "starter"
+weight = 1
+type = "setup"
+probe = "wall"
+title = "make check fails while an upgrade's conflict markers remain"
+why = "Without it, a half-done merge can reach the default branch with every check green."
+fix = "Run apply.py again to get mk/upgrade.mk, and keep `-include mk/*.mk` in the Makefile"
 
 # ---------------------------------------------------------------- Claude Code plugin marketplaces
 # These exist only for repositories that ship plugins (preset claude-plugin, or detected from
