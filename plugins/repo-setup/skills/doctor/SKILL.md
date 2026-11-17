@@ -28,14 +28,21 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
 
 3. Offer fixes, then act only on the ones the user approves:
    - If the stack has a preset (`detect.py` → `suggested_preset`): run
-     `apply.py --preset <p> --level <l> --var ... --dry-run` and show which missing files
-     it would add. Existing files are never overwritten; `conflict` files are left as they
-     are. Ask for project name/description/owner only if `.repo-setup.json` lacks them.
+     `apply.py --preset <p> --level <l> --var ... --dry-run` and show what it would add and
+     merge. A file repo-setup wrote and the repo edited since is merged with the new template
+     (`merged`); where both changed the same lines it gets conflict markers (`marked`) and
+     `make check` stays red until they are resolved. `base_unread` means the template the file
+     came from could not be read (no network): run again online, or with `--base-from`. Files
+     the repo deleted stay deleted (`removed`). Files the repo had before setup (`conflict`,
+     `kept`) are left as they are. Ask for project name/description/owner only if
+     `.repo-setup.json` lacks them.
    - Otherwise (or for files that exist but fail a content check, e.g. tsconfig without
      `"strict": true`): make the minimal edit by hand and explain it. Turning on strict
      modes can surface many errors — warn first and offer to do it in a separate PR.
 
 4. After changes, run the project's checks (`make check` if present) and `doctor.py` again.
+   Its "Upgrade" block lists files still marked, files behind the last release, files edited
+   in place and files deleted here.
    Show before → after score.
 
 ## Notes

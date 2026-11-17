@@ -135,6 +135,7 @@ thay vì để nguyên rồi báo.
 | ------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
 | Giống hệt mẫu mới                                                         | `unchanged`                                           | băm mới, bản mới                                       |
 | Băm khớp lần ghi trước (chưa sửa), kể cả tệp `user_owned`                 | `updated`                                             | mẫu mới; băm mới, bản mới                              |
+| Đã sửa, mẫu mới bằng gốc (mẫu không đổi)                                  | `edited`                                              | để nguyên; băm mới, bản mới                            |
 | Đã sửa, có gốc, gộp sạch                                                  | `merged`                                              | kết quả gộp; băm mới, bản mới                          |
 | Đã sửa, có gốc, đụng nhau                                                 | `marked`                                              | tệp có dấu; băm mới, bản mới                           |
 | Đã sửa, không có gốc khớp                                                 | `marked`                                              | gộp hai chiều (gốc rỗng), tệp có dấu; băm mới, bản mới |
