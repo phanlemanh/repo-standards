@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+### Rule kinds (RS7)
+The generated `AGENTS.md` told every rule in the same voice, so nobody could tell a rule a machine
+holds from a sentence. Now every rule says what holds it.
+
+- `AGENTS.md` ends with a new section, **What holds these rules**. It lists the machines this
+  repository has (for example `secret-scan`, the commit-format check, `make check` for module
+  boundaries, the autonomy gate) with what each one catches and how it reacts, then says once that
+  nothing listed covers the other rules. The list follows what is installed: a starter repository
+  is not told of the commit check or the secret scan, a team repository is; going from starter to
+  team adds the lines.
+- In the plugin, every list item of the twelve `+AGENTS.md/` fragments carries a kind,
+  `<!-- kept: <code> -->`: `word`, `none` (not a rule), or a machine listed in the new
+  `rule-checks.toml`. `apply.py` takes the kinds off, so none reaches a repository.
+- A machine may be named only when a test of this repository, tagged `# rule-check: <code>`,
+  breaks the rule in a generated repository and sees the machine react. Seven machines qualify
+  today. The count on this release: **14 rules held by a machine, 61 kept by word, 33 items that
+  are not rules** (108 list items). `python3 plugins/repo-setup/scripts/rule_kinds.py check
+  --tests tests` prints it; section 50 of `tests/run.sh` is red when an item has no kind, names a
+  machine nobody registered, or names one without a tagged test.
+- Six items that mixed a held rule with a worded one are now two items each (for example
+  "Never commit secrets." and "Never commit `.env`. Configuration goes in `.env.example`."). The
+  rules themselves did not change.
+
+**On upgrade.** `AGENTS.md` gains the section and the six split items. A file nobody edited is
+updated; a file with edits elsewhere is merged. Two cases end with conflict markers (`marked`,
+`make check` red until they are resolved): the repository edited one of the six lines that are
+now split, or it added its own text at the very end of `AGENTS.md`, where the section goes. In the
+second case both parts are kept between the markers: put the section last and remove the markers.
+A repository set up with `--adopt` gets the split items and no section.
+
+**For the plugin's authors.** A new list item in a `+AGENTS.md/` fragment needs a kind, or
+`tests/run.sh` is red. Use `word` unless a tagged test proves a machine.
+
+### Known gaps
+- Rules written in a paragraph or a table (the autonomy and SDLC fragments have some) are not
+  list items, so nothing asks for their kind.
+- "Not a rule" is the author's call; no check can tell a rule from a fact.
+- The section follows the templates and the choices in `.repo-setup.json`, not the disk and not
+  GitHub: a repository that deleted a check after setup still reads its line, and a check that the
+  ruleset does not require is still named. `doctor` answers the second question.
+- Repositories set up with `--adopt` skip files they already have, so the section could name a
+  machine they lack; they get none until the manifest records which machines were written.
+- The tag ties a test to a machine; that the test breaks the very rule is read by a person.
+  Section 44b (the secret scan) is skipped on a machine without gitleaks, and its tag still counts.
+
 ## 0.9.0 — 2026-11-18
 
 ### Fixed: package.json no longer gets conflict markers when a Node repository upgrades

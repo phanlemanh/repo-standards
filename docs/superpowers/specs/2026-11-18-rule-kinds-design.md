@@ -283,8 +283,10 @@ viết bài chứng minh hoặc được bỏ bằng cấu trúc.
 
 - `AGENTS.md` của mọi kho cài mới nhận thêm một mục cuối ở lần nâng cấp, và vài mục bị tách dòng.
   Kho `--adopt` chỉ nhận phần tách dòng.
-- Bản chưa sửa tại chỗ được cập nhật thẳng. Bản đã sửa đi qua phép gộp ba chiều của RS8: mục thêm ở
-  cuối không đụng dòng nào; mục bị tách có thể để lại dấu xung đột nếu kho đã sửa đúng dòng đó.
+- Bản chưa sửa tại chỗ được cập nhật thẳng. Bản đã sửa đi qua phép gộp ba chiều của RS8. Hai
+  trường hợp để lại dấu xung đột (`marked`), tìm ra khi dựng và có bài kiểm ghim lại: kho đã sửa
+  đúng một dòng bị tách; hoặc kho đã thêm chữ của riêng mình vào tận cuối `AGENTS.md`, đúng chỗ mục
+  tổng được thêm. Ở trường hợp sau cả hai phần đều còn giữa các dấu, không mất gì.
 - Không có gì ngừng chạy. Ghi dưới `## Unreleased` của `CHANGELOG.md`, kèm con số ở mục 7.
 
 ## 9. Đối chiếu nguyên tắc của setup

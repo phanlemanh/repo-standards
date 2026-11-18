@@ -110,7 +110,8 @@ và con số «64 lần gộp ngược» ở bản trước đếm theo lời co
      Phần cơ chế đã là mã (gói `dieu-phoi`), nhưng nó được quyết gì, tới đâu, khi nào phải hỏi thì
      vẫn nằm trong lời dặn: không bền, đồng đội không đọc được, không có biên, không đo được.
    - Luật: `AGENTS.md` mà plugin sinh ra nêu khoảng 16 luật dạng «luôn» hay «không được»; máy đọc và
-     xếp thì khoảng 6 luật có máy giữ, 10 luật chỉ là câu chữ. Luật «tên tệp tiếng Anh» nằm trong
+     xếp thì khoảng 6 luật có máy giữ, 10 luật chỉ là câu chữ. (Số đếm sau RS7, trên cả 12 mảnh và chỉ tính
+     máy đã có bài chứng minh: 14 luật máy giữ, 61 luật bằng lời.) Luật «tên tệp tiếng Anh» nằm trong
      10 luật đó: `onehub-inventory` có khoảng 59 trên 62 thư mục vòng tên tiếng Việt, và bốn tệp
      tài liệu ở chính kho này từng mang tên tiếng Việt (ba tệp do máy đặt trong buổi này; đã đổi
      cùng ngày, gói RS9).
@@ -196,7 +197,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
 | RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Làm cùng RS9                         |
-| RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Chưa thiết kế                        |
+| RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Đã dựng (2026-11-18), mục 50 bộ kiểm: 14 luật máy giữ, 61 lời |
 | RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Đã dựng và chạy ở kho thử (2026-11-17), mục 47 bộ kiểm |
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
 | RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đã dựng (2026-11-16), mục 46 bộ kiểm |
@@ -552,7 +553,9 @@ mới chạy trên `onehub-inventory`.
 - **Luật gộp kiểu hợp mới thử ở máy.** Phép phát lại dùng git tại chỗ, đúng nơi các phiên gộp nhánh
   chính vào nhánh. GitHub có theo luật đó khi tự tính «có xung đột» hay không thì chưa kiểm.
 - **Cách xếp 16 luật của `AGENTS.md`** thành «máy giữ» và «lời» là do máy đọc và xếp, chưa đối
-  chiếu từng luật với một bài kiểm chiều đỏ.
+  chiếu từng luật với một bài kiểm chiều đỏ. RS7 (2026-11-18) đã thay cách xếp đó bằng nhãn trên
+  từng mục; nhãn «máy giữ» chỉ hợp lệ khi bộ kiểm có một bài phạm luật và thấy máy phản ứng. Xem
+  [thiết kế RS7](superpowers/specs/2026-11-18-rule-kinds-design.md).
 - **Số xung đột phát lại không dùng luật gộp riêng của kho thật** cho `PRODUCT-MAP.md`, nên 45 lần
   ở tệp đó cao hơn thực tế.
 
