@@ -3352,5 +3352,8 @@ echo "ok  derived (or misses reported above)"
 # shellcheck source=tests/tiered_ci.sh
 . "$ROOT/tests/tiered_ci.sh"
 
+# shellcheck source=tests/rule_kinds.sh
+. "$ROOT/tests/rule_kinds.sh"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
