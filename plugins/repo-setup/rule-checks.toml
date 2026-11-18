@@ -47,8 +47,9 @@ catches = """
 a deleted or weakened test, a looser `agent:` setting, a change to `.github/workflows/` or
   `governance/`"""
 reaction = "the gate raises the tier, and a person decides"
+# tools/autonomy.py is in every team repository, but only the pull request pipeline runs it.
 kind = "raises-tier"
-present_when = "tools/autonomy.py"
+present_when = ".github/workflows/pr-pipeline.yml"
 
 [checks.module-boundaries]
 catches = "a module reaching past another module's public API"
@@ -63,7 +64,7 @@ kind = "red"
 present_when = "tools/api_compat.py"
 
 [checks.plugin-lint]
-catches = "manifest versions that disagree, a plugin whose source is the repository root"
+catches = "a plugin whose source is the repository root"
 reaction = "`make check` goes red"
 kind = "red"
 present_when = "tools/plugin_lint.py"

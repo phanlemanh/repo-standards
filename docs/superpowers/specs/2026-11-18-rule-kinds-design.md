@@ -213,7 +213,9 @@ tệp bị báo «không đọc được bản gốc» và lượt nâng cấp k
   lượt dựng lại bản gốc. Đây là chỗ duy nhất RS7 chạm vào mã của RS8. Nhãn vẫn được gỡ khỏi các
   dòng như mọi kho khác.
 
-Chữ đề xuất (tiếng Anh, vì khuôn viết bằng tiếng Anh), ở một kho hạng team có modular-monolith:
+Chữ đề xuất (tiếng Anh, vì khuôn viết bằng tiếng Anh), ở một kho hạng team có modular-monolith và
+capability github-agents (dòng về cổng hạng chỉ hiện ở kho có `pr-pipeline.yml`, nơi duy nhất chạy
+cổng trên một pull request; điều này tìm ra khi soát bản dựng):
 
 ```
 ## What holds these rules

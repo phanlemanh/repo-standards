@@ -8,7 +8,7 @@ holds from a sentence. Now every rule says what holds it.
 
 - `AGENTS.md` ends with a new section, **What holds these rules**. It lists the machines this
   repository has (for example `secret-scan`, the commit-format check, `make check` for module
-  boundaries, the autonomy gate) with what each one catches and how it reacts, then says once that
+  boundaries, the autonomy gate where the pull request pipeline runs it) with what each one catches and how it reacts, then says once that
   nothing listed covers the other rules. The list follows what is installed: a starter repository
   is not told of the commit check or the secret scan, a team repository is; going from starter to
   team adds the lines.
@@ -17,7 +17,7 @@ holds from a sentence. Now every rule says what holds it.
   `rule-checks.toml`. `apply.py` takes the kinds off, so none reaches a repository.
 - A machine may be named only when a test of this repository, tagged `# rule-check: <code>`,
   breaks the rule in a generated repository and sees the machine react. Seven machines qualify
-  today. The count on this release: **14 rules held by a machine, 61 kept by word, 33 items that
+  today. The count on this release: **13 rules held by a machine, 62 kept by word, 33 items that
   are not rules** (108 list items). `python3 plugins/repo-setup/scripts/rule_kinds.py check
   --tests tests` prints it; section 50 of `tests/run.sh` is red when an item has no kind, names a
   machine nobody registered, or names one without a tagged test.

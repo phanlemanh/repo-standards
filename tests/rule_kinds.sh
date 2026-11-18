@@ -62,6 +62,10 @@ subst 's|^- Commits follow the format\. |- Commits follow the format. <!-- kept:
 rk_says "10-a.md:3: list item has two kinds"
 rk_fragment word; printf '\nA paragraph with a kind. <!-- kept: word -->\n' >> "$rk_frag/10-a.md"
 rk_says "10-a.md:13: marker outside a list item"
+# a bullet written with "+", or a number with ")", is a list item like any other
+rk_fragment word; printf '\n+ A rule with a plus.\n2) A rule with a bracket.\n' >> "$rk_frag/10-a.md"
+rk_says "10-a.md:13: list item has no kind"
+rk_says "10-a.md:14: list item has no kind"
 
 # 50d. a machine nobody registered; a machine without a tagged test
 rk_fragment nope
@@ -251,12 +255,18 @@ for line in '^- commit format:' '^- a secret in a commit:' '^- a deleted or weak
   rk_has "$rk_s" "$line" && miss "rule kinds: starter names a machine it does not have: $line"
 done
 for line in '^- commit format: `conventional-title` or `conventional-commits` goes red (GitHub)$' '^- a secret in a commit: `secret-scan` goes red (GitHub)$' \
-  '^- a module reaching past another module.s public API: `make check` goes red$' '^- a deleted or weakened test, a looser `agent:` setting,'; do
+  '^- a module reaching past another module.s public API: `make check` goes red$'; do
   rk_has "$rk_t" "$line" || miss "rule kinds: team lacks the line $line"
 done
+# the gate: tools/autonomy.py is in every team repository, but only the pull request pipeline of
+# the github-agents capability runs it; without that pipeline nothing raises a tier
+rk_has "$rk_t" 'a deleted or weakened test' && miss "rule kinds: a team repository without the pull request pipeline is told of the gate"
+rk_has "$rk_p" 'a deleted or weakened test' && miss "rule kinds: a plugin repository without the pull request pipeline is told of the gate"
+rk_has "$rk_f" '^- a deleted or weakened test, a looser `agent:` setting,' || miss "rule kinds: a repository with the pull request pipeline lacks the line for the gate"
 rk_has "$rk_f" '^- a breaking change to the API contract: `make check` goes red$' || miss "rule kinds: a service API lacks the line for api-compat"
 rk_has "$rk_f" 'a module reaching past' && miss "rule kinds: a repository without modules is told of module boundaries"
-rk_has "$rk_p" '^- manifest versions that disagree, a plugin whose source is the repository root: `make check` goes red$' || miss "rule kinds: a plugin repository lacks the line for the manifest lint"
+rk_has "$rk_p" '^- a plugin whose source is the repository root: `make check` goes red$' || miss "rule kinds: a plugin repository lacks the line for the manifest lint"
+rk_has "$rk_p" 'versions that disagree' && miss "rule kinds: the manifest lint is named for a rule it does not hold (a version edited by hand in every manifest passes it)"
 rk_has "$rk_p" 'a wiki page' && miss "rule kinds: a plugin repository is told of a wiki it does not have"
 
 # 50p. every new repository: one section, no kind left, the closing sentence, and every machine
@@ -283,6 +293,9 @@ done
 # 50q. a repository set up with --adopt: the kinds go, no section
 grep -q 'What holds\|kept:' "$rk_a/AGENTS.md" && miss "rule kinds: an adopted repository gets the section, or keeps a kind"
 grep -q '^- Never commit secrets\.$' "$rk_a/AGENTS.md" || miss "rule kinds: an adopted repository lacks a rule as the fragments now word it"
+
+grep -q 'kept:' "$rk_plugin/skills/adopt/SKILL.md" && grep -q 'apply.py --dry-run --diff' "$rk_plugin/skills/adopt/SKILL.md" \
+  || miss "rule kinds: the adopt skill does not say to take the AGENTS.md sections from apply's output, where the kinds are gone"
 
 # 50r. the section adds no stop of its own (the phrases of 43g)
 for phrase in 'get approval before you start' 'ask in the issue and stop' 'need human review' 'need a human reviewer' 'one approval is required' '(high tier)'; do

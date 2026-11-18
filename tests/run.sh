@@ -1203,9 +1203,9 @@ x="$TMP/pd-notests"; fresh "$x"; rm -rf "$x/tests"
 expect "$x" tests '^fail: Automated tests exist'
 # the repo's own lint command says the same thing
 if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-drift" >/dev/null 2>&1; then :; else miss "plugin_lint: independent versions rejected despite the declared policy"; fi
-# rule-check: plugin-lint
 if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-version" >/dev/null 2>"$TMP/lint.err"; then miss "plugin_lint: version mismatch accepted"; fi
 grep -q "\[versions\] plugin 'beta': the marketplace says 1.2.0 but plugin.json says 1.3.0" "$TMP/lint.err" || miss "plugin_lint: no message for a version mismatch"
+# rule-check: plugin-lint
 { python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep -q '^False False$' || miss "plugin_lint --json"
 echo "ok  doctor profile for plugin repos (or misses reported above)"
 
