@@ -74,4 +74,32 @@ ci_put "$ci_c" src/b.ts new; ci_commit "$ci_c" "main moves"
 git -C "$ci_c" checkout -q feature
 git -C "$ci_c" merge -q --no-edit --no-ff main >/dev/null 2>&1 || miss "ci_inputs: could not merge main into the test branch"
 [ "$(ci_key "$ci_c")" != "$ci_c_feat" ] || miss "ci_inputs: merging a code change from main leaves the key unchanged"
+# 49d. the check that stands for every tier: green only when every tier is "success"
+ci_verdict() { ( NEEDS_JSON="$1" python3 "$ci_tools/ci_verdict.py" 2>&1 ); }
+ci_vrc() { local rc=0; ( NEEDS_JSON="$1" python3 "$ci_tools/ci_verdict.py" ) >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+ci_needs() { printf '{"quick": {"result": "%s", "outputs": {}}, "heavy": {"result": "%s", "outputs": {}}}' "$1" "$2"; }
+[ "$(ci_vrc "$(ci_needs success success)")" = 0 ] || miss "ci_verdict: success + success is not green"
+ci_skip_why="did not run: an earlier tier failed, or this pull request is a draft"
+ci_cancel_why="cancelled: a newer push replaces this run"
+for q in success skipped cancelled failure; do
+  for h in success skipped cancelled failure; do
+    [ "$q $h" = "success success" ] && continue
+    ci_vo=$(ci_verdict "$(ci_needs "$q" "$h")") || true
+    [ "$(ci_vrc "$(ci_needs "$q" "$h")")" = 1 ] || miss "ci_verdict: $q + $h is not red"
+    for pair in "quick $q" "heavy $h"; do
+      read -r ci_tier ci_res <<<"$pair"
+      case "$ci_res" in
+        success) case "$ci_vo" in *"$ci_tier: success"*) miss "ci_verdict: $q + $h names $ci_tier, which is green" ;; esac ;;
+        skipped) case "$ci_vo" in *"$ci_tier: skipped — $ci_skip_why"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier skipped ($ci_vo)" ;; esac ;;
+        cancelled) case "$ci_vo" in *"$ci_tier: cancelled — $ci_cancel_why"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier cancelled ($ci_vo)" ;; esac ;;
+        failure) case "$ci_vo" in *"$ci_tier: failure — failed"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier failure ($ci_vo)" ;; esac ;;
+      esac
+    done
+  done
+done
+[ "$(ci_verdict "$(ci_needs failure success)" | wc -l | tr -d ' ')" = 1 ] || miss "ci_verdict: one red tier does not print exactly one line"
+[ "$(ci_vrc '{}')" = 1 ] || miss "ci_verdict: an empty needs object is not red"
+[ "$(ci_vrc 'not json')" = 1 ] || miss "ci_verdict: a string that is not JSON is not red"
+[ "$(ci_vrc '')" = 1 ] || miss "ci_verdict: an empty NEEDS_JSON is not red"
+[ "$(cd "$TMP" && env -u NEEDS_JSON python3 "$ci_tools/ci_verdict.py" >/dev/null 2>&1; echo $?)" = 1 ] || miss "ci_verdict: no NEEDS_JSON is not red"
 echo "ok  tiered CI (or misses reported above)"
