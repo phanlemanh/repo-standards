@@ -10,6 +10,13 @@ Every list item in a `+AGENTS.md/` fragment ends with a kind, `<!-- kept: <code>
 `check` reads the fragments and the registry and says what is wrong; with nothing wrong it prints
 how many rules each kind holds.
 
+`finish` is what apply.py does to the composed AGENTS.md: the kinds come off, and a section at
+the end names the machines this repository has. Every word of that section comes from
+rule-checks.toml, and templates without that file are left exactly as they are, so a later release
+of the plugin still rebuilds, byte for byte, the AGENTS.md an earlier release wrote (the base of
+an upgrade, see upgrade_base.py). For the same reason the section depends on the templates and the
+choices only, never on what is on disk.
+
 Only the Python standard library is used (Python 3.11+).
 """
 
@@ -20,6 +27,7 @@ import json
 import re
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,6 +191,50 @@ def count(root: Path) -> dict[str, dict[str, int]]:
             "none": kinds.count(NONE),
         }
     return counts
+
+
+def held(text: str, registry: dict, present: Callable[[str], bool]) -> list[dict]:
+    """The registered machines the rules of `text` name, in the order they first appear, that this
+    repository has. A code the registry does not know, or knows half of, holds nothing here:
+    `check` is where that is red."""
+    checks = registry["checks"]
+    seen: list[str] = []
+    for item in list_items(text):
+        for code in item.kinds:
+            if code not in seen and code in checks:
+                seen.append(code)
+    return [
+        checks[code]
+        for code in seen
+        if all(checks[code].get(field) for field in CHECK_FIELDS)
+        and present(str(checks[code]["present_when"]))
+    ]
+
+
+def summary(text: str, registry: dict, present: Callable[[str], bool]) -> str:
+    """The section "What holds these rules" for a repository; raises KeyError when the registry
+    lacks one of its sentences."""
+    words = {field: str(registry["summary"][field]).strip("\n") for field in SUMMARY_FIELDS}
+    lines = [f"- {entry['catches']}: {entry['reaction']}" for entry in held(text, registry, present)]
+    if not lines:
+        return "\n".join([words["heading"], "", words["closing_alone"]])
+    return "\n".join([words["heading"], "", words["intro"], "", *lines, "", words["closing"]])
+
+
+def finish(content: bytes, root: Path, present: Callable[[str], bool], adopt: bool) -> bytes:
+    """AGENTS.md as a repository gets it: without the kinds and, unless it was set up with
+    --adopt, with the section that says what holds its rules. `present(path)` says whether the
+    templates give this repository that file. Templates without a registry are not touched."""
+    registry = load_registry(root)
+    if registry is None:
+        return content
+    text = content.decode("utf-8")
+    stripped = MARKER.sub("", text)
+    if adopt:
+        return stripped.encode("utf-8")
+    section = summary(text, registry, present)
+    body = stripped.rstrip("\n")
+    return f"{body}\n\n{section}\n".encode("utf-8")
 
 
 def total(counts: dict[str, dict[str, int]]) -> dict[str, int]:

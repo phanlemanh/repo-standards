@@ -74,6 +74,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import blueprint  # noqa: E402
+import rule_kinds  # noqa: E402
 import upgrade_base  # noqa: E402
 import upgrade_merge  # noqa: E402
 from doctor import Repo, glob_to_regex  # noqa: E402
@@ -458,16 +459,39 @@ def left_out_patterns(meta: dict, level: str) -> list[str]:
     return left_out
 
 
+RULES_FILE = "AGENTS.md"
+
+
+def with_rule_kinds(plan: dict, root: Path, adopt: bool) -> dict:
+    """The plan with AGENTS.md as a repository gets it (rule_kinds.finish): the kinds of the rules
+    come off and, unless the repository was set up with --adopt, a section names the machines it
+    has. Call it after the files a preset leaves out are gone: a machine is one of the files left.
+    Keys may be paths or posix strings; the plan given is not changed."""
+    paths = {Path(k).as_posix() for k in plan}
+
+    def present(path: str) -> bool:
+        return path in paths
+
+    return {
+        k: {**v, "content": rule_kinds.finish(v["content"], root, present, adopt)}
+        if Path(k).as_posix() == RULES_FILE
+        else v
+        for k, v in plan.items()
+    }
+
+
 def planned_files(
-    choices: Choices, variables: dict[str, str], root: Path = PLUGIN_ROOT
+    choices: Choices, variables: dict[str, str], root: Path = PLUGIN_ROOT, adopt: bool = False
 ) -> dict[str, dict]:
-    """The files the templates under `root` give for these choices, keyed by posix path."""
+    """The files the templates under `root` give for these choices, keyed by posix path. `adopt`
+    is how the repository was set up: it decides what AGENTS.md ends with (with_rule_kinds)."""
     caps = list(choices.caps)
     meta = load_meta(choices.preset, choices.level, choices.archetype, choices.deploy, caps, root)
     plan = build_plan(choices.preset, choices.level, variables, choices.archetype, choices.deploy,
                       caps, root)
     left_out = left_out_patterns(meta, choices.level)
-    return {k.as_posix(): v for k, v in plan.items() if not matches(k.as_posix(), left_out)}
+    kept = {k.as_posix(): v for k, v in plan.items() if not matches(k.as_posix(), left_out)}
+    return with_rule_kinds(kept, root, adopt)
 
 
 def sha(data: bytes) -> str:
@@ -681,6 +705,11 @@ def main(argv: list[str] | None = None) -> int:
         if any(matches(k.as_posix(), na.get("paths", [])) for k in plan)
     ]
     plan = {k: v for k, v in plan.items() if not matches(k.as_posix(), left_out)}
+    try:
+        plan = with_rule_kinds(plan, PLUGIN_ROOT, adopt)
+    except KeyError as exc:
+        print(f"Template error: {rule_kinds.REGISTRY_NAME} lacks {exc}", file=sys.stderr)
+        return 2
 
     merge_set = set(meta["merge_lines"])
     existing = Repo(target).files if adopt else []
@@ -719,7 +748,8 @@ def main(argv: list[str] | None = None) -> int:
             old_vars = dict(previous.get("vars", {}))
 
             def render(root: Path) -> dict[str, bytes]:
-                files = planned_files(old, render_variables(old_vars, old, root), root)
+                files = planned_files(old, render_variables(old_vars, old, root), root,
+                                      bool(previous.get("adopt")))
                 return {k: v["content"] for k, v in files.items()}
 
             finder = upgrade_base.BaseFinder(
@@ -843,7 +873,7 @@ def main(argv: list[str] | None = None) -> int:
     if LEVELS.index(level) < LEVELS.index(previous.get("level", "starter")):
         # A lower --level than recorded leaves the recorded level's files alone: still ours.
         recorded = Choices(preset, previous["level"], archetype, deploy, tuple(caps))
-        given |= set(planned_files(recorded, variables))
+        given |= set(planned_files(recorded, variables, adopt=adopt))
     results["dropped"] = sorted(k for k in prev_hashes if k not in given)
     files = {k: v for k, v in {**prev_hashes, **new_hashes}.items() if k not in results["dropped"]}
     versions = {k: new_versions.get(k, prev_versions.get(k, prev_version)) for k in files}
