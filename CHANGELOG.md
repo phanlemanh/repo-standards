@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Fixed: `dependency-audit` is green again on a `react-vite` setup with `design`
+`npm audit --omit=dev --audit-level=high` (workflow "Security") had been red on every such setup since
+2026-11-18: 8 high advisories, all through `shadcn`. The root is GHSA-fc5q-39xc-vjpf, a ReDoS in
+`picomatch` (`<= 4.0.7`, no patched version yet), which `shadcn` pulls in through `@dotenvx/dotenvx`,
+`@shadcn/registry`, `fast-glob`/`micromatch` and `ts-morph`.
+
+- The design capability now installs `shadcn@4.23.0` with `--save-dev`. The app reads it only at
+  build time: its CLI (`npx shadcn add`) and `@import "shadcn/tailwind.css"`, which Vite bundles. None
+  of its code reaches the browser.
+- Checked on a fresh `react-vite --with design` setup: `npm audit --omit=dev` finds 0
+  vulnerabilities (10 before), `npm run build` gives the same CSS byte for byte, and `make check` is
+  green with its 18 browser tests. The container `Dockerfile` runs `npm ci` before `npm run build`,
+  so the build still has `shadcn`.
+- `tests/run.sh` checks that the install line holds `shadcn@` only with `--save-dev`.
+- The same advisory still reaches dev tools (`vite`, `vitest`, `typescript-eslint`). The job reads
+  only what ships (`--omit=dev`), so it stays green until it matters there.
+
+**What breaks on upgrade**: nothing turns red. A repository set up before this release keeps
+`shadcn` under `dependencies` (npm wrote that `package.json`, the upgrade does not move a package),
+so its `dependency-audit` stays red until it runs `npm install --save-dev shadcn@4.23.0` once.
+
 ### Rule kinds (RS7)
 The generated `AGENTS.md` told every rule in the same voice, so nobody could tell a rule a machine
 holds from a sentence. Now every rule says what holds it.
@@ -35,7 +56,7 @@ A repository set up with `--adopt` gets the split items and no section.
 **For the plugin's authors.** A new list item in a `+AGENTS.md/` fragment needs a kind, or
 `tests/run.sh` is red. Use `word` unless a tagged test proves a machine.
 
-### Known gaps
+### Known gaps (rule kinds)
 - Rules written in a paragraph or a table (the autonomy and SDLC fragments have some) are not
   list items, so nothing asks for their kind.
 - "Not a rule" is the author's call; no check can tell a rule from a fact.

@@ -784,6 +784,15 @@ cmds = tomllib.load(open(sys.argv[1], "rb"))["starter"]["install"]
 at = lambda word: next(i for i, c in enumerate(cmds) if word in c)
 assert at("shadcn@4.23.0 add") < at("make ui-patch") < at("make format"), cmds
 PY
+# shadcn is read only at build time (its CLI, and shadcn/tailwind.css that Vite bundles): it goes
+# under devDependencies, or `npm audit --omit=dev` in security.yml reports what it pulls in.
+python3 - "$S/../capabilities/design/preset.toml" <<'PY' || miss "design: shadcn not installed with --save-dev"
+import sys, tomllib
+cmds = tomllib.load(open(sys.argv[1], "rb"))["starter"]["install"]
+installs = [c.split() for c in cmds if c.startswith("npm install")]
+with_shadcn = [c for c in installs if any(w.startswith("shadcn@") for w in c)]
+assert with_shadcn and all("--save-dev" in c for c in with_shadcn), cmds
+PY
 d="$TMP/design-team"; mkdir -p "$d/src/components/ui"
 cat > "$d/src/components/ui/table.tsx" <<'TSX'
 function Table({ className, ...props }: React.ComponentProps<"table">) {
