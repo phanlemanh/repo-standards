@@ -190,7 +190,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------- | ------------------------------------ |
 | RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); đã chạy ở kho thử    |
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
-| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 (2026-11-18), mục 48 bộ kiểm; chờ đo trên kho thử |
+| RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 và đo ở kho thử (2026-11-18), mục 48 bộ kiểm |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Đã dựng (2026-11-18), mục 49 bộ kiểm; chờ đo trên kho thử |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
@@ -219,7 +219,7 @@ Hai điều bản thiết kế bước D đổi so với ghi chú bên dưới:
 
 Ghi chú cho các gói mới và gói đổi:
 
-- **RS2b đã dựng (bước D), chưa đo trên kho thử.** Kho này cấp `make derived` và
+- **RS2b đã dựng (bước D), phát hành ở 0.8.0.** Kho này cấp `make derived` và
   `tools/ledgers.py` (`add-log`, `add-term`, `draw`, `draw-gen`, `shape`, `split`): sổ log, sổ
   thuật ngữ và mục lục wiki thành mảnh, mã sinh ra từ `ontology/` thành vật dẫn xuất; `split` chuyển
   một kho đang giữ sổ một tệp, mỗi sổ một PR, và so từng mục trước sau. Mục 48 của bộ kiểm giữ phần
@@ -244,11 +244,24 @@ Ghi chú cho các gói mới và gói đổi:
   khi dựng nằm ở `docs/reports/2026-11-18-heavy-reuse-measure.md`: 12,4% số lượt lúc `gate` đỏ dùng
   lại được tầng nặng. Phép so «phút máy mỗi PR gộp» của `sdlc_metrics.py` (hôm nay 44,2) sau 10 PR
   gộp cũng chưa làm. Ruleset trên `main` của kho này vẫn chưa có (spec mục 9).
-- **RS2b chưa đo trên kho thử.** Bước đo trên kho thử `design-ci-probe` (nâng bằng nhánh này, `split` bốn sổ, hai PR
-  song song mỗi PR một `make log`, một `add-term`, một trang wiki, gộp PR đầu, mong PR hai gộp
-  được không cần «Update branch» và hai PR không chung tệp nào) chưa chạy: nó đẩy và gộp trong một
-  kho khác, nên cần lời chủ kho. Tới khi chạy, trạng thái ở bảng là «chờ đo», không phải «đã chạy
-  ở kho thử» như RS1 và RS8.
+- **RS2b đã đo trên kho thử (2026-11-18).** Kho thử `design-ci-probe` nâng từ bản dựng thay 0.6.1
+  lên tag `repo-setup-v0.8.0` (PR 10), `split` bốn sổ trong một PR, mỗi sổ một commit (PR 11). Hai
+  PR mở cùng lúc từ cùng một gốc, mỗi PR một `make log`, một `add-term`, một trang wiki (PR 12 và
+  13). Hai PR không chung tệp nào. Gộp PR 12 xong, GitHub vẫn báo PR 13 gộp được; PR 13 gộp bằng nút
+  của GitHub, không «Update branch», dù đi sau nhánh chính 4 commit. Trên nhánh chính, `make derived`
+  vẽ đủ cả hai dòng log, hai thuật ngữ và hai trang trong mục lục, và CI trên nhánh chính sau hai
+  lần gộp xanh. Ba điều lộ ra khi nâng:
+  - `package.json` bị đánh dấu. Mẫu thêm `prepare` vào cuối `scripts`, sát chỗ `npm install` của kho
+    đã thêm `devDependencies`, nên `git merge-file` coi hai thay đổi kề nhau là xung đột. Kho preset
+    Node nào đã `npm install` nhiều khả năng gặp điều này khi nâng lên 0.8.0. Phép `e2e` nâng từ
+    0.7.0 không bắt được, vì nó chạy preset python, không có `package.json`.
+  - `.editorconfig` và `AGENTS.md` mang băm của bản dựng thay, nên được gộp hai chiều với gốc rỗng và
+    bị đánh dấu cả tệp, đúng như «Known gaps» của 0.8.0 đã ghi. Ba tệp được gộp tay; `make check`
+    xanh ở máy và trên CI.
+  - Ô `dependency-audit` (không bắt buộc, trong workflow «Security») đỏ trên mọi PR của lần đo và
+    trên nhánh chính: `npm audit` báo 8 lỗ hổng mức cao trong `shadcn` và các gói nó kéo theo, công
+    bố sau lần chạy xanh trước trên nhánh chính. Lỗi không do bản nâng: PR 10 không đổi
+    `package-lock.json`.
 - **RS2a đã thử.** Phát lại 99 lần gộp ngược với luật gộp kiểu hợp cho `wiki/log.md` và
   `wiki/index.md`: xung đột ở hai tệp này từ 60 và 3 về 0, số lần gộp ngược sạch từ 6 lên 22, một
   bản gộp soi tay không mất dòng nào. Nó chỉ gỡ xung đột; hai PR vẫn «cùng chạm một tệp», nên lối
