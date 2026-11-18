@@ -546,6 +546,7 @@ fix = "Run: node tools/design_guards.mjs --only guards, then restore the rules i
 # These files hold the floor itself: they must stay as apply.py wrote them (hash in .repo-setup.json).
 unchanged = [
   "tools/design_guards.mjs",
+  "tools/ui_select.mjs",
   "tests/e2e/floor.spec.ts",
   "tests/e2e/routes.ts",
   "tests/App.test.tsx",

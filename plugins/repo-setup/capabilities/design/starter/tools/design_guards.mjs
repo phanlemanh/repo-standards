@@ -127,11 +127,13 @@ function gate() {
   } catch {
     problems.push("make -n check failed");
   }
-  if (!/^npx playwright test$/m.test(plan)) problems.push("make check has no browser step");
+  // tools/ui_select.mjs runs Playwright and fails when it fails.
+  if (!/^node tools\/ui_select\.mjs --run(?: --full)?$/m.test(plan))
+    problems.push("make check has no browser step");
   if (!/^node tools\/design_guards\.mjs$/m.test(plan))
     problems.push("make check does not run the design guards");
   const mk = read("mk/design.mk");
-  if (!/^\t@?npx playwright test$/m.test(mk))
+  if (!/^\t@?node tools\/ui_select\.mjs --run\b/m.test(mk))
     problems.push("the browser step can no longer fail the gate");
   if (!/^\t@?node tools\/design_guards\.mjs$/m.test(mk))
     problems.push("the design guards can no longer fail the gate");

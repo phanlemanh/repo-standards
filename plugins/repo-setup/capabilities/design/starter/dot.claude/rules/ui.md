@@ -20,7 +20,8 @@ paths: ["src/**/*.tsx"]
 ## Loop
 
 - While building: `make format lint ui-floor`. The browser checks, at 1440 and 390 px, are the
-  visual check: no screenshots, no preview server.
+  visual check: no screenshots, no preview server. Here they check every screen; a pull request's
+  CI run checks only the screens the change reaches.
 - Before you finish: `make check`. A guard failure means the screen should change, not the guard.
 
 ## Traps
@@ -48,6 +49,6 @@ shadcn is pinned; always call it with its version:
 
 Results marked `(block)` are ready-made sections: `view` them for ideas, never `add` them.
 
-`tools/design_guards.mjs`, `mk/design.mk`, `tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and
-`tests/e2e/routes.ts` belong to the plugin: you never need to open them, and an edit costs
-`doctor` points.
+`tools/design_guards.mjs`, `tools/ui_select.mjs`, `mk/design.mk`, `tests/App.test.tsx`,
+`tests/e2e/floor.spec.ts` and `tests/e2e/routes.ts` belong to the plugin: you never need to open
+them, and an edit costs `doctor` points.

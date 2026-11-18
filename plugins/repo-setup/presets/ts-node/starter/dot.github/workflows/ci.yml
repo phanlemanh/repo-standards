@@ -41,7 +41,11 @@ jobs:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
+      # Two commits deep: on a pull request the checkout is a merge commit, and the browser checks
+      # measure the change from its first parent, the base.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Key of what the heavy tier reads
         id: key
         # The assignment fails the step when the tool fails: an empty key must never match.
@@ -68,6 +72,10 @@ jobs:
       - if: steps.earlier.outputs.cache-hit != 'true'
         run: npm ci
       - if: steps.earlier.outputs.cache-hit != 'true'
+        env:
+          # The commit the change is measured from: the browser checks run only the screens it
+          # reaches (empty off a pull request, where every check runs).
+          UI_BASE: ${{ github.event.pull_request.base.sha }}
         run: make check-heavy
       - name: Record the green run
         if: steps.earlier.outputs.cache-hit != 'true'

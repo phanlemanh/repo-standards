@@ -978,9 +978,9 @@ rm -f "$d/GNUmakefile"
 # Quiet steps: a silent recipe (@) still counts, an error-ignoring one (- in any order) does not.
 for prefix in '@-' '-@'; do
   cp "$d/mk/design.mk" "$TMP/gate.bak"
-  subst "s/^	@npx playwright test\$/	${prefix}npx playwright test/" "$d/mk/design.mk"
+  subst "s#^	@node tools/ui_select.mjs --run#	${prefix}node tools/ui_select.mjs --run#" "$d/mk/design.mk"
   cmp -s "$TMP/gate.bak" "$d/mk/design.mk" && miss "design gate: the $prefix mutation did not change mk/design.mk"
-  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}npx playwright test"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}node tools/ui_select.mjs --run"
   case "$out" in *"the browser step can no longer fail the gate"*) ;; *) miss "design gate: $prefix went red for another reason: $out" ;; esac
   cp "$TMP/gate.bak" "$d/mk/design.mk"
 done
