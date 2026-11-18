@@ -191,7 +191,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS1  | Tường thật: quét bí mật quét được; «Release» không đỏ vô cớ; ô khuôn commit theo cách gộp; ruleset bắt buộc đúng các ô kho khai       | 3       | Tin cậy          | Đã gộp (PR 14); đã chạy ở kho thử    |
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 và đo ở kho thử (2026-11-18), mục 48 bộ kiểm |
-| RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Đã thiết kế, chủ kho duyệt (2026-11-17); chờ dựng |
+| RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Đã dựng (2026-11-18), mục 49 bộ kiểm; chờ đo trên kho thử |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
@@ -239,6 +239,11 @@ Ghi chú cho các gói mới và gói đổi:
     không bằng `PYTHON`, để móc `SessionStart` ở kho python không kéo `uv run`. Các công cụ này
     cũng qua `ruff` của preset python, nên được tách thành `ledgers.py`, `ledgers_ontology.py`,
     `ledgers_split.py`, `ledgers_split_read.py`, mỗi tệp dưới 800 dòng.
+- **RS3 đã dựng, chưa đo trên kho thử.** Phép đo trên kho thử `design-ci-probe` (sáu phép thử ở mục 8
+  của spec) chưa chạy: nó đẩy và gộp trong một kho khác, nên cần lời chủ kho, như RS2b. Số đo trước
+  khi dựng nằm ở `docs/reports/2026-11-18-heavy-reuse-measure.md`: 12,4% số lượt lúc `gate` đỏ dùng
+  lại được tầng nặng. Phép so «phút máy mỗi PR gộp» của `sdlc_metrics.py` (hôm nay 44,2) sau 10 PR
+  gộp cũng chưa làm. Ruleset trên `main` của kho này vẫn chưa có (spec mục 9).
 - **RS2b đã đo trên kho thử (2026-11-18).** Kho thử `design-ci-probe` nâng từ bản dựng thay 0.6.1
   lên tag `repo-setup-v0.8.0` (PR 10), `split` bốn sổ trong một PR, mỗi sổ một commit (PR 11). Hai
   PR mở cùng lúc từ cùng một gốc, mỗi PR một `make log`, một `add-term`, một trang wiki (PR 12 và

@@ -52,6 +52,9 @@ RULESET_CHECKS = (
     '.rules[] | select(.type == "required_status_checks") '
     "| .parameters.required_status_checks[].context"
 )
+# Jobs that run behind `check`, the job that stands for every CI tier. GitHub counts a skipped
+# required check as green, and these are skipped when the light tier fails or the PR is a draft.
+BEHIND_CHECK = ("heavy", "e2e")
 # The one way pull requests are merged: (title of the step, the setting that allows it).
 MERGE_METHODS = {
     "squash": ("squash-only merges", "allow_squash_merge"),
@@ -329,17 +332,35 @@ def existing_ruleset(repo: str, name: str) -> tuple[str, list[str] | None] | Non
     return target, ([line for line in out.splitlines() if line.strip()] if ok else None)
 
 
-def dropped_checks(current: list[str] | None, ruleset: dict[str, Any]) -> list[str]:
-    """Required checks the repository has today that the new ruleset would no longer require."""
-    if current is None:
-        return ["(the current required checks could not be read)"]
-    wanted = {
+def wanted_checks(ruleset: dict[str, Any]) -> set[str]:
+    """The checks a ruleset requires."""
+    return {
         check["context"]
         for rule in ruleset["rules"]
         if rule["type"] == "required_status_checks"
         for check in rule["parameters"]["required_status_checks"]
     }
+
+
+def dropped_checks(current: list[str] | None, ruleset: dict[str, Any]) -> list[str]:
+    """Required checks the repository has today that the new ruleset would no longer require."""
+    if current is None:
+        return ["(the current required checks could not be read)"]
+    wanted = wanted_checks(ruleset)
     return [name for name in current if name not in wanted]
+
+
+def behind_check(ruleset: dict[str, Any], kept: list[str]) -> list[str]:
+    """Required checks, wanted or kept from today's ruleset, that run behind `check`."""
+    wanted = wanted_checks(ruleset)
+    return [name for name in BEHIND_CHECK if name in wanted or name in kept]
+
+
+BEHIND_HELP = (
+    "can be skipped, and GitHub counts a skipped check as green: a job behind the light tier is "
+    "skipped when that tier fails or the pull request is a draft, and only check stands for it. "
+    "Nothing is dropped: to stop requiring it, take it out of required_checks and pass --prune"
+)
 
 
 DROP_HELP = (
@@ -405,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     # What could not be read is a failure, also when nothing else went wrong.
     failures = len(unread_format)
+    behind: list[str] = []
     for step in steps:
         gone: list[str] = []
         pruned: list[str] = []
@@ -422,6 +444,8 @@ def main(argv: list[str] | None = None) -> int:
                 gone = dropped_checks(current, step["ruleset"])
                 if args.prune:
                     gone, pruned = [], gone
+            # What stays required after this step: what it asks for, and what it would not drop.
+            behind = behind_check(step["ruleset"], gone)
         if not args.apply:
             print(f"  - {step['what']}\n      gh {' '.join(step['args'])}")
             if unread:
@@ -467,6 +491,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     for note in commit_format_notes:
         print(f"\n  ! {note}")
+    for name in behind:
+        print(f"\n  ! {name} is a required check that {BEHIND_HELP}.")
     names = secret_names(repo)
     print("\nSecrets (values are never read):")
     if names is None:

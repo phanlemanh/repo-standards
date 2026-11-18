@@ -20,7 +20,8 @@ paths: ["src/**/*.tsx"]
 ## Loop
 
 - While building: `make format lint ui-floor`. The browser checks, at 1440 and 390 px, are the
-  visual check: no screenshots, no preview server.
+  visual check: no screenshots, no preview server. Here they check every screen; a pull request's
+  CI run checks only the screens the change reaches.
 - Before you finish: `make check`. A guard failure means the screen should change, not the guard.
 
 ## Traps
@@ -37,6 +38,9 @@ paths: ["src/**/*.tsx"]
 - A state appears because of a real condition: a pending or failed request, an empty result, a
   filter with no match, a user action. Never because of a switch (a prop or URL value that exists
   only to pick the state): a state reachable only from a switch is not a state.
+- A browser test whose title holds a word starting with `/` names that screen: on a pull request it
+  runs only when that screen is reached. Name a path that is not a screen (`/api/health`) without
+  the leading slash (`api/health`), or that test runs only on main.
 
 ## Adding a component
 
@@ -48,6 +52,6 @@ shadcn is pinned; always call it with its version:
 
 Results marked `(block)` are ready-made sections: `view` them for ideas, never `add` them.
 
-`tools/design_guards.mjs`, `mk/design.mk`, `tests/App.test.tsx`, `tests/e2e/floor.spec.ts` and
-`tests/e2e/routes.ts` belong to the plugin: you never need to open them, and an edit costs
-`doctor` points.
+`tools/design_guards.mjs`, `tools/ui_select.mjs`, `mk/design.mk`, `tests/App.test.tsx`,
+`tests/e2e/floor.spec.ts` and `tests/e2e/routes.ts` belong to the plugin: you never need to open
+them, and an edit costs `doctor` points.

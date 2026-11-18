@@ -29,7 +29,9 @@ way) and explain in plain words what it will do: the merge method, environments 
 required, required checks `check`, `secret-scan`, `conventional-title` and `conventional-commits`,
 a code owner only where `.github/CODEOWNERS` names one, and no other approval). Checks of the
 repository's own, a browser suite for example, become required when `governance/autonomy.yaml`
-names them under `required_checks`.
+names them under `required_checks`. The CI job `check` stands for every tier (`quick` and
+`heavy`). When `heavy` or `e2e` is required too, the dry run says so: such a job is skipped when
+the light tier fails or the pull request is a draft, and GitHub counts a skipped check as green.
 
 The two commit-format checks run as the default branch defines them. When the dry run says one is
 "not a required check yet", the default branch does not have its job: merge the upgrade that

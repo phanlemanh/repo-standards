@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # ready_for_review: a draft skips the heavy tier, so leaving draft needs a run of its own.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -12,8 +14,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Files the heavy tier does not read. A pull request that changes only these reuses an earlier
+  # green heavy run with the same inputs. A path not listed is an input: when unsure, it runs.
+  # Changing this list changes the rules of the game.
+  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/**"
+
 jobs:
-  check:
+  # The light tier, on every push.
+  quick:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,4 +30,66 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: make check
+      - run: make check-quick
+
+  # The heavy tier, once the light tier is green and the pull request is not a draft. On a pull
+  # request it reuses a green run whose inputs were the same; on the main branch it always runs.
+  heavy:
+    needs: quick
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Key of what the heavy tier reads
+        id: key
+        # The assignment fails the step when the tool fails: an empty key must never match.
+        run: |
+          key=$(python3 tools/ci_inputs.py key)
+          echo "key=heavy-ok-$key" >> "$GITHUB_OUTPUT"
+      - name: Look for a green run with the same inputs
+        id: earlier
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: .heavy-ok
+          key: ${{ steps.key.outputs.key }}
+      - name: Same inputs as a green run
+        if: steps.earlier.outputs.cache-hit == 'true'
+        run: |
+          echo "Heavy tier not run again: same inputs as run $(sed -n 1p .heavy-ok) at commit $(sed -n 2p .heavy-ok)." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: astral-sh/setup-uv@v7
+        if: steps.earlier.outputs.cache-hit != 'true'
+        with:
+          enable-cache: true
+      - if: steps.earlier.outputs.cache-hit != 'true'
+        run: uv sync --locked
+      - if: steps.earlier.outputs.cache-hit != 'true'
+        run: make check-heavy
+      - name: Record the green run
+        if: steps.earlier.outputs.cache-hit != 'true'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          printf '%s\n%s\n' "$RUN_URL" "$COMMIT" > .heavy-ok
+          echo "Heavy tier ran: make check-heavy is green at commit $COMMIT." | tee -a "$GITHUB_STEP_SUMMARY"
+      # A key that is already saved (a run with the same inputs saved it first) is no failure.
+      - if: steps.earlier.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .heavy-ok
+          key: ${{ steps.key.outputs.key }}
+
+  # The one required check: green only when every tier above is "success".
+  check:
+    needs: [quick, heavy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every tier is green
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 tools/ci_verdict.py

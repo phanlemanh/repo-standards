@@ -761,7 +761,8 @@ for level in starter team; do
   # shadcn's destructive red fails 4.5:1 on its own 10% tint (badge, button); e2e pins it in the browser.
   grep -q -- '--destructive: oklch(0.48 0.2 27.325);' "$d/src/index.css" || miss "design: destructive token not darkened"
   grep -q '"vi-VN"' "$d/src/lib/format.ts" && grep -q '"VND"' "$d/src/lib/format.ts" || miss "design: locale"
-  grep -q 'CHECK_TARGETS += design-guards ui-floor' "$d/mk/design.mk" || miss "design: not in the gate"
+  grep -qx 'CHECK_TARGETS += design-guards' "$d/mk/design.mk" && grep -qx 'HEAVY_TARGETS += ui-floor' "$d/mk/design.mk" \
+    || miss "design: not in the gate"
   [ -f "$d/.mcp.json" ] && miss "design: must not add .mcp.json"
   # The measurement protocol cuts the capability at these exact lines.
   grep -qx ' *// design-floor:start' "$d/eslint.config.js" && grep -qx ' *// design-floor:end' "$d/eslint.config.js" \
@@ -957,7 +958,7 @@ d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
 gate_red() { # <file> <line to add, or "" to drop design-guards from the gate> <expected text>
   cp "$d/$1" "$TMP/gate.bak"
-  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards /CHECK_TARGETS += /' "$d/$1"; fi
+  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards$/CHECK_TARGETS +=/' "$d/$1"; fi
   cmp -s "$TMP/gate.bak" "$d/$1" && miss "design gate: mutation '$2' did not change $1"
   out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with '$2' in $1"
   case "$out" in *"$3"*) ;; *) miss "design gate: '$2' in $1 went red for another reason: $out" ;; esac
@@ -977,9 +978,9 @@ rm -f "$d/GNUmakefile"
 # Quiet steps: a silent recipe (@) still counts, an error-ignoring one (- in any order) does not.
 for prefix in '@-' '-@'; do
   cp "$d/mk/design.mk" "$TMP/gate.bak"
-  subst "s/^	@npx playwright test\$/	${prefix}npx playwright test/" "$d/mk/design.mk"
+  subst "s#^	@node tools/ui_select.mjs --run#	${prefix}node tools/ui_select.mjs --run#" "$d/mk/design.mk"
   cmp -s "$TMP/gate.bak" "$d/mk/design.mk" && miss "design gate: the $prefix mutation did not change mk/design.mk"
-  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}npx playwright test"
+  out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with ${prefix}node tools/ui_select.mjs --run"
   case "$out" in *"the browser step can no longer fail the gate"*) ;; *) miss "design gate: $prefix went red for another reason: $out" ;; esac
   cp "$TMP/gate.bak" "$d/mk/design.mk"
 done
@@ -1077,7 +1078,7 @@ out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starte
   --var project_name=Sample --var description=x --var owner=acme --json)
 [ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
-padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/derived.mk', 'mk/upgrade.mk', 'tools/ledgers.py', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/derived.mk', 'mk/upgrade.mk', 'tools/ci_inputs.py', 'tools/ci_verdict.py', 'tools/ledgers.py', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
 padopt "d['merged'] == ['.gitignore']"
 padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
 padopt "d['conflict'] == ['LICENSE', 'README.md']"
@@ -3347,6 +3348,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/upgrade.sh
 . "$ROOT/tests/upgrade.sh"
+
+# shellcheck source=tests/tiered_ci.sh
+. "$ROOT/tests/tiered_ci.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

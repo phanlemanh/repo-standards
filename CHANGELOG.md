@@ -31,6 +31,80 @@ two changes touch, so the line merge (`git merge-file`) gave up and the upgrade 
 **What breaks on upgrade**: nothing. A `package.json` that 0.8.0 would have marked now comes out
 merged. A repository that already resolved the markers by hand has nothing to redo.
 
+### Tiered CI (RS3)
+Design: `docs/superpowers/specs/2026-11-17-tiered-ci-design.md`. A pull request that is not ready to
+merge no longer pays for the heavy checks, and a push that changes nothing a heavy check reads
+reuses the last green heavy run. Not yet run on GitHub (see "Known gaps"). Measured before
+building, on `onehub-inventory`: 31 of 251 runs made while `gate` was red (12.4%) could have reused
+a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
+(`docs/reports/2026-11-18-heavy-reuse-measure.md`).
+
+**What is new**
+
+- `make check` is now `check-quick check-heavy`. A layer lists its slow steps in `HEAVY_TARGETS`
+  (the design capability puts `ui-floor` there) and everything else stays in `check-quick`.
+  `make check-heavy` prints `no heavy checks` when a repository has none. The ts-node, python and
+  claude-plugin Makefiles carry the targets.
+- The three `ci.yml` templates have three jobs: `quick` (every push), `heavy` (after `quick`, when
+  the pull request is ready for review, and always on main) and `check`, a summary cell that always
+  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell, and its line
+  for a skipped tier says which case it is: a draft (not its turn yet) or a tier it waits for that
+  did not pass.
+- `heavy` does not run its checks again when its input key matches an earlier green run: it ends
+  green at once and says which run and commit it reuses. It is not skipped (a skipped `heavy`
+  turns `check` red). `tools/ci_inputs.py` hashes the whole tree minus `HEAVY_NOT_INPUTS`
+  (`docs/** wiki/** *.md _acceptance/**` in the templates). A green run saves a cache entry
+  `heavy-ok-<key>` holding that run and commit; a later push with the same key restores it. A red
+  run saves nothing. A pull request that moves from draft to ready (`ready_for_review`) runs
+  `heavy`.
+- `ui-floor` runs the screens a change reaches. On a pull request, `tools/ui_select.mjs` asks
+  design-assembly's `tools/design-assembly/affected.mjs --json` which screens are reached and runs
+  two Playwright lanes: the tests that name those screens, then the tests that name no screen. It
+  runs the full set when the command is missing, fails or says all, on main, locally, with
+  `UI_FULL=1`, and when no test names a reached screen. The heavy checkout uses `fetch-depth: 2`
+  and passes `UI_BASE`.
+- `tools/github_setup.py` warns when `heavy` or `e2e` is a required check: a skipped job counts as
+  green, so only `check` stands for them. It drops nothing.
+- This repository: `.github/workflows/test.yml` has `offline` and `validate` (light), `e2e` (heavy,
+  by input key with `HEAVY_NOT_INPUTS: "docs/** *.md"`, runs only the combinations the change
+  reaches through `tests/e2e_select.py`, every combination on main) and `check`. Section 49 of
+  `tests/run.sh` (`tests/tiered_ci.sh`, 49a to 49k) holds the tests.
+- A narrowed e2e list that holds `python` or `fastapi` also runs the upgrade case (`UPGRADE=1`):
+  that case upgrades a python setup. Other narrowed lists do not reach what it reads.
+
+**What breaks on upgrade**
+
+- **`check` means the summary cell.** It is red unless both `quick` and `heavy` succeed. That
+  includes a draft pull request (red there means "not your turn yet") and a pull request whose
+  light tier is red. A repository that requires `check` keeps one required name; one that
+  required `quick` or `heavy` by name should require `check` instead.
+- **A repository that edited `ci.yml` in place** receives the new shape through the three-way
+  merge of the upgrade path. It may conflict; resolve to the three jobs.
+- **An `e2e` job a repository added itself** must move behind `quick` (as a heavy step, or as a
+  job with `needs: quick` that `check` waits for), or stop being a required check. `github_setup.py`
+  now says so.
+- **The ts-node `quick` job runs `make build`**, not `npm run build`.
+- **A Makefile edited in place** must keep `HEAVY_TARGETS`, `check-quick`, `check-heavy` and
+  `check: check-quick check-heavy` after the merge. Without them `quick` is red ("No rule to make
+  target check-quick"), and with `design` the browser step drops out and the design gate goes red.
+- **The new `mk/design.mk` needs `tools/ui_select.mjs`.** An old `npx playwright test` line kept
+  after a merge conflict makes the design gate red.
+- **`make check` prints `no heavy checks`** when the repository has none.
+- **The cache.** Each green heavy run leaves a tiny cache entry per input key.
+
+**Known gaps**
+
+- Not yet run on GitHub: the probe repository (`design-ci-probe`, six trials in section 8 of the
+  design) is not done, so cache scope, restore hits and save collisions are unverified. The
+  ruleset on `main` of this repository is still missing (section 9 of the design).
+- Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
+  it was green; the full run on main is the net.
+- Path-based selection can miss a break that comes through a path other than `extends`.
+- Browser-test narrowing reads test titles: a test whose title holds a word starting with `/`
+  counts as naming that screen, so on a pull request it runs only when that screen is reached. A
+  test of a path that is not a screen (`/api/health`) named with its slash runs only on main;
+  `.claude/rules/ui.md` tells builders to drop the slash.
+
 ## 0.8.0 — 2026-11-18
 
 ### Ledgers as fragments (RS2b)
