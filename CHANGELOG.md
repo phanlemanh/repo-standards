@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-11-18
 
 ### Ledgers as fragments (RS2b)
 Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`. Two pull requests that each
@@ -182,6 +182,29 @@ split notice. The following breaks, and only for what it names:
   that git does not track now makes `make derived` red (it used to be left alone); move it aside or
   delete it, then run `make derived`. A repository set up by this release has none.
 - A hand edit of a drawn file, or a drawn file put back in git (for example `git add -f`), is red: `draw` exits 1, `derived-untracked` is red.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI, on
+  `main` at the merge of this package (`03c3b71`): all four checks green. A new end-to-end
+  combination installs from tag `repo-setup-v0.7.0`, upgrades with this code, splits all four
+  ledgers and runs `make check`.
+- Not yet run: two pull requests at once on the probe repository, each adding a log line, a term
+  and a page, merged one after the other without "Update branch" (the measurement this release is
+  for); whether `claude-code-action` hands `claude_args` to Claude Code unchanged, so the review job
+  runs with hooks off; an upgrade between two published releases that change a template (possible
+  once this release is tagged); the PR pipeline of `github-agents` on GitHub; CodeQL on a public
+  repository after the upgrade.
+
+### Known gaps
+- The gaps listed under 0.7.0 are still open: a file without a final newline gets markers, the
+  setup skills do not say that `apply.py --dry-run` ends with 1 when a file would be marked, the
+  marker check misses a closing marker Prettier turned into a quote, `upgrade_wall` looks for the
+  `include` lines exactly as the template writes them, and `production` has no reviewer on a
+  private repository on the free plan.
+- Two files on the probe repository carry hashes no release gives (from the stand-in release used
+  to verify 0.7.0), so its next upgrade merges them two ways, against an empty base.
+- `plugins/repo-setup/scripts/apply.py` is 927 lines, over the 800-line limit for one file.
 
 ## 0.7.0 — 2026-11-17
 
