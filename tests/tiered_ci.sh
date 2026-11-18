@@ -332,4 +332,200 @@ JS
   printf '%s' "$(ci_step "$ui_y" heavy 'actions/checkout@')" | grep -qx '          fetch-depth: 2' \
     || miss "ci.yml (ts-node): the heavy checkout does not hold the base commit (fetch-depth: 2)"
 fi
+
+# 49i. tests/e2e_select.py (spec 6): the combinations of tests/e2e.sh a change reaches, one case
+#      per row of the table. A throwaway repository holds the change; COMBOS and the presets are
+#      read from this tree. Expectations are computed from the real COMBOS so the test keeps up
+#      when it grows; the fixture cases below pin literal lines.
+es_tool="$ROOT/tests/e2e_select.py"
+es_r=$(ci_repo i)
+ci_put "$es_r" README.md base; ci_put "$es_r" docs/old.md base
+ci_put "$es_r" plugins/repo-setup/presets/python/kept.txt base
+ci_commit "$es_r" base
+# es_pick <edit>...: a branch off main with these edits (a path is written, rm:<path> deleted,
+# mv:<from>:<to> moved); prints what the tool prints on stdout, or EXIT <rc> when it fails
+es_pick() {
+  local e out rc=0 from to
+  git -C "$es_r" checkout -q -B case main
+  for e in "$@"; do
+    case "$e" in
+      rm:*) git -C "$es_r" rm -q "${e#rm:}" ;;
+      mv:*) from=${e#mv:}; to=${from#*:}; from=${from%%:*}
+            mkdir -p "$(dirname "$es_r/$to")"; git -C "$es_r" mv "$from" "$to" ;;
+      *) ci_put "$es_r" "$e" changed ;;
+    esac
+  done
+  ci_commit "$es_r" case
+  if [ -n "${ES_E2E:-}" ]; then
+    out=$(cd "$es_r" && python3 "$es_tool" --base main --e2e "$ES_E2E" 2>"$TMP/tci-i-err") || rc=$?
+  else
+    out=$(cd "$es_r" && python3 "$es_tool" --base main 2>"$TMP/tci-i-err") || rc=$?
+  fi
+  if [ "$rc" = 0 ]; then printf '%s' "$out"; else printf 'EXIT %s: %s' "$rc" "$out"; fi
+}
+# es_is <expected line> <label> <edit>...
+es_is() {
+  local want="$1" label="$2" got; shift 2
+  got=$(es_pick "$@") || true
+  [ "$got" = "$want" ] || miss "e2e_select: $label prints '$got', not '$want'"
+}
+# es_want <stacks> <capabilities>: the entries of ALL then COMBOS, as tests/e2e.sh builds them,
+# whose stack is one of the stacks or whose capabilities hold one of the capabilities
+es_combos=$(sed -n 's/^COMBOS="\(.*\)"$/\1/p' "$ROOT/tests/e2e.sh")
+es_all=$(python3 "$S/apply.py" --list-presets --json \
+  | python3 -c 'import json, sys; print(" ".join(k for k in json.load(sys.stdin) if k != "react-vite"))') || true
+[ -n "$es_combos" ] && [ -n "$es_all" ] || miss "e2e_select (test): cannot read COMBOS or ALL the way tests/e2e.sh does"
+es_want() {
+  local out="" e st cap c
+  for e in $es_all $es_combos; do
+    IFS=: read -r st _ _ cap _ <<<"$e"
+    case " $1 " in *" $st "*) out="$out $e"; continue ;; esac
+    for c in $2; do case ",$cap," in *",$c,"*) out="$out $e"; break ;; esac; done
+  done
+  printf '%s' "${out# }"
+}
+es_py=$(es_want "python fastapi" ""); es_ts=$(es_want "ts-node ts-api react-vite" ""); es_mcp=$(es_want "" mcp)
+case " $es_py " in *" fastapi:"*) ;; *) miss "e2e_select (test): COMBOS has no fastapi combination to check extends with" ;; esac
+case " $es_ts " in *" react-vite:"*" ts-api:"*|*" ts-api:"*" react-vite:"*) ;; *) miss "e2e_select (test): COMBOS lacks a react-vite or ts-api combination" ;; esac
+case " $es_ts " in *" react-vite "*) miss "e2e_select (test): bare react-vite is in the expected set" ;; esac
+[ -n "$es_mcp" ] || miss "e2e_select (test): COMBOS has no mcp combination"
+es_is none "only docs/x.md" docs/x.md
+es_is none "docs/x.md, CHANGELOG.md and README.md" docs/x.md CHANGELOG.md README.md
+es_is none "deleting docs/old.md" rm:docs/old.md
+es_is "$es_py" "presets/python/a (fastapi extends python)" plugins/repo-setup/presets/python/a
+es_is "$es_ts" "presets/ts-node/a (react-vite and ts-api extend ts-node)" plugins/repo-setup/presets/ts-node/a
+es_is "$es_mcp" "capabilities/mcp/x" plugins/repo-setup/capabilities/mcp/x
+for f in plugins/repo-setup/scripts/apply.py plugins/repo-setup/presets/_core/x tests/run.sh .github/x odd.txt \
+  plugins/repo-setup/skills/new/SKILL.md plugins/repo-setup/checklists/x.md plugins/repo-setup/archetypes/x \
+  plugins/repo-setup/deploy/x plugins/repo-setup/README.md plugins/repo-setup/presets/no-such-preset/x \
+  plugins/repo-setup/presets/loose.txt plugins/repo-setup/capabilities/no-such/x; do
+  es_is all "$f" "$f"
+done
+es_is all "tests/run.sh with presets/python/a" tests/run.sh plugins/repo-setup/presets/python/a
+# fixture: a COMBOS line of its own pins the exact line (order, extends, bare react-vite left out,
+# a capability list split on commas), and a capability no combination uses runs everything
+es_fx="$TMP/tci-i-e2e.sh"
+printf '%s\n' 'ALL=" $ALL "; ALL="${ALL/ react-vite / }"' \
+  'COMBOS="ts-node:none:none:mcp python:none:none:ai,mcp:agent react-vite:none:none:design"' > "$es_fx"
+ES_E2E=$es_fx es_is "ts-node:none:none:mcp python:none:none:ai,mcp:agent" "capabilities/mcp/x (fixture)" plugins/repo-setup/capabilities/mcp/x
+ES_E2E=$es_fx es_is "ts-api ts-node ts-node:none:none:mcp react-vite:none:none:design" "presets/ts-node/a (fixture)" plugins/repo-setup/presets/ts-node/a
+ES_E2E=$es_fx es_is all "capabilities/github-agents/x, which no combination uses (fixture)" plugins/repo-setup/capabilities/github-agents/x
+grep -v '^COMBOS=' "$es_fx" > "$es_fx.none"
+ES_E2E=$es_fx.none es_is all "an e2e.sh with no COMBOS line" plugins/repo-setup/presets/python/a
+ES_E2E=$TMP/tci-i-missing.sh es_is all "an e2e.sh that does not exist" plugins/repo-setup/presets/python/a
+# one line; --head; git that cannot list the changes runs everything and says why; a wrong call is 2
+es_pick plugins/repo-setup/presets/python/a >/dev/null || true
+es_lines=$( (cd "$es_r" && python3 "$es_tool" --base main 2>/dev/null) | wc -l | tr -d ' ') || true
+[ "$es_lines" = 1 ] || miss "e2e_select: prints $es_lines lines, not one"
+git -C "$es_r" checkout -q main
+es_o=$(cd "$es_r" && python3 "$es_tool" --base main --head case 2>/dev/null) || es_o="EXIT $?"
+[ "$es_o" = "$es_py" ] || miss "e2e_select: --head case from main prints '$es_o', not '$es_py'"
+es_o=$(cd "$es_r" && python3 "$es_tool" --base no-such-rev 2>"$TMP/tci-i-err") || es_o="EXIT $?"
+[ "$es_o" = all ] || miss "e2e_select: a base git cannot find prints '$es_o', not all"
+grep -q . "$TMP/tci-i-err" || miss "e2e_select: a base git cannot find does not say why on stderr"
+mkdir -p "$TMP/tci-i-norepo"
+es_o=$(cd "$TMP/tci-i-norepo" && python3 "$es_tool" --base main 2>/dev/null) || es_o="EXIT $?"
+[ "$es_o" = all ] || miss "e2e_select: outside a git repository prints '$es_o', not all"
+es_o=$(cd "$es_r" && python3 "$es_tool" --base main --head main 2>/dev/null) || es_o="EXIT $?"
+[ "$es_o" = all ] || miss "e2e_select: no changed file prints '$es_o', not all"
+for es_bad in "" "--base main --nonsense" "--head main"; do
+  es_rc=0; (cd "$es_r" && python3 "$es_tool" $es_bad) >/dev/null 2>&1 || es_rc=$?
+  [ "$es_rc" = 2 ] || miss "e2e_select: the wrong call '$es_bad' exits $es_rc, not 2"
+done
+
+# 49j. docs files next to a preset's files are ignored, not a reason to run nothing; a move or a
+#      deletion counts for the folder the file leaves
+es_is "$es_py" "docs/x.md with presets/python/a" docs/x.md plugins/repo-setup/presets/python/a
+es_is "$es_mcp" "CHANGELOG.md with capabilities/mcp/x" CHANGELOG.md plugins/repo-setup/capabilities/mcp/x
+es_is "$es_py" "moving presets/python/kept.txt into docs/" mv:plugins/repo-setup/presets/python/kept.txt:docs/kept.txt
+es_is "$es_py" "deleting presets/python/kept.txt" rm:plugins/repo-setup/presets/python/kept.txt
+es_is "$(es_want "python fastapi" mcp)" "presets/python/a with capabilities/mcp/x" \
+  plugins/repo-setup/presets/python/a plugins/repo-setup/capabilities/mcp/x
+
+# 49k. this repository's test.yml has the same three tiers (spec 6): read as text, and the two
+#      shell steps that choose and run e2e are run here with stand-ins
+tk_y="$ROOT/.github/workflows/test.yml"
+tk_chk=$(ci_block "$tk_y" check); tk_e2e=$(ci_block "$tk_y" e2e)
+[ -n "$tk_chk" ] && [ -n "$tk_e2e" ] && [ -n "$(ci_block "$tk_y" offline)" ] && [ -n "$(ci_block "$tk_y" validate)" ] \
+  || miss "test.yml: jobs offline, validate, e2e and check are not all there"
+printf '%s\n' "$tk_chk" | grep -qx '    if: always()' || miss "test.yml: check does not run always()"
+printf '%s\n' "$tk_chk" | grep -qx '    needs: \[offline, validate, e2e\]' || miss "test.yml: check does not wait for offline, validate and e2e"
+printf '%s\n' "$tk_chk" | grep -qxF '          NEEDS_JSON: ${{ toJSON(needs) }}' || miss "test.yml: check does not hand the results to ci_verdict.py through NEEDS_JSON"
+printf '%s\n' "$tk_chk" | grep -qx '        run: python3 plugins/repo-setup/presets/_core/starter/tools/ci_verdict.py' \
+  || miss "test.yml: check does not run the plugin's ci_verdict.py"
+if grep -q 'run:.*toJSON' "$tk_y"; then miss "test.yml: toJSON(needs) is written into a command"; fi
+printf '%s\n' "$tk_e2e" | grep -qx '    needs: \[offline, validate\]' || miss "test.yml: e2e does not wait for offline and validate"
+printf '%s\n' "$tk_e2e" | grep -qxF "    if: github.event_name != 'pull_request' || !github.event.pull_request.draft" \
+  || miss "test.yml: e2e also runs on a draft pull request"
+# an expression is only ever a value of if:, env: or with:, never pasted into a script
+if printf '%s\n' "$tk_e2e" | grep -F '${{' | grep -qvE '^ +(if|[A-Za-z_-]+): .*\$\{\{.*\}\}'"'"'?$'; then
+  miss "test.yml: e2e pastes an expression into a script"
+fi
+tk_rs=$(ci_step "$tk_y" e2e 'actions/cache/restore@')
+printf '%s' "$tk_rs" | grep -qxF "        if: github.event_name == 'pull_request'" || miss "test.yml: the restore step also runs on the main branch"
+[ "$(grep -c 'actions/cache/restore@' "$tk_y")" = 1 ] || miss "test.yml: not exactly one restore step"
+tk_ky=$(ci_step "$tk_y" e2e 'id: key')
+printf '%s' "$tk_ky" | grep -q 'heavy-ok-' && printf '%s' "$tk_ky" | grep -q 'python3 plugins/repo-setup/presets/_core/starter/tools/ci_inputs.py key' \
+  || miss "test.yml: e2e does not make its key heavy-ok-<input key> with the plugin's ci_inputs.py"
+# the condition, as the step's first key (- if:) or a later one
+tk_ran="^(      - |        )if: steps\.pick\.outputs\.run == 'true'\$"
+tk_sv=$(ci_step "$tk_y" e2e 'actions/cache/save@')
+printf '%s' "$tk_sv" | grep -qF 'key: ${{ steps.key.outputs.key }}' || miss "test.yml: e2e does not save under the input key"
+for tk_s in 'actions/cache/save@' 'bash tests/e2e.sh' 'Record the green run'; do
+  printf '%s' "$(ci_step "$tk_y" e2e "$tk_s")" | grep -qE "$tk_ran" || miss "test.yml: the step '$tk_s' does not wait for a selection that runs e2e.sh"
+done
+tk_l_run=$(grep -n 'bash tests/e2e.sh' "$tk_y" | head -1 | cut -d: -f1) || true
+tk_l_save=$(grep -n 'actions/cache/save@' "$tk_y" | head -1 | cut -d: -f1) || true
+[ -n "$tk_l_run" ] && [ -n "$tk_l_save" ] && [ "$tk_l_save" -gt "$tk_l_run" ] || miss "test.yml: the key is saved before e2e.sh runs"
+printf '%s' "$(ci_step "$tk_y" e2e 'actions/checkout@')" | grep -qx '          fetch-depth: 0' \
+  || miss "test.yml: the e2e checkout does not hold the pull request's base (fetch-depth: 0)"
+grep -qx '    types: \[opened, synchronize, reopened, ready_for_review\]' "$tk_y" || miss "test.yml: pull_request lacks ready_for_review"
+grep -qxF '  HEAVY_NOT_INPUTS: "docs/** *.md"' "$tk_y" || miss "test.yml: HEAVY_NOT_INPUTS is not \"docs/** *.md\""
+printf '%s\n' "$(ci_block "$tk_y" offline)" | grep -qx '      - run: bash tests/run.sh' || miss "test.yml: offline no longer runs tests/run.sh"
+# the shell of a step: the lines under its `run: |`
+ci_run() { ci_step "$1" "$2" "$3" | awk 'on { sub(/^          /, ""); print } /^        run: \|$/ { on = 1 }'; }
+tk_pick=$(ci_run "$tk_y" e2e 'id: pick'); tk_go=$(ci_run "$tk_y" e2e 'bash tests/e2e.sh')
+[ -n "$tk_pick" ] && [ -n "$tk_go" ] || miss "test.yml: e2e has no step 'id: pick' or no step running tests/e2e.sh"
+tk_d="$TMP/tci-k"; mkdir -p "$tk_d/tests" "$TMP/tci-k-rt"
+# stand-ins: the selection prints TK_OUT and exits TK_RC; e2e.sh records the PRESETS it was given
+cat > "$tk_d/tests/e2e_select.py" <<'PY'
+import os, sys
+with open(os.environ["TK_LOG"], "a") as log:
+    log.write(" ".join(sys.argv[1:]) + "\n")
+print("stub: why it chose", file=sys.stderr)
+if os.environ.get("TK_OUT"):
+    print(os.environ["TK_OUT"])
+sys.exit(int(os.environ.get("TK_RC", "0")))
+PY
+printf '%s\n' 'echo "PRESETS=${PRESETS-unset}" >> "$TK_LOG"' > "$tk_d/tests/e2e.sh"
+# tk_try <event> <selection stdout> <selection exit>: runs the pick step; prints its outputs
+tk_try() {
+  : > "$TMP/tci-k-out"; : > "$TMP/tci-k-sum"; : > "$TMP/tci-k-log"
+  ( cd "$tk_d" && env EVENT="$1" BASE_SHA=0123abc TK_OUT="$2" TK_RC="$3" TK_LOG="$TMP/tci-k-log" \
+      GITHUB_OUTPUT="$TMP/tci-k-out" GITHUB_STEP_SUMMARY="$TMP/tci-k-sum" RUNNER_TEMP="$TMP/tci-k-rt" \
+      bash --noprofile --norc -eo pipefail -c "$tk_pick" ) >/dev/null 2>&1 || echo "the step failed"
+  cat "$TMP/tci-k-out"
+}
+tk_out() { printf 'run=%s\npresets=%s' "$1" "$2"; }
+[ "$(tk_try push "" 0)" = "$(tk_out true all)" ] || miss "test.yml: on the main branch the pick step does not choose every combination ($(tk_try push "" 0))"
+[ -s "$TMP/tci-k-log" ] && miss "test.yml: on the main branch the pick step asks e2e_select.py"
+grep -q 'every combination' "$TMP/tci-k-sum" || miss "test.yml: the summary on the main branch does not say every combination runs"
+[ "$(tk_try pull_request none 0)" = "$(tk_out false none)" ] || miss "test.yml: 'none' does not leave e2e.sh out"
+grep -q 'no combination' "$TMP/tci-k-sum" && grep -q 'why it chose' "$TMP/tci-k-sum" || miss "test.yml: 'none' does not write the reason to the summary"
+[ "$(tk_try pull_request "python fastapi" 0)" = "$(tk_out true "python fastapi")" ] || miss "test.yml: a list does not become PRESETS"
+[ "$(cat "$TMP/tci-k-log")" = "--base 0123abc" ] || miss "test.yml: the pick step does not ask from the pull request's base ($(cat "$TMP/tci-k-log"))"
+grep -q 'python fastapi' "$TMP/tci-k-sum" || miss "test.yml: the summary does not name the chosen combinations"
+[ "$(tk_try pull_request all 0)" = "$(tk_out true all)" ] || miss "test.yml: 'all' does not run every combination"
+[ "$(tk_try pull_request "" 1)" = "$(tk_out true all)" ] || miss "test.yml: a failing e2e_select.py does not run every combination"
+[ "$(tk_try pull_request "python" 1)" = "$(tk_out true all)" ] || miss "test.yml: a failing e2e_select.py that printed a list does not run every combination"
+[ "$(tk_try pull_request "" 0)" = "$(tk_out true all)" ] || miss "test.yml: an empty selection does not run every combination"
+# tk_run <selection>: runs the e2e step; prints the PRESETS e2e.sh was given
+tk_run() {
+  : > "$TMP/tci-k-log"
+  ( cd "$tk_d" && env SELECTION="$1" TK_LOG="$TMP/tci-k-log" bash --noprofile --norc -eo pipefail -c "$tk_go" ) >/dev/null 2>&1 \
+    || echo "the step failed"
+  cat "$TMP/tci-k-log"
+}
+[ "$(tk_run all)" = "PRESETS=unset" ] || miss "test.yml: 'all' sets PRESETS, so the upgrade case would not run ($(tk_run all))"
+[ "$(tk_run "python fastapi")" = "PRESETS=python fastapi" ] || miss "test.yml: a list is not passed as PRESETS ($(tk_run "python fastapi"))"
 echo "ok  tiered CI (or misses reported above)"

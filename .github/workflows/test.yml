@@ -4,11 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+    # ready_for_review: a draft skips e2e, so leaving draft needs a run of its own.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
 
+env:
+  # Files e2e does not read. A pull request that changes only these reuses an earlier green e2e
+  # run with the same inputs. A path not listed is an input: when unsure, it runs. Changing this
+  # list changes the rules of the game.
+  HEAVY_NOT_INPUTS: "docs/** *.md"
+
 jobs:
+  # The light tier, on every push.
   offline:
     strategy:
       fail-fast: false
@@ -19,17 +28,6 @@ jobs:
       - uses: actions/checkout@v7
       - run: bash tests/run.sh
 
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - uses: astral-sh/setup-uv@v7
-      - run: uv tool install pre-commit
-      - run: bash tests/e2e.sh
-
   validate:
     runs-on: ubuntu-latest
     steps:
@@ -39,3 +37,107 @@ jobs:
           node-version: 22
       - run: npx -y @anthropic-ai/claude-code plugin validate .
       - run: npx -y @anthropic-ai/claude-code plugin validate plugins/repo-setup
+
+  # The heavy tier, once the light tier is green and the pull request is not a draft. On a pull
+  # request it reuses a green run whose inputs were the same, and runs only the combinations the
+  # change reaches; on the main branch it always runs every combination.
+  e2e:
+    needs: [offline, validate]
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      # The whole history: on a pull request the combinations are chosen from what changed since
+      # its base, so the base commit must be here.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Key of what e2e reads
+        id: key
+        # The assignment fails the step when the tool fails: an empty key must never match.
+        run: |
+          key=$(python3 plugins/repo-setup/presets/_core/starter/tools/ci_inputs.py key)
+          echo "key=heavy-ok-$key" >> "$GITHUB_OUTPUT"
+      - name: Look for a green run with the same inputs
+        id: earlier
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: .heavy-ok
+          key: ${{ steps.key.outputs.key }}
+      - name: Same inputs as a green run
+        if: steps.earlier.outputs.cache-hit == 'true'
+        run: |
+          echo "e2e not run again: same inputs as run $(sed -n 1p .heavy-ok) at commit $(sed -n 2p .heavy-ok)." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Combinations this change reaches
+        id: pick
+        if: steps.earlier.outputs.cache-hit != 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        # A selection that fails or prints nothing runs every combination: when unsure, it runs.
+        run: |
+          why="$RUNNER_TEMP/e2e-select-why"
+          if [ "$EVENT" = pull_request ]; then
+            sel=$(python3 tests/e2e_select.py --base "$BASE_SHA" 2>"$why") || sel=all
+          else
+            echo "the main branch runs every combination" > "$why"
+            sel=all
+          fi
+          [ -n "$sel" ] || sel=all
+          cat "$why" >&2 || true
+          if [ "$sel" = none ]; then echo "run=false"; else echo "run=true"; fi >> "$GITHUB_OUTPUT"
+          echo "presets=$sel" >> "$GITHUB_OUTPUT"
+          case "$sel" in
+            none) echo "e2e ran no combination ($(cat "$why" 2>/dev/null))." ;;
+            all) echo "e2e runs every combination and the upgrade case ($(cat "$why" 2>/dev/null))." ;;
+            *) echo "e2e runs the combinations this change reaches: $sel." ;;
+          esac | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v7
+        if: steps.pick.outputs.run == 'true'
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@v7
+        if: steps.pick.outputs.run == 'true'
+      - if: steps.pick.outputs.run == 'true'
+        run: uv tool install pre-commit
+      - name: Run e2e
+        if: steps.pick.outputs.run == 'true'
+        env:
+          SELECTION: ${{ steps.pick.outputs.presets }}
+        # all: PRESETS stays unset, so the upgrade case runs too.
+        run: |
+          if [ "$SELECTION" = all ]; then
+            bash tests/e2e.sh
+          else
+            PRESETS="$SELECTION" bash tests/e2e.sh
+          fi
+      - name: Record the green run
+        if: steps.pick.outputs.run == 'true'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          printf '%s\n%s\n' "$RUN_URL" "$COMMIT" > .heavy-ok
+          echo "e2e ran: tests/e2e.sh is green at commit $COMMIT." | tee -a "$GITHUB_STEP_SUMMARY"
+      # Saved only after e2e.sh ran and passed: a "none" ran nothing on these inputs. A key that is
+      # already saved (a run with the same inputs saved it first) is no failure.
+      - if: steps.pick.outputs.run == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .heavy-ok
+          key: ${{ steps.key.outputs.key }}
+
+  # The check that stands for every tier: green only when each one above is "success". No
+  # ruleset requires it yet, so today it is there to be read.
+  check:
+    needs: [offline, validate, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every tier is green
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 plugins/repo-setup/presets/_core/starter/tools/ci_verdict.py
