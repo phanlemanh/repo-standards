@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-11-18
 
 ### Fixed: package.json no longer gets conflict markers when a Node repository upgrades
 Found on the probe repository (0.7.0 -> 0.8.0, ts-node): 0.8.0 adds `"prepare"` as the last line
@@ -106,6 +106,40 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
   counts as naming that screen, so on a pull request it runs only when that screen is reached. A
   test of a path that is not a screen (`/api/health`) named with its slash runs only on main;
   `.claude/rules/ui.md` tells builders to drop the slash.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI, on
+  `main` at `7e8a1b5` (both packages above merged): all five checks green, `e2e` in 30 minutes. The
+  end-to-end suite now upgrades two setups: python from the newest release (0.8.0), and ts-node
+  from `repo-setup-v0.7.0` with that release's real `npm install` run first.
+- Run on GitHub, on the private probe repository: upgraded from `repo-setup-v0.8.0` (ledgers
+  already split) to `main` at `7e8a1b5` with no file marked; `quick`, `heavy` and `check` green
+  on the first run. Then the six trials of section 8 of the tiered-CI design on one pull request,
+  all passed: a red `quick` skips `heavy` and turns `check` red; a code change runs `heavy`; a
+  docs-only push ends `heavy` green in 6 seconds, naming the run it reuses; a cancelled `heavy`
+  and a draft turn `check` red; leaving draft runs `heavy`.
+- This repository's own tiered `test.yml`: on a pull request that changes only docs, `e2e` ends in
+  seconds instead of about 25 minutes.
+- Not yet run: two runs saving the same input key; a pull request reusing a key saved on the main
+  branch; the minutes-per-merged-PR comparison of `sdlc_metrics.py` after 10 pull requests; an
+  upgrade from this release to the next; whether `claude-code-action` hands `claude_args` on
+  unchanged; the PR pipeline of `github-agents` on GitHub; CodeQL on a public repository after the
+  upgrade.
+
+### Known gaps
+- Still open from 0.7.0: a file without a final newline gets markers, the setup skills do not say
+  that `apply.py --dry-run` ends with 1 when a file would be marked, the marker check misses a
+  closing marker Prettier turned into a quote, `upgrade_wall` looks for the `include` lines exactly
+  as the template writes them, and `production` has no reviewer on a private repository on the free
+  plan.
+- `dependency-audit` is red on a `react-vite` setup with `design`: `npm audit --omit=dev` reports
+  high advisories in `shadcn` and the packages it pulls in, published after 0.8.0. The template
+  lists `shadcn` under `dependencies`, although the sample app reads it only at build time
+  (`@import "shadcn/tailwind.css"`). The job is not a required check.
+- `plugins/repo-setup/scripts/apply.py` is 930 lines, over the 800-line limit for one file.
+- The 0.8.0 gap on the probe's stand-in hashes is closed: its upgrade to 0.8.0 recorded real
+  hashes, and the upgrade above found a base for every file.
 
 ## 0.8.0 — 2026-11-18
 
