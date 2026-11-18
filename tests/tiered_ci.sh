@@ -208,10 +208,14 @@ process.stdout.write(process.env.UI_FAKE_OUT ?? "");
 process.stderr.write(process.env.UI_FAKE_ERR ?? "");
 process.exitCode = Number(process.env.UI_FAKE_RC ?? "0");
 JS
-  # A stand-in for npx: records each call as [arg][arg]..., exits UI_NPX_RC, or 1 when its fourth
-  # argument is UI_NPX_RED_ON (--grep: the first lane; --grep-invert: the second). No browser runs.
+  # A stand-in for npx: records each call as [arg][arg]...; a --list call exits UI_NPX_LIST_RC
+  # (0: tests found); a run exits 1 when an argument is UI_NPX_RED_ON (--grep: the first lane;
+  # --grep-invert: the second), else UI_NPX_RC. No browser runs.
   printf '%s\n' '#!/bin/sh' 'for a in "$@"; do printf "[%s]" "$a"; done >> "$UI_NPX_LOG"' \
-    'echo >> "$UI_NPX_LOG"' '[ "$4" = "${UI_NPX_RED_ON:-none}" ] && exit 1' 'exit "${UI_NPX_RC:-0}"' > "$TMP/tci-h-bin/npx"
+    'echo >> "$UI_NPX_LOG"' \
+    'for a in "$@"; do [ "$a" = --list ] && exit "${UI_NPX_LIST_RC:-0}"; done' \
+    'for a in "$@"; do [ "$a" = "${UI_NPX_RED_ON:-none}" ] && exit 1; done' \
+    'exit "${UI_NPX_RC:-0}"' > "$TMP/tci-h-bin/npx"
   chmod +x "$TMP/tci-h-bin/npx"
   ui_log="$TMP/tci-h-affected.log"; ui_npx="$TMP/tci-h-npx.log"
   # ui_run <dir> <event> <affected stdout> <affected exit> [ui_select args...]; prints what it prints
@@ -265,10 +269,16 @@ JS
   ui_o=$(ui_run "$ui_r" pull_request "$ui_screens" 0 --nonsense 2>&1) && miss "ui_select: a wrong call is not refused ($ui_o)"
 
   # --run: two lanes when narrowed, one plain run otherwise; a failing lane fails the run
-  ui_lane1="[playwright][test][--pass-with-no-tests][--grep][$ui_two]"
+  ui_list="[playwright][test][--grep][$ui_two][--list]"
+  ui_lane1="[playwright][test][--grep][$ui_two]"
   ui_lane2='[playwright][test][--pass-with-no-tests][--grep-invert][(?:^|\s)/]'
   : > "$ui_npx"; ui_o=$(ui_run "$ui_r" pull_request "$ui_screens" 0 --run) || miss "ui_select --run: two screens went red ($ui_o)"
-  [ "$(cat "$ui_npx")" = "$(printf '%s\n%s' "$ui_lane1" "$ui_lane2")" ] || miss "ui_select --run: two screens do not run the two lanes ($(cat "$ui_npx"))"
+  [ "$(cat "$ui_npx")" = "$(printf '%s\n%s\n%s' "$ui_list" "$ui_lane1" "$ui_lane2")" ] || miss "ui_select --run: two screens do not list their tests, then run the two lanes ($(cat "$ui_npx"))"
+  # a reached screen no test names (ledger routes drifted from the test titles): every test runs
+  : > "$ui_npx"; ui_o=$(UI_NPX_LIST_RC=1 ui_run "$ui_r" pull_request "$ui_screens" 0 --run) || miss "ui_select --run: reached screens with no test went red ($ui_o)"
+  [ "$(cat "$ui_npx")" = "$(printf '%s\n%s' "$ui_list" "[playwright][test]")" ] || miss "ui_select --run: reached screens with no test do not run every test ($(cat "$ui_npx"))"
+  case "$ui_o" in *"no test names a reached screen (/orders, /orders/:id): running every test"*) ;; *) miss "ui_select --run: does not say why every test runs ($ui_o)" ;; esac
+  ui_o=$(UI_NPX_LIST_RC=1 UI_NPX_RC=1 ui_run "$ui_r" pull_request "$ui_screens" 0 --run) && miss "ui_select --run: a red full run after an empty list is green ($ui_o)"
   case "$ui_o" in *"/orders, /orders/:id"*) ;; *) miss "ui_select --run: does not print which screens run ($ui_o)" ;; esac
   : > "$ui_npx"; ui_o=$(ui_run "$ui_r" pull_request "$ui_none" 0 --run) || miss "ui_select --run: no screen reached went red ($ui_o)"
   [ "$(cat "$ui_npx")" = "$ui_lane2" ] || miss "ui_select --run: no screen reached does not run only the tests naming no screen ($(cat "$ui_npx"))"
@@ -286,7 +296,7 @@ JS
   for ui_lane in --grep --grep-invert; do
     : > "$ui_npx"
     ui_o=$(UI_NPX_RED_ON=$ui_lane ui_run "$ui_r" pull_request "$ui_screens" 0 --run) && miss "ui_select --run: a red $ui_lane lane is green ($ui_o)"
-    [ "$(wc -l < "$ui_npx" | tr -d ' ')" = 2 ] || miss "ui_select --run: a red $ui_lane lane leaves the other lane out"
+    [ "$(wc -l < "$ui_npx" | tr -d ' ')" = 3 ] || miss "ui_select --run: a red $ui_lane lane leaves the other lane out"
   done
   # Playwright tests the grep against "<project> <file> <title>", case-insensitive (forceRegExp).
   # Lane two keeps the tests that name no screen; the known limit (spec 11): a test named

@@ -50,7 +50,8 @@ as `/orders/:id`, with a real address to visit); the sample screen sits at `/exa
 reads one page, `.claude/rules/ui.md`, and `make ui-floor` is the fast loop. On a pull request in
 CI, `ui-floor` runs only the screens the change reaches when the repository has design-assembly's
 `tools/design-assembly/affected.mjs`; on the main branch, locally, and with `UI_FULL=1` it runs
-every screen, and so it does whenever that command cannot answer. The data source's test
+every screen, and so it does whenever that command cannot answer or no test names a reached
+screen. The data source's test
 hook (`?scenario=`) answers only in the unit tests and the browser checks' own build, never in
 `npm run build`; there it answers every request, so the checks never reach a real server.
 

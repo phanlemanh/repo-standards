@@ -5,7 +5,8 @@
 //   prints {"mode": "all" | "screens", "reason": "...", "grep": "<pattern>" | null}
 //   --full  every check, whatever the change (make ui-floor UI_FULL=1)
 //   --run   prints the reason and runs Playwright instead: one plain run for "all"; for "screens",
-//           the tests whose name holds a reached screen's route, then every test naming no screen
+//           the tests whose name holds a reached screen's route, then every test naming no screen.
+//           When no test is listed for the reached screens, it runs every test instead.
 // Reads GITHUB_EVENT_NAME (only "pull_request" narrows) and UI_BASE, the commit the change is
 // measured from (the pull request's base; without it, affected.mjs picks its own).
 import { spawnSync } from "node:child_process";
@@ -86,6 +87,7 @@ function select(full, env) {
     mode: "screens",
     reason: `the change reaches ${routes.join(", ")}: their tests and the tests that name no screen run`,
     grep: data.grep,
+    routes,
   };
 }
 
@@ -96,13 +98,29 @@ function playwright(args) {
   return run.status === 0;
 }
 
-// Both lanes run even when the first is red, so one run shows every failure. A lane that picks no
-// test is green: the change reached nothing it would check.
+// True when Playwright lists at least one test for the pattern. Listing starts no server, and it
+// exits non-zero when no test matches, so any other answer counts as none.
+function listsATest(grep) {
+  const run = spawnSync("npx", ["playwright", "test", "--grep", grep, "--list"], {
+    encoding: "utf8",
+    maxBuffer: 1 << 30,
+  });
+  return !run.error && run.status === 0;
+}
+
+// Both lanes run even when the first is red, so one run shows every failure. A reached screen
+// whose tests cannot be found is not a screen with nothing to check: every test runs instead.
+// Only the second lane may pick no test, when every test names a screen.
 function runChecks(choice) {
   console.log(`ui-floor: ${choice.reason}`);
   if (choice.mode === "all") return playwright([]);
-  const byScreen =
-    choice.grep === null || playwright(["--pass-with-no-tests", "--grep", choice.grep]);
+  if (choice.grep !== null && !listsATest(choice.grep)) {
+    console.log(
+      `ui-floor: no test names a reached screen (${choice.routes.join(", ")}): running every test`,
+    );
+    return playwright([]);
+  }
+  const byScreen = choice.grep === null || playwright(["--grep", choice.grep]);
   const noScreen = playwright(["--pass-with-no-tests", "--grep-invert", NAMES_A_SCREEN]);
   return byScreen && noScreen;
 }
@@ -114,4 +132,4 @@ if (args.some((arg) => arg !== "--full" && arg !== "--run")) {
 }
 const choice = select(args.includes("--full"), process.env);
 if (args.includes("--run")) process.exit(runChecks(choice) ? 0 : 1);
-console.log(JSON.stringify(choice));
+console.log(JSON.stringify({ mode: choice.mode, reason: choice.reason, grep: choice.grep }));
