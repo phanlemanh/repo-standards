@@ -2,6 +2,111 @@
 
 ## Unreleased
 
+### Fixed: package.json no longer gets conflict markers when a Node repository upgrades
+Found on the probe repository (0.7.0 -> 0.8.0, ts-node): 0.8.0 adds `"prepare"` as the last line
+of `scripts`, and `npm install` had written `devDependencies` right after the `scripts` block. The
+two changes touch, so the line merge (`git merge-file`) gave up and the upgrade reported
+`package.json` as `marked`, with `make check` red until someone resolved it by hand.
+
+- `package.json` is now merged key by key where the line merge meets
+  (`upgrade_merge.merge_by_key`): this repository's keys keep their order and values, a key the
+  template adds goes after the key that comes before it in the template, a key the template drops
+  goes unless this repository changed it, and nested objects (`scripts`, `engines`) are merged
+  the same way. The file is written the way npm writes it (`JSON.stringify` with the file's own
+  indent, CRLF kept). The upgrade reports the file as `merged` and reminds you to run
+  `npm install` again.
+- The line merge and its markers stay where a key merge cannot keep both sides: one key changed
+  on both sides to different values, a `package.json` that is not written the way npm writes it
+  (someone formatted it by hand, which a rewrite would undo), or no base to read (a two-way merge).
+- Only `package.json` is merged this way; every other file is merged by line as before.
+- `tests/e2e.sh` runs a second upgrade case: ts-node from `repo-setup-v0.7.0` (override with
+  `UPGRADE_NODE_FROM`), with that release's real install (`npm install`) run before the upgrade.
+  Until now the upgrade case ran the python preset only, which is why this was missed.
+- `tests/e2e.sh`, python upgrade case: it upgrades from the newest release, which is now 0.8.0, and
+  it still built the base as a pre-0.8.0 repository (ledgers force-added to git, then `shape` must
+  read `one-file`), so it was red on main. The case now reads the shape from the base release: a
+  release with `mk/derived.mk` keeps its ledgers out of git and must stay `fragments`; an older one
+  is checked and split as before.
+
+**What breaks on upgrade**: nothing. A `package.json` that 0.8.0 would have marked now comes out
+merged. A repository that already resolved the markers by hand has nothing to redo.
+
+### Tiered CI (RS3)
+Design: `docs/superpowers/specs/2026-11-17-tiered-ci-design.md`. A pull request that is not ready to
+merge no longer pays for the heavy checks, and a push that changes nothing a heavy check reads
+reuses the last green heavy run. Not yet run on GitHub (see "Known gaps"). Measured before
+building, on `onehub-inventory`: 31 of 251 runs made while `gate` was red (12.4%) could have reused
+a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
+(`docs/reports/2026-11-18-heavy-reuse-measure.md`).
+
+**What is new**
+
+- `make check` is now `check-quick check-heavy`. A layer lists its slow steps in `HEAVY_TARGETS`
+  (the design capability puts `ui-floor` there) and everything else stays in `check-quick`.
+  `make check-heavy` prints `no heavy checks` when a repository has none. The ts-node, python and
+  claude-plugin Makefiles carry the targets.
+- The three `ci.yml` templates have three jobs: `quick` (every push), `heavy` (after `quick`, when
+  the pull request is ready for review, and always on main) and `check`, a summary cell that always
+  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell, and its line
+  for a skipped tier says which case it is: a draft (not its turn yet) or a tier it waits for that
+  did not pass.
+- `heavy` does not run its checks again when its input key matches an earlier green run: it ends
+  green at once and says which run and commit it reuses. It is not skipped (a skipped `heavy`
+  turns `check` red). `tools/ci_inputs.py` hashes the whole tree minus `HEAVY_NOT_INPUTS`
+  (`docs/** wiki/** *.md _acceptance/**` in the templates). A green run saves a cache entry
+  `heavy-ok-<key>` holding that run and commit; a later push with the same key restores it. A red
+  run saves nothing. A pull request that moves from draft to ready (`ready_for_review`) runs
+  `heavy`.
+- `ui-floor` runs the screens a change reaches. On a pull request, `tools/ui_select.mjs` asks
+  design-assembly's `tools/design-assembly/affected.mjs --json` which screens are reached and runs
+  two Playwright lanes: the tests that name those screens, then the tests that name no screen. It
+  runs the full set when the command is missing, fails or says all, on main, locally, with
+  `UI_FULL=1`, and when no test names a reached screen. The heavy checkout uses `fetch-depth: 2`
+  and passes `UI_BASE`.
+- `tools/github_setup.py` warns when `heavy` or `e2e` is a required check: a skipped job counts as
+  green, so only `check` stands for them. It drops nothing.
+- This repository: `.github/workflows/test.yml` has `offline` and `validate` (light), `e2e` (heavy,
+  by input key with `HEAVY_NOT_INPUTS: "docs/** *.md"`, runs only the combinations the change
+  reaches through `tests/e2e_select.py`, every combination on main) and `check`. Section 49 of
+  `tests/run.sh` (`tests/tiered_ci.sh`, 49a to 49k) holds the tests.
+- A narrowed e2e list that holds `python` or `fastapi` also runs the upgrade case (`UPGRADE=1`):
+  that case upgrades a python setup. Other narrowed lists do not reach what it reads.
+
+**What breaks on upgrade**
+
+- **`check` means the summary cell.** It is red unless both `quick` and `heavy` succeed. That
+  includes a draft pull request (red there means "not your turn yet") and a pull request whose
+  light tier is red. A repository that requires `check` keeps one required name; one that
+  required `quick` or `heavy` by name should require `check` instead.
+- **A repository that edited `ci.yml` in place** receives the new shape through the three-way
+  merge of the upgrade path. It may conflict; resolve to the three jobs.
+- **An `e2e` job a repository added itself** must move behind `quick` (as a heavy step, or as a
+  job with `needs: quick` that `check` waits for), or stop being a required check. `github_setup.py`
+  now says so.
+- **The ts-node `quick` job runs `make build`**, not `npm run build`.
+- **A Makefile edited in place** must keep `HEAVY_TARGETS`, `check-quick`, `check-heavy` and
+  `check: check-quick check-heavy` after the merge. Without them `quick` is red ("No rule to make
+  target check-quick"), and with `design` the browser step drops out and the design gate goes red.
+- **The new `mk/design.mk` needs `tools/ui_select.mjs`.** An old `npx playwright test` line kept
+  after a merge conflict makes the design gate red.
+- **`make check` prints `no heavy checks`** when the repository has none.
+- **The cache.** Each green heavy run leaves a tiny cache entry per input key.
+
+**Known gaps**
+
+- Not yet run on GitHub: the probe repository (`design-ci-probe`, six trials in section 8 of the
+  design) is not done, so cache scope, restore hits and save collisions are unverified. The
+  ruleset on `main` of this repository is still missing (section 9 of the design).
+- Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
+  it was green; the full run on main is the net.
+- Path-based selection can miss a break that comes through a path other than `extends`.
+- Browser-test narrowing reads test titles: a test whose title holds a word starting with `/`
+  counts as naming that screen, so on a pull request it runs only when that screen is reached. A
+  test of a path that is not a screen (`/api/health`) named with its slash runs only on main;
+  `.claude/rules/ui.md` tells builders to drop the slash.
+
+## 0.8.0 — 2026-11-18
+
 ### Ledgers as fragments (RS2b)
 Design: `docs/superpowers/specs/2026-11-17-ledger-fragments-design.md`. Two pull requests that each
 add a log line, a glossary term or a wiki page no longer touch the same file, so the second one
@@ -183,79 +288,28 @@ split notice. The following breaks, and only for what it names:
   delete it, then run `make derived`. A repository set up by this release has none.
 - A hand edit of a drawn file, or a drawn file put back in git (for example `git add -f`), is red: `draw` exits 1, `derived-untracked` is red.
 
-### Tiered CI (RS3)
-Design: `docs/superpowers/specs/2026-11-17-tiered-ci-design.md`. A pull request that is not ready to
-merge no longer pays for the heavy checks, and a push that changes nothing a heavy check reads
-reuses the last green heavy run. Not yet run on GitHub (see "Known gaps"). Measured before
-building, on `onehub-inventory`: 31 of 251 runs made while `gate` was red (12.4%) could have reused
-a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
-(`docs/reports/2026-11-18-heavy-reuse-measure.md`).
+### Verified
 
-**What is new**
+- Offline suite on Linux and macOS, manifest validation and the end-to-end combinations in CI, on
+  `main` at the merge of this package (`03c3b71`): all four checks green. A new end-to-end
+  combination installs from tag `repo-setup-v0.7.0`, upgrades with this code, splits all four
+  ledgers and runs `make check`.
+- Not yet run: two pull requests at once on the probe repository, each adding a log line, a term
+  and a page, merged one after the other without "Update branch" (the measurement this release is
+  for); whether `claude-code-action` hands `claude_args` to Claude Code unchanged, so the review job
+  runs with hooks off; an upgrade between two published releases that change a template (possible
+  once this release is tagged); the PR pipeline of `github-agents` on GitHub; CodeQL on a public
+  repository after the upgrade.
 
-- `make check` is now `check-quick check-heavy`. A layer lists its slow steps in `HEAVY_TARGETS`
-  (the design capability puts `ui-floor` there) and everything else stays in `check-quick`.
-  `make check-heavy` prints `no heavy checks` when a repository has none. The ts-node, python and
-  claude-plugin Makefiles carry the targets.
-- The three `ci.yml` templates have three jobs: `quick` (every push), `heavy` (after `quick`, when
-  the pull request is ready for review, and always on main) and `check`, a summary cell that always
-  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell, and its line
-  for a skipped tier says which case it is: a draft (not its turn yet) or a tier it waits for that
-  did not pass.
-- `heavy` does not run its checks again when its input key matches an earlier green run: it ends
-  green at once and says which run and commit it reuses. It is not skipped (a skipped `heavy`
-  turns `check` red). `tools/ci_inputs.py` hashes the whole tree minus `HEAVY_NOT_INPUTS`
-  (`docs/** wiki/** *.md _acceptance/**` in the templates). A green run saves a cache entry
-  `heavy-ok-<key>` holding that run and commit; a later push with the same key restores it. A red
-  run saves nothing. A pull request that moves from draft to ready (`ready_for_review`) runs
-  `heavy`.
-- `ui-floor` runs the screens a change reaches. On a pull request, `tools/ui_select.mjs` asks
-  design-assembly's `tools/design-assembly/affected.mjs --json` which screens are reached and runs
-  two Playwright lanes: the tests that name those screens, then the tests that name no screen. It
-  runs the full set when the command is missing, fails or says all, on main, locally, with
-  `UI_FULL=1`, and when no test names a reached screen. The heavy checkout uses `fetch-depth: 2`
-  and passes `UI_BASE`.
-- `tools/github_setup.py` warns when `heavy` or `e2e` is a required check: a skipped job counts as
-  green, so only `check` stands for them. It drops nothing.
-- This repository: `.github/workflows/test.yml` has `offline` and `validate` (light), `e2e` (heavy,
-  by input key with `HEAVY_NOT_INPUTS: "docs/** *.md"`, runs only the combinations the change
-  reaches through `tests/e2e_select.py`, every combination on main) and `check`. Section 49 of
-  `tests/run.sh` (`tests/tiered_ci.sh`, 49a to 49k) holds the tests.
-- A narrowed e2e list that holds `python` or `fastapi` also runs the upgrade case (`UPGRADE=1`):
-  that case upgrades a python setup. Other narrowed lists do not reach what it reads.
-
-**What breaks on upgrade**
-
-- **`check` means the summary cell.** It is red unless both `quick` and `heavy` succeed. That
-  includes a draft pull request (red there means "not your turn yet") and a pull request whose
-  light tier is red. A repository that requires `check` keeps one required name; one that
-  required `quick` or `heavy` by name should require `check` instead.
-- **A repository that edited `ci.yml` in place** receives the new shape through the three-way
-  merge of the upgrade path. It may conflict; resolve to the three jobs.
-- **An `e2e` job a repository added itself** must move behind `quick` (as a heavy step, or as a
-  job with `needs: quick` that `check` waits for), or stop being a required check. `github_setup.py`
-  now says so.
-- **The ts-node `quick` job runs `make build`**, not `npm run build`.
-- **A Makefile edited in place** must keep `HEAVY_TARGETS`, `check-quick`, `check-heavy` and
-  `check: check-quick check-heavy` after the merge. Without them `quick` is red ("No rule to make
-  target check-quick"), and with `design` the browser step drops out and the design gate goes red.
-- **The new `mk/design.mk` needs `tools/ui_select.mjs`.** An old `npx playwright test` line kept
-  after a merge conflict makes the design gate red.
-- **`make check` prints `no heavy checks`** when the repository has none.
-- **The cache.** Each green heavy run leaves a tiny cache entry per input key.
-
-**Known gaps**
-
-- Not yet run on GitHub: the probe repository (`design-ci-probe`, six trials in section 8 of the
-  design) is not done, so cache scope, restore hits and save collisions are unverified. The
-  ruleset on `main` of this repository is still missing (section 9 of the design).
-- Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
-  it was green; the full run on main is the net.
-- Path-based selection can miss a break that comes through a path other than `extends`.
-- Browser-test narrowing reads test titles: a test whose title holds a word starting with `/`
-  counts as naming that screen, so on a pull request it runs only when that screen is reached. A
-  test of a path that is not a screen (`/api/health`) named with its slash runs only on main;
-  `.claude/rules/ui.md` tells builders to drop the slash.
+### Known gaps
+- The gaps listed under 0.7.0 are still open: a file without a final newline gets markers, the
+  setup skills do not say that `apply.py --dry-run` ends with 1 when a file would be marked, the
+  marker check misses a closing marker Prettier turned into a quote, `upgrade_wall` looks for the
+  `include` lines exactly as the template writes them, and `production` has no reviewer on a
+  private repository on the free plan.
+- Two files on the probe repository carry hashes no release gives (from the stand-in release used
+  to verify 0.7.0), so its next upgrade merges them two ways, against an empty base.
+- `plugins/repo-setup/scripts/apply.py` is 927 lines, over the 800-line limit for one file.
 
 ## 0.7.0 — 2026-11-17
 
