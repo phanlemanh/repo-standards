@@ -89,8 +89,10 @@ ci_verdict() { ( NEEDS_JSON="$1" python3 "$ci_tools/ci_verdict.py" 2>&1 ); }
 ci_vrc() { local rc=0; ( NEEDS_JSON="$1" python3 "$ci_tools/ci_verdict.py" ) >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
 ci_needs() { printf '{"quick": {"result": "%s", "outputs": {}}, "heavy": {"result": "%s", "outputs": {}}}' "$1" "$2"; }
 [ "$(ci_vrc "$(ci_needs success success)")" = 0 ] || miss "ci_verdict: success + success is not green"
-ci_skip_why="did not run: an earlier tier failed, or this pull request is a draft"
-ci_cancel_why="cancelled: a newer push replaces this run"
+# skipped beside tiers that all passed: only a draft does that; beside one that did not: behind it
+ci_draft_why="did not run: the pull request is a draft, not its turn yet (mark it ready for review)"
+ci_behind_why="did not run: a tier it waits for did not pass"
+ci_cancel_why="cancelled: a newer push replaced this run, or it was cancelled by hand"
 for q in success skipped cancelled failure; do
   for h in success skipped cancelled failure; do
     [ "$q $h" = "success success" ] && continue
@@ -100,13 +102,20 @@ for q in success skipped cancelled failure; do
       read -r ci_tier ci_res <<<"$pair"
       case "$ci_res" in
         success) case "$ci_vo" in *"$ci_tier: success"*) miss "ci_verdict: $q + $h names $ci_tier, which is green" ;; esac ;;
-        skipped) case "$ci_vo" in *"$ci_tier: skipped — $ci_skip_why"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier skipped ($ci_vo)" ;; esac ;;
+        skipped)
+          [ "$ci_tier" = quick ] && ci_other=$h || ci_other=$q
+          [ "$ci_other" = success ] && ci_why=$ci_draft_why || ci_why=$ci_behind_why
+          case "$ci_vo" in *"$ci_tier: skipped — $ci_why"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier skipped, '$ci_why' ($ci_vo)" ;; esac ;;
         cancelled) case "$ci_vo" in *"$ci_tier: cancelled — $ci_cancel_why"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier cancelled ($ci_vo)" ;; esac ;;
         failure) case "$ci_vo" in *"$ci_tier: failure — failed"*) ;; *) miss "ci_verdict: $q + $h has no line for $ci_tier failure ($ci_vo)" ;; esac ;;
       esac
     done
   done
 done
+# three tiers, as in this repository's test.yml: the reason looks at every other one
+ci_n3() { printf '{"offline": {"result": "%s"}, "validate": {"result": "%s"}, "e2e": {"result": "skipped"}}' "$1" "$2"; }
+[ "$(ci_verdict "$(ci_n3 success success)")" = "e2e: skipped — $ci_draft_why" ] || miss "ci_verdict: e2e skipped beside two green tiers is not a draft ($(ci_verdict "$(ci_n3 success success)"))"
+case "$(ci_verdict "$(ci_n3 success failure)")" in *"e2e: skipped — $ci_behind_why"*) ;; *) miss "ci_verdict: e2e skipped beside a red validate is not behind it ($(ci_verdict "$(ci_n3 success failure)"))" ;; esac
 [ "$(ci_verdict "$(ci_needs failure success)" | wc -l | tr -d ' ')" = 1 ] || miss "ci_verdict: one red tier does not print exactly one line"
 [ "$(ci_vrc '{}')" = 1 ] || miss "ci_verdict: an empty needs object is not red"
 [ "$(ci_vrc 'not json')" = 1 ] || miss "ci_verdict: a string that is not JSON is not red"
@@ -170,6 +179,20 @@ for ci_p in ts-node python claude-plugin; do
     || miss "ci.yml ($ci_p): heavy does not make its key heavy-ok-<input key>"
   printf '%s' "$(ci_step "$ci_y" heavy 'actions/cache/save@')" | grep -qF 'key: ${{ steps.key.outputs.key }}' \
     || miss "ci.yml ($ci_p): heavy does not save under the input key"
+  # a red heavy run is never recorded: the checks, the record and the save each run only on no
+  # earlier green run (one if:, as the step's first key or a later one, with no always()), and the
+  # record and the save come after the checks, so a failed make check-heavy stops both
+  printf '%s' "$ci_rs" | grep -qx '        id: earlier' || miss "ci.yml ($ci_p): the restore step is not id: earlier"
+  ci_new="^(      - |        )if: steps\.earlier\.outputs\.cache-hit != 'true'\$"
+  for ci_s in 'run: make check-heavy' 'Record the green run' 'actions/cache/save@'; do
+    ci_st=$(ci_step "$ci_y" heavy "$ci_s")
+    [ "$(grep -cE '^(      - |        )if:' <<<"$ci_st")" = 1 ] && grep -qE "$ci_new" <<<"$ci_st" \
+      || miss "ci.yml ($ci_p): the step '$ci_s' does not run on exactly: if: steps.earlier.outputs.cache-hit != 'true'"
+  done
+  ci_ln() { awk -v want="$1" 'index($0, want) { print NR; exit }' <<<"$ci_hv"; }
+  ci_l_chk=$(ci_ln 'run: make check-heavy'); ci_l_rec=$(ci_ln 'Record the green run'); ci_l_sav=$(ci_ln 'actions/cache/save@')
+  [ -n "$ci_l_chk" ] && [ -n "$ci_l_rec" ] && [ -n "$ci_l_sav" ] && [ "$ci_l_rec" -gt "$ci_l_chk" ] && [ "$ci_l_sav" -gt "$ci_l_chk" ] \
+    || miss "ci.yml ($ci_p): the green run is recorded or saved before make check-heavy runs"
   grep -qx '    types: \[opened, synchronize, reopened, ready_for_review\]' "$ci_y" || miss "ci.yml ($ci_p): pull_request lacks ready_for_review"
   grep -qxF '  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/**"' "$ci_y" || miss "ci.yml ($ci_p): HEAVY_NOT_INPUTS is not the default list"
   grep -qxF '  group: ci-${{ github.ref }}' "$ci_y" && grep -qx '  cancel-in-progress: true' "$ci_y" || miss "ci.yml ($ci_p): concurrency changed"
@@ -472,7 +495,8 @@ tk_ran="^(      - |        )if: steps\.pick\.outputs\.run == 'true'\$"
 tk_sv=$(ci_step "$tk_y" e2e 'actions/cache/save@')
 printf '%s' "$tk_sv" | grep -qF 'key: ${{ steps.key.outputs.key }}' || miss "test.yml: e2e does not save under the input key"
 for tk_s in 'actions/cache/save@' 'bash tests/e2e.sh' 'Record the green run'; do
-  printf '%s' "$(ci_step "$tk_y" e2e "$tk_s")" | grep -qE "$tk_ran" || miss "test.yml: the step '$tk_s' does not wait for a selection that runs e2e.sh"
+  # a here-string, not a pipe: grep -q may stop reading early, and under pipefail the writer's SIGPIPE turns it red
+  grep -qE "$tk_ran" <<<"$(ci_step "$tk_y" e2e "$tk_s")" || miss "test.yml: the step '$tk_s' does not wait for a selection that runs e2e.sh"
 done
 tk_l_run=$(grep -n 'bash tests/e2e.sh' "$tk_y" | head -1 | cut -d: -f1) || true
 tk_l_save=$(grep -n 'actions/cache/save@' "$tk_y" | head -1 | cut -d: -f1) || true
@@ -487,7 +511,7 @@ ci_run() { ci_step "$1" "$2" "$3" | awk 'on { sub(/^          /, ""); print } /^
 tk_pick=$(ci_run "$tk_y" e2e 'id: pick'); tk_go=$(ci_run "$tk_y" e2e 'bash tests/e2e.sh')
 [ -n "$tk_pick" ] && [ -n "$tk_go" ] || miss "test.yml: e2e has no step 'id: pick' or no step running tests/e2e.sh"
 tk_d="$TMP/tci-k"; mkdir -p "$tk_d/tests" "$TMP/tci-k-rt"
-# stand-ins: the selection prints TK_OUT and exits TK_RC; e2e.sh records the PRESETS it was given
+# stand-ins: the selection prints TK_OUT and exits TK_RC; e2e.sh records the PRESETS and UPGRADE it was given
 cat > "$tk_d/tests/e2e_select.py" <<'PY'
 import os, sys
 with open(os.environ["TK_LOG"], "a") as log:
@@ -497,7 +521,7 @@ if os.environ.get("TK_OUT"):
     print(os.environ["TK_OUT"])
 sys.exit(int(os.environ.get("TK_RC", "0")))
 PY
-printf '%s\n' 'echo "PRESETS=${PRESETS-unset}" >> "$TK_LOG"' > "$tk_d/tests/e2e.sh"
+printf '%s\n' 'echo "PRESETS=${PRESETS-unset} UPGRADE=${UPGRADE-unset}" >> "$TK_LOG"' > "$tk_d/tests/e2e.sh"
 # tk_try <event> <selection stdout> <selection exit>: runs the pick step; prints its outputs
 tk_try() {
   : > "$TMP/tci-k-out"; : > "$TMP/tci-k-sum"; : > "$TMP/tci-k-log"
@@ -515,17 +539,26 @@ grep -q 'no combination' "$TMP/tci-k-sum" && grep -q 'why it chose' "$TMP/tci-k-
 [ "$(tk_try pull_request "python fastapi" 0)" = "$(tk_out true "python fastapi")" ] || miss "test.yml: a list does not become PRESETS"
 [ "$(cat "$TMP/tci-k-log")" = "--base 0123abc" ] || miss "test.yml: the pick step does not ask from the pull request's base ($(cat "$TMP/tci-k-log"))"
 grep -q 'python fastapi' "$TMP/tci-k-sum" || miss "test.yml: the summary does not name the chosen combinations"
+grep -q 'and the upgrade case' "$TMP/tci-k-sum" || miss "test.yml: the summary of a list with python does not say the upgrade case runs too"
+tk_try pull_request "ts-node ts-node:mcp" 0 >/dev/null
+grep -q 'ts-node ts-node:mcp' "$TMP/tci-k-sum" || miss "test.yml: the summary does not name a ts-node list"
+grep -q 'upgrade case' "$TMP/tci-k-sum" && miss "test.yml: the summary of a ts-node list says the upgrade case runs"
 [ "$(tk_try pull_request all 0)" = "$(tk_out true all)" ] || miss "test.yml: 'all' does not run every combination"
 [ "$(tk_try pull_request "" 1)" = "$(tk_out true all)" ] || miss "test.yml: a failing e2e_select.py does not run every combination"
 [ "$(tk_try pull_request "python" 1)" = "$(tk_out true all)" ] || miss "test.yml: a failing e2e_select.py that printed a list does not run every combination"
 [ "$(tk_try pull_request "" 0)" = "$(tk_out true all)" ] || miss "test.yml: an empty selection does not run every combination"
-# tk_run <selection>: runs the e2e step; prints the PRESETS e2e.sh was given
+# tk_run <selection>: runs the e2e step; prints the PRESETS and UPGRADE e2e.sh was given
 tk_run() {
   : > "$TMP/tci-k-log"
   ( cd "$tk_d" && env SELECTION="$1" TK_LOG="$TMP/tci-k-log" bash --noprofile --norc -eo pipefail -c "$tk_go" ) >/dev/null 2>&1 \
     || echo "the step failed"
   cat "$TMP/tci-k-log"
 }
-[ "$(tk_run all)" = "PRESETS=unset" ] || miss "test.yml: 'all' sets PRESETS, so the upgrade case would not run ($(tk_run all))"
-[ "$(tk_run "python fastapi")" = "PRESETS=python fastapi" ] || miss "test.yml: a list is not passed as PRESETS ($(tk_run "python fastapi"))"
+[ "$(tk_run all)" = "PRESETS=unset UPGRADE=unset" ] || miss "test.yml: 'all' sets PRESETS, so the upgrade case would not run ($(tk_run all))"
+[ "$(tk_run "python fastapi")" = "PRESETS=python fastapi UPGRADE=1" ] \
+  || miss "test.yml: a list with python is not passed as PRESETS with UPGRADE=1 ($(tk_run "python fastapi"))"
+[ "$(tk_run "ts-node fastapi:mcp")" = "PRESETS=ts-node fastapi:mcp UPGRADE=1" ] \
+  || miss "test.yml: a list with fastapi:mcp does not run the upgrade case ($(tk_run "ts-node fastapi:mcp"))"
+[ "$(tk_run "ts-node ts-node:mcp")" = "PRESETS=ts-node ts-node:mcp UPGRADE=unset" ] \
+  || miss "test.yml: a ts-node list sets UPGRADE ($(tk_run "ts-node ts-node:mcp"))"
 echo "ok  tiered CI (or misses reported above)"

@@ -240,9 +240,10 @@ Ghi chú cho các gói mới và gói đổi:
     cũng qua `ruff` của preset python, nên được tách thành `ledgers.py`, `ledgers_ontology.py`,
     `ledgers_split.py`, `ledgers_split_read.py`, mỗi tệp dưới 800 dòng.
 - **RS3 đã dựng, chưa đo trên kho thử.** Phép đo trên kho thử `design-ci-probe` (sáu phép thử ở mục 8
-  của spec) chưa chạy. Số đo trước khi dựng nằm ở `docs/reports/2026-11-18-heavy-reuse-measure.md`:
-  12,4% số lượt lúc `gate` đỏ dùng lại được tầng nặng. Ruleset trên `main` của kho này vẫn chưa có
-  (spec mục 9).
+  của spec) chưa chạy: nó đẩy và gộp trong một kho khác, nên cần lời chủ kho, như RS2b. Số đo trước
+  khi dựng nằm ở `docs/reports/2026-11-18-heavy-reuse-measure.md`: 12,4% số lượt lúc `gate` đỏ dùng
+  lại được tầng nặng. Phép so «phút máy mỗi PR gộp» của `sdlc_metrics.py` (hôm nay 44,2) sau 10 PR
+  gộp cũng chưa làm. Ruleset trên `main` của kho này vẫn chưa có (spec mục 9).
 - **RS2b chưa đo trên kho thử.** Bước đo trên kho thử `design-ci-probe` (nâng bằng nhánh này, `split` bốn sổ, hai PR
   song song mỗi PR một `make log`, một `add-term`, một trang wiki, gộp PR đầu, mong PR hai gộp
   được không cần «Update branch» và hai PR không chung tệp nào) chưa chạy: nó đẩy và gộp trong một

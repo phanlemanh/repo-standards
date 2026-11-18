@@ -21,9 +21,14 @@ import os
 import sys
 
 ENV_NEEDS = "NEEDS_JSON"
+# A skipped tier beside tiers that all passed: only a draft skips it (the heavy tier waits for
+# ready for review). Beside one that did not pass: a tier it waits for stopped it.
+SKIPPED_DRAFT = (
+    "did not run: the pull request is a draft, not its turn yet (mark it ready for review)"
+)
+SKIPPED_BEHIND = "did not run: a tier it waits for did not pass"
 REASONS = {
-    "skipped": "did not run: an earlier tier failed, or this pull request is a draft",
-    "cancelled": "cancelled: a newer push replaces this run",
+    "cancelled": "cancelled: a newer push replaced this run, or it was cancelled by hand",
     "failure": "failed",
 }
 
@@ -44,13 +49,20 @@ def tier_result(tier: object) -> str:
     return result if isinstance(result, str) else "unknown"
 
 
+def reason(result: str, others_passed: bool) -> str:
+    if result == "skipped":
+        return SKIPPED_DRAFT if others_passed else SKIPPED_BEHIND
+    return REASONS.get(result, "no usable result")
+
+
 def verdict(needs: dict[str, object]) -> list[str]:
     """One line per tier whose result is not `success`."""
+    results = {name: tier_result(tier) for name, tier in needs.items()}
     lines = []
-    for name, tier in needs.items():
-        result = tier_result(tier)
+    for name, result in results.items():
         if result != "success":
-            lines.append(f"{name}: {result} — {REASONS.get(result, 'no usable result')}")
+            others_passed = all(r == "success" for other, r in results.items() if other != name)
+            lines.append(f"{name}: {result} — {reason(result, others_passed)}")
     return lines
 
 

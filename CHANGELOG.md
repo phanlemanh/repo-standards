@@ -199,12 +199,16 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
   claude-plugin Makefiles carry the targets.
 - The three `ci.yml` templates have three jobs: `quick` (every push), `heavy` (after `quick`, when
   the pull request is ready for review, and always on main) and `check`, a summary cell that always
-  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell.
-- `heavy` is skipped when its input key matches an earlier green run. `tools/ci_inputs.py` hashes
-  the whole tree minus `HEAVY_NOT_INPUTS` (`docs/** wiki/** *.md _acceptance/**` in the templates).
-  A green run saves a cache entry `heavy-ok-<key>` holding the earlier run and commit; a later
-  push with the same key restores it, skips `heavy` and says which run it reuses. A pull request
-  that moves from draft to ready (`ready_for_review`) runs `heavy`.
+  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell, and its line
+  for a skipped tier says which case it is: a draft (not its turn yet) or a tier it waits for that
+  did not pass.
+- `heavy` does not run its checks again when its input key matches an earlier green run: it ends
+  green at once and says which run and commit it reuses. It is not skipped (a skipped `heavy`
+  turns `check` red). `tools/ci_inputs.py` hashes the whole tree minus `HEAVY_NOT_INPUTS`
+  (`docs/** wiki/** *.md _acceptance/**` in the templates). A green run saves a cache entry
+  `heavy-ok-<key>` holding that run and commit; a later push with the same key restores it. A red
+  run saves nothing. A pull request that moves from draft to ready (`ready_for_review`) runs
+  `heavy`.
 - `ui-floor` runs the screens a change reaches. On a pull request, `tools/ui_select.mjs` asks
   design-assembly's `tools/design-assembly/affected.mjs --json` which screens are reached and runs
   two Playwright lanes: the tests that name those screens, then the tests that name no screen. It
@@ -217,6 +221,8 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
   by input key with `HEAVY_NOT_INPUTS: "docs/** *.md"`, runs only the combinations the change
   reaches through `tests/e2e_select.py`, every combination on main) and `check`. Section 49 of
   `tests/run.sh` (`tests/tiered_ci.sh`, 49a to 49k) holds the tests.
+- A narrowed e2e list that holds `python` or `fastapi` also runs the upgrade case (`UPGRADE=1`):
+  that case upgrades a python setup. Other narrowed lists do not reach what it reads.
 
 **What breaks on upgrade**
 
@@ -229,6 +235,10 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
 - **An `e2e` job a repository added itself** must move behind `quick` (as a heavy step, or as a
   job with `needs: quick` that `check` waits for), or stop being a required check. `github_setup.py`
   now says so.
+- **The ts-node `quick` job runs `make build`**, not `npm run build`.
+- **A Makefile edited in place** must keep `HEAVY_TARGETS`, `check-quick`, `check-heavy` and
+  `check: check-quick check-heavy` after the merge. Without them `quick` is red ("No rule to make
+  target check-quick"), and with `design` the browser step drops out and the design gate goes red.
 - **The new `mk/design.mk` needs `tools/ui_select.mjs`.** An old `npx playwright test` line kept
   after a merge conflict makes the design gate red.
 - **`make check` prints `no heavy checks`** when the repository has none.
@@ -242,7 +252,10 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
 - Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
   it was green; the full run on main is the net.
 - Path-based selection can miss a break that comes through a path other than `extends`.
-- A narrowed e2e list skips the upgrade case (`UPGRADE=1` is not set by `test.yml`).
+- Browser-test narrowing reads test titles: a test whose title holds a word starting with `/`
+  counts as naming that screen, so on a pull request it runs only when that screen is reached. A
+  test of a path that is not a screen (`/api/health`) named with its slash runs only on main;
+  `.claude/rules/ui.md` tells builders to drop the slash.
 
 ## 0.7.0 — 2026-11-17
 

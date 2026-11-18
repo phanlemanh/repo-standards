@@ -91,7 +91,13 @@ jobs:
           case "$sel" in
             none) echo "e2e ran no combination ($(cat "$why" 2>/dev/null))." ;;
             all) echo "e2e runs every combination and the upgrade case ($(cat "$why" 2>/dev/null))." ;;
-            *) echo "e2e runs the combinations this change reaches: $sel." ;;
+            *) up=
+               for e in $sel; do case "${e%%:*}" in python|fastapi) up=1 ;; esac; done
+               if [ -n "$up" ]; then
+                 echo "e2e runs the combinations this change reaches: $sel, and the upgrade case."
+               else
+                 echo "e2e runs the combinations this change reaches: $sel."
+               fi ;;
           esac | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@v7
         if: steps.pick.outputs.run == 'true'
@@ -105,12 +111,21 @@ jobs:
         if: steps.pick.outputs.run == 'true'
         env:
           SELECTION: ${{ steps.pick.outputs.presets }}
-        # all: PRESETS stays unset, so the upgrade case runs too.
+        # all: PRESETS stays unset, so the upgrade case runs too. A list that holds python or
+        # fastapi runs it as well (UPGRADE=1): that case upgrades a python setup.
         run: |
           if [ "$SELECTION" = all ]; then
             bash tests/e2e.sh
           else
-            PRESETS="$SELECTION" bash tests/e2e.sh
+            upgrade=
+            for e in $SELECTION; do
+              case "${e%%:*}" in python|fastapi) upgrade=1 ;; esac
+            done
+            if [ -n "$upgrade" ]; then
+              PRESETS="$SELECTION" UPGRADE=1 bash tests/e2e.sh
+            else
+              PRESETS="$SELECTION" bash tests/e2e.sh
+            fi
           fi
       - name: Record the green run
         if: steps.pick.outputs.run == 'true'

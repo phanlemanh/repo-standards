@@ -38,6 +38,9 @@ paths: ["src/**/*.tsx"]
 - A state appears because of a real condition: a pending or failed request, an empty result, a
   filter with no match, a user action. Never because of a switch (a prop or URL value that exists
   only to pick the state): a state reachable only from a switch is not a state.
+- A browser test whose title holds a word starting with `/` names that screen: on a pull request it
+  runs only when that screen is reached. Name a path that is not a screen (`/api/health`) without
+  the leading slash (`api/health`), or that test runs only on main.
 
 ## Adding a component
 
