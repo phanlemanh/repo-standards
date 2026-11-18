@@ -1,4 +1,6 @@
-CHECK_TARGETS += design-guards ui-floor
+CHECK_TARGETS += design-guards
+# The browser checks are the heavy tier: CI runs them when the files they read change.
+HEAVY_TARGETS += ui-floor
 
 .PHONY: design-guards ui-floor ui-patch
 design-guards: ## Prove the design guards still catch real violations

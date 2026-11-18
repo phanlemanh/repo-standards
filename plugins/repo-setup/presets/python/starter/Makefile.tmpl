@@ -1,4 +1,4 @@
-# One-command tasks. CI runs `make check`; run it before every PR.
+# One-command tasks. `make check` is everything CI runs; run it before every PR.
 .DEFAULT_GOAL := help
 PKG := {{package_name}}
 DEV_CMD := {{dev_cmd}}
@@ -6,17 +6,20 @@ GEN_OUT := src/$(PKG)/ontology_types.py
 GEN_LANG := python
 PYTEST_ARGS :=
 PYTHON ?= uv run python
+# Two tiers. CI runs the light one (CHECK_TARGETS) on every push and the heavy one
+# (HEAVY_TARGETS, browser suites and the like) when the files it reads change.
 CHECK_TARGETS := lint typecheck test ontology
+HEAVY_TARGETS :=
 
 # Extra targets from repo-setup layers (architecture, governance, coverage...) live in mk/*.mk.
-# They append to CHECK_TARGETS / PYTEST_ARGS, so `make check` grows with the setup.
+# They append to CHECK_TARGETS / HEAVY_TARGETS / PYTEST_ARGS, so `make check` grows with the setup.
 -include mk/*.mk
 
 # Every check step, those layers added in mk/*.mk too, waits for `make derived` (mk/derived.mk).
 # `upgrade` runs first and `derived` waits for it, so it stays out of the list.
-$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) dev: | derived
+$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) $(HEAVY_TARGETS) dev: | derived
 
-.PHONY: help setup dev format lint typecheck test gen ontology check clean
+.PHONY: help setup dev format lint typecheck test gen ontology check check-quick check-heavy clean
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-10s %s\n", $$1, $$2}'
@@ -49,7 +52,12 @@ ontology: ## Check ontology/ + wiki/ consistency and generated code
 	$(PYTHON) tools/wiki_lint.py
 	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then $(LEDGERS_PYTHON) tools/ontology_codegen.py --lang python --out $(GEN_OUT) --check; fi
 
-check: $(CHECK_TARGETS) ## Everything CI runs
+check-quick: $(CHECK_TARGETS) ## The light tier: CI runs it on every push
+
+check-heavy: $(HEAVY_TARGETS) ## The heavy tier: CI runs it when the files it reads change
+	@$(if $(strip $(HEAVY_TARGETS)),:,echo "no heavy checks")
+
+check: check-quick check-heavy ## Everything CI runs: both tiers
 
 clean: ## Remove caches and build output
 	rm -rf .mypy_cache .ruff_cache .pytest_cache dist build

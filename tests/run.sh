@@ -761,7 +761,8 @@ for level in starter team; do
   # shadcn's destructive red fails 4.5:1 on its own 10% tint (badge, button); e2e pins it in the browser.
   grep -q -- '--destructive: oklch(0.48 0.2 27.325);' "$d/src/index.css" || miss "design: destructive token not darkened"
   grep -q '"vi-VN"' "$d/src/lib/format.ts" && grep -q '"VND"' "$d/src/lib/format.ts" || miss "design: locale"
-  grep -q 'CHECK_TARGETS += design-guards ui-floor' "$d/mk/design.mk" || miss "design: not in the gate"
+  grep -qx 'CHECK_TARGETS += design-guards' "$d/mk/design.mk" && grep -qx 'HEAVY_TARGETS += ui-floor' "$d/mk/design.mk" \
+    || miss "design: not in the gate"
   [ -f "$d/.mcp.json" ] && miss "design: must not add .mcp.json"
   # The measurement protocol cuts the capability at these exact lines.
   grep -qx ' *// design-floor:start' "$d/eslint.config.js" && grep -qx ' *// design-floor:end' "$d/eslint.config.js" \
@@ -957,7 +958,7 @@ d="$TMP/design-team"
 ( cd "$d" && node tools/design_guards.mjs --only gate >/dev/null 2>&1 ) || miss "design gate: red on a fresh repo"
 gate_red() { # <file> <line to add, or "" to drop design-guards from the gate> <expected text>
   cp "$d/$1" "$TMP/gate.bak"
-  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards /CHECK_TARGETS += /' "$d/$1"; fi
+  if [ -n "$2" ]; then printf '%s\n' "$2" >> "$d/$1"; else subst 's/^CHECK_TARGETS += design-guards$/CHECK_TARGETS +=/' "$d/$1"; fi
   cmp -s "$TMP/gate.bak" "$d/$1" && miss "design gate: mutation '$2' did not change $1"
   out=$(cd "$d" && node tools/design_guards.mjs --only gate 2>&1) && miss "design gate: stayed green with '$2' in $1"
   case "$out" in *"$3"*) ;; *) miss "design gate: '$2' in $1 went red for another reason: $out" ;; esac

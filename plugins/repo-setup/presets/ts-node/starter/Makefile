@@ -1,21 +1,24 @@
-# One-command tasks. CI runs `make check`; run it before every PR.
+# One-command tasks. `make check` is everything CI runs; run it before every PR.
 .DEFAULT_GOAL := help
 GEN_OUT := src/generated/ontology.ts
 GEN_LANG := ts
 PYTHON ?= python3
+# Two tiers. CI runs the light one (CHECK_TARGETS) on every push and the heavy one
+# (HEAVY_TARGETS, browser suites and the like) when the files it reads change.
 CHECK_TARGETS := lint typecheck test ontology
+HEAVY_TARGETS :=
 
 # Extra targets from repo-setup layers (architecture, governance...) live in mk/*.mk.
-# They append to CHECK_TARGETS, so `make check` grows with the setup.
+# They append to CHECK_TARGETS or HEAVY_TARGETS, so `make check` grows with the setup.
 # Check steps run quietly: a passing step prints only its tool's short result, a failing
 # step prints the tool's full report.
 -include mk/*.mk
 
 # Every check step, those layers added in mk/*.mk too, waits for `make derived` (mk/derived.mk).
 # `upgrade` runs first and `derived` waits for it, so it stays out of the list.
-$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) build dev: | derived
+$(filter-out upgrade derived-untracked derived,$(CHECK_TARGETS)) $(HEAVY_TARGETS) build dev: | derived
 
-.PHONY: help setup dev build format lint typecheck test gen ontology check clean
+.PHONY: help setup dev build format lint typecheck test gen ontology check check-quick check-heavy clean
 
 help: ## Show available commands
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-10s %s\n", $$1, $$2}'
@@ -49,8 +52,13 @@ ontology: ## Check ontology/ + wiki/ consistency and generated code
 	@python3 tools/wiki_lint.py
 	@if [ "$$($(LEDGERS_PYTHON) tools/ledgers.py shape gen --gen-out $(GEN_OUT))" = one-file ]; then python3 tools/ontology_codegen.py --lang ts --out $(GEN_OUT) --check; fi
 
-check: $(CHECK_TARGETS) ## Everything CI runs
-	@echo "make check passed: $(CHECK_TARGETS)"
+check-quick: $(CHECK_TARGETS) ## The light tier: CI runs it on every push
+
+check-heavy: $(HEAVY_TARGETS) ## The heavy tier: CI runs it when the files it reads change
+	@$(if $(strip $(HEAVY_TARGETS)),:,echo "no heavy checks")
+
+check: check-quick check-heavy ## Everything CI runs: both tiers
+	@echo "make check passed: $(strip $(CHECK_TARGETS) $(HEAVY_TARGETS))"
 
 clean: ## Remove build output
 	rm -rf dist coverage

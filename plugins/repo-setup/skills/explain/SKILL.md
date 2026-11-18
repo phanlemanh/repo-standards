@@ -33,7 +33,7 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `.nvmrc` / `.python-version` | Which runtime version this project uses |
 | linter / formatter | Spell-checker and auto-layout for code |
 | strict type checking | Catches "wrong kind of value" bugs before running |
-| CI (`.github/workflows/ci.yml`) | GitHub runs the checks on every push / PR |
+| CI (`.github/workflows/ci.yml`) | GitHub runs the quick checks on every push / PR, and the slow ones (browser tests) only when the files they read change; the `check` job is green only when both are |
 | pre-commit | The same checks, on your machine, before each commit |
 | gitleaks | Blocks passwords/API keys from being committed |
 | Dependabot | Opens small PRs to keep libraries up to date |
