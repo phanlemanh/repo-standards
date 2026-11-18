@@ -183,6 +183,67 @@ split notice. The following breaks, and only for what it names:
   delete it, then run `make derived`. A repository set up by this release has none.
 - A hand edit of a drawn file, or a drawn file put back in git (for example `git add -f`), is red: `draw` exits 1, `derived-untracked` is red.
 
+### Tiered CI (RS3)
+Design: `docs/superpowers/specs/2026-11-17-tiered-ci-design.md`. A pull request that is not ready to
+merge no longer pays for the heavy checks, and a push that changes nothing a heavy check reads
+reuses the last green heavy run. Not yet run on GitHub (see "Known gaps"). Measured before
+building, on `onehub-inventory`: 31 of 251 runs made while `gate` was red (12.4%) could have reused
+a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
+(`docs/reports/2026-11-18-heavy-reuse-measure.md`).
+
+**What is new**
+
+- `make check` is now `check-quick check-heavy`. A layer lists its slow steps in `HEAVY_TARGETS`
+  (the design capability puts `ui-floor` there) and everything else stays in `check-quick`.
+  `make check-heavy` prints `no heavy checks` when a repository has none. The ts-node, python and
+  claude-plugin Makefiles carry the targets.
+- The three `ci.yml` templates have three jobs: `quick` (every push), `heavy` (after `quick`, when
+  the pull request is ready for review, and always on main) and `check`, a summary cell that always
+  runs (`if: always()`). `tools/ci_verdict.py` holds the rule of the summary cell.
+- `heavy` is skipped when its input key matches an earlier green run. `tools/ci_inputs.py` hashes
+  the whole tree minus `HEAVY_NOT_INPUTS` (`docs/** wiki/** *.md _acceptance/**` in the templates).
+  A green run saves a cache entry `heavy-ok-<key>` holding the earlier run and commit; a later
+  push with the same key restores it, skips `heavy` and says which run it reuses. A pull request
+  that moves from draft to ready (`ready_for_review`) runs `heavy`.
+- `ui-floor` runs the screens a change reaches. On a pull request, `tools/ui_select.mjs` asks
+  design-assembly's `tools/design-assembly/affected.mjs --json` which screens are reached and runs
+  two Playwright lanes: the tests that name those screens, then the tests that name no screen. It
+  runs the full set when the command is missing, fails or says all, on main, locally, with
+  `UI_FULL=1`, and when no test names a reached screen. The heavy checkout uses `fetch-depth: 2`
+  and passes `UI_BASE`.
+- `tools/github_setup.py` warns when `heavy` or `e2e` is a required check: a skipped job counts as
+  green, so only `check` stands for them. It drops nothing.
+- This repository: `.github/workflows/test.yml` has `offline` and `validate` (light), `e2e` (heavy,
+  by input key with `HEAVY_NOT_INPUTS: "docs/** *.md"`, runs only the combinations the change
+  reaches through `tests/e2e_select.py`, every combination on main) and `check`. Section 49 of
+  `tests/run.sh` (`tests/tiered_ci.sh`, 49a to 49k) holds the tests.
+
+**What breaks on upgrade**
+
+- **`check` means the summary cell.** It is red unless both `quick` and `heavy` succeed. That
+  includes a draft pull request (red there means "not your turn yet") and a pull request whose
+  light tier is red. A repository that requires `check` keeps one required name; one that
+  required `quick` or `heavy` by name should require `check` instead.
+- **A repository that edited `ci.yml` in place** receives the new shape through the three-way
+  merge of the upgrade path. It may conflict; resolve to the three jobs.
+- **An `e2e` job a repository added itself** must move behind `quick` (as a heavy step, or as a
+  job with `needs: quick` that `check` waits for), or stop being a required check. `github_setup.py`
+  now says so.
+- **The new `mk/design.mk` needs `tools/ui_select.mjs`.** An old `npx playwright test` line kept
+  after a merge conflict makes the design gate red.
+- **`make check` prints `no heavy checks`** when the repository has none.
+- **The cache.** Each green heavy run leaves a tiny cache entry per input key.
+
+**Known gaps**
+
+- Not yet run on GitHub: the probe repository (`design-ci-probe`, six trials in section 8 of the
+  design) is not done, so cache scope, restore hits and save collisions are unverified. The
+  ruleset on `main` of this repository is still missing (section 9 of the design).
+- Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
+  it was green; the full run on main is the net.
+- Path-based selection can miss a break that comes through a path other than `extends`.
+- A narrowed e2e list skips the upgrade case (`UPGRADE=1` is not set by `test.yml`).
+
 ## 0.7.0 — 2026-11-17
 
 ### Upgrade path
