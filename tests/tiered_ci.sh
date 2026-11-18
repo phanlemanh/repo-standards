@@ -50,6 +50,16 @@ for f in sub/README.md docs.ts; do
 done
 [ "$(ci_rc "$ci_a" matches src/a.ts --not-inputs 'src/**')" = 1 ] || miss "ci_inputs: --not-inputs is not read by matches"
 [ "$(cd "$ci_a" && HEAVY_NOT_INPUTS='src/**' python3 "$ci_tools/ci_inputs.py" matches src/a.ts >/dev/null 2>&1; echo $?)" = 1 ] || miss "ci_inputs: HEAVY_NOT_INPUTS is not read when --not-inputs is absent"
+# the key does not depend on the folder it runs in or the --root it is given
+mkdir -p "$ci_a/deep/er"
+ci_k_root=$(ci_key "$ci_a")
+[ "$(ci_key "$ci_a/src")" = "$ci_k_root" ] || miss "ci_inputs: the key computed from a subfolder differs from the key from the root"
+[ "$(ci_key "$ci_a/deep/er")" = "$ci_k_root" ] || miss "ci_inputs: the key computed from an empty-ish subfolder differs from the key from the root"
+[ "$(ci_key "$ci_a/src" --root "$ci_a/src")" = "$ci_k_root" ] || miss "ci_inputs: --root pointing at a subfolder gives a different key"
+[ "$(ci_key "$ci_a" --root src)" = "$ci_k_root" ] || miss "ci_inputs: --root src gives a different key"
+ci_put "$ci_a" sub/README.md three; ci_commit "$ci_a" "edit sub"
+[ "$(ci_key "$ci_a/src")" != "$ci_k_root" ] || miss "ci_inputs: an edit outside the subfolder leaves the key computed from it unchanged"
+[ "$(ci_rc "$ci_a" key --rev no-such-rev)" = 2 ] || miss "ci_inputs: a revision that does not resolve does not exit 2"
 [ "$(ci_rc "$ci_a" nonsense)" = 2 ] || miss "ci_inputs: a wrong call does not exit 2"
 
 # 49b. a path with spaces and non-ASCII letters: a stable key, and the file counts

@@ -7,9 +7,10 @@ can ask "has anything the heavy tier reads changed since a green run?" without a
   python3 tools/ci_inputs.py key [--rev REV] [--not-inputs "<pattern> ..."] [--root DIR]
   python3 tools/ci_inputs.py matches <path> [--not-inputs "<pattern> ..."]
 
-`key` prints `sha256:<hex>`, computed from `git ls-tree -r -z REV`: the path, the mode and type
-and the blob id of every file that no pattern matches, sorted by path. `matches` exits 0 when the
-file is an input and 1 when it is not.
+`key` prints `sha256:<hex>`, computed from `git ls-tree -r -z --full-tree REV`: the whole tree,
+with paths from the repository root whichever folder the tool runs in. It hashes the path, the
+mode and type and the blob id of every file that no pattern matches, sorted by path. `matches`
+exits 0 when the file is an input and 1 when it is not.
 
 The patterns are the files that are NOT inputs, separated by spaces. Without --not-inputs they
 come from the environment variable HEAVY_NOT_INPUTS, and without that from DEFAULT_NOT_INPUTS.
@@ -17,7 +18,8 @@ come from the environment variable HEAVY_NOT_INPUTS, and without that from DEFAU
   - A pattern without `/` matches a file at the root only: `*.md` is `README.md`, not `docs/x.md`.
   - A pattern with `/` matches the full path; `**` matches any number of directory levels.
 
-Exit codes: 0 done, 1 git could not read the revision, 2 wrong usage.
+Exit codes: 0 done, 2 wrong call (a revision that does not resolve, not a repository, bad
+arguments), 1 git could not be run.
 
 Only the Python standard library is used.
 """
@@ -77,14 +79,14 @@ def split_patterns(text: str) -> list[str]:
 def list_tree(root: Path, rev: str) -> list[tuple[str, str, str]]:
     """(path, "mode type", blob id) of every file at REV; paths come NUL-separated, never quoted."""
     done = subprocess.run(  # noqa: S603
-        ["git", "ls-tree", "-r", "-z", rev],  # noqa: S607
+        ["git", "ls-tree", "-r", "-z", "--full-tree", rev],  # noqa: S607
         cwd=root,
         capture_output=True,
         check=False,
     )
     if done.returncode != 0:
         detail = done.stderr.decode("utf-8", "replace").strip()
-        raise RuntimeError(f"git ls-tree -r -z {rev} failed: {detail}")
+        raise RuntimeError(f"git ls-tree -r -z --full-tree {rev} failed: {detail}")
     entries: list[tuple[str, str, str]] = []
     for record in done.stdout.split(b"\0"):
         if not record:
@@ -137,7 +139,10 @@ def main(argv: list[str]) -> int:
         return 1 if is_not_input(args.path, patterns) else 0
     try:
         print(input_key(Path(args.root), args.rev, patterns))
-    except (RuntimeError, OSError) as err:
+    except RuntimeError as err:
+        print(err, file=sys.stderr)
+        return 2
+    except OSError as err:
         print(err, file=sys.stderr)
         return 1
     return 0
