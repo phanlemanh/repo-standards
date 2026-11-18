@@ -409,4 +409,89 @@ PY2
   (cd "$up10" && make upgrade >/dev/null 2>&1) && miss "upgrade: an opening marker indented by a formatter is not seen"
 fi
 
+# 47m. found on design-ci-probe (0.7.0 -> 0.8.0): the release added "prepare" as the last script,
+# and `npm install` had written devDependencies right after the scripts block. The two changes
+# touch, so a line merge marked package.json. package.json is merged by key: both sides are kept.
+pj="$TMP/pj-arch"; mkdir -p "$pj"
+cp -R "$PLUGIN" "$pj/repo-setup-v0.0.1"; find "$pj/repo-setup-v0.0.1" -name __pycache__ -prune -exec rm -rf {} +
+subst 's/"version": "[^"]*"/"version": "0.0.1"/' "$pj/repo-setup-v0.0.1/.claude-plugin/plugin.json"
+for preset in ts-node react-vite; do   # the template before "prepare", as 0.7.0 had it
+  python3 - "$pj/repo-setup-v0.0.1/presets/$preset/starter/package.json.tmpl" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+old = re.sub(r',\n    "prepare": [^\n]*\n', "\n", t)
+assert old != t, "no prepare line to drop"
+p.write_text(old)
+PY
+done
+# npm_install <repo>: what `npm install --save-dev` does to package.json (JSON.stringify, two spaces)
+npm_install() {
+  python3 - "$1/package.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1]); d = json.loads(p.read_text())
+d["devDependencies"] = {"typescript": "^5.9.3", "vitest": "^4.0.8"}
+p.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+PY
+}
+for preset in ts-node react-vite; do
+  r="$TMP/pj-$preset"; mkdir -p "$r"; git -C "$r" init -q -b main
+  python3 "$pj/repo-setup-v0.0.1/scripts/apply.py" --target "$r" --preset "$preset" --level starter \
+    --var project_name=Up --var description=x --var owner=acme >/dev/null
+  grep -q '"prepare"' "$r/package.json" && miss "package.json upgrade ($preset): the stand-in old release already has prepare"
+  npm_install "$r"
+  up_apply "$S/apply.py" "$r" --base-from "$pj" >/dev/null
+  [ "$(cat "$r.rc")" = 0 ] || miss "package.json upgrade ($preset): apply.py exits $(cat "$r.rc") ($(cat "$r.err" | tail -1))"
+  in_group "$r" marked package.json && miss "package.json upgrade ($preset): package.json is marked after npm install wrote devDependencies"
+  in_group "$r" merged package.json || miss "package.json upgrade ($preset): package.json is not in merged"
+  grep -q '<<<<<<<' "$r/package.json" && miss "package.json upgrade ($preset): conflict markers in package.json"
+  python3 - "$r/package.json" <<'PY' || miss "package.json upgrade ($preset): the merged file lost a side or its order"
+import json, pathlib, sys
+t = pathlib.Path(sys.argv[1]).read_text(); d = json.loads(t)
+assert d["scripts"]["prepare"].startswith("command -v make"), "no prepare"
+assert d["devDependencies"] == {"typescript": "^5.9.3", "vitest": "^4.0.8"}, "devDependencies lost"
+assert list(d)[-2:] == ["scripts", "devDependencies"], list(d)
+assert list(d["scripts"])[-1] == "prepare", list(d["scripts"])
+assert t == json.dumps(d, indent=2, ensure_ascii=False) + "\n", "not written the way npm writes it"
+PY
+done
+# Where a key merge cannot keep both sides, the line merge and its markers stay: the same script
+# changed two ways, a file not written the way npm writes it, and a file with no base to read.
+pj_case() {
+  python3 - "$S" "$1" <<'PY'
+import json, sys
+sys.path.insert(0, sys.argv[1]); import upgrade_merge as um
+dump = lambda d: (json.dumps(d, indent=2) + "\n").encode()
+base = {"name": "p", "scripts": {"test": "vitest run"}}
+new = {"name": "p", "scripts": {"test": "vitest run", "prepare": "make -s derived"}}
+ours = {"name": "p", "scripts": {"test": "vitest run"}, "devDependencies": {"vitest": "^4"}}
+case = sys.argv[2]
+if case == "clean":
+    group, out, _ = um.reconcile(dump(ours), dump(new), dump(base), "0.0.1", "0.0.2", by_key=True)
+    ok = group == "merged" and json.loads(out) == {**ours, "scripts": new["scripts"]}
+elif case == "crlf":
+    crlf = lambda b: b.replace(b"\n", b"\r\n")
+    group, out, _ = um.reconcile(crlf(dump(ours)), dump(new), dump(base), "0.0.1", "0.0.2", by_key=True)
+    ok = group == "merged" and b"\r\n" in out and out.count(b"\n") == out.count(b"\r\n")
+elif case == "same-key":
+    mine = {**ours, "scripts": {"test": "vitest run --coverage"}}
+    theirs = {**new, "scripts": {"test": "vitest", "prepare": "make -s derived"}}
+    group, out, _ = um.reconcile(dump(mine), dump(theirs), dump(base), "0.0.1", "0.0.2", by_key=True)
+    ok = group == "marked" and b"<<<<<<<" in out
+elif case == "hand-formatted":
+    text = dump(ours).replace(b'{\n    "vitest": "^4"\n  }', b'{ "vitest": "^4" }')
+    group, out, _ = um.reconcile(text, dump(new), dump(base), "0.0.1", "0.0.2", by_key=True)
+    ok = group == "marked" and b"<<<<<<<" in out
+elif case == "no-base":
+    group, out, _ = um.reconcile(dump(ours), dump(new), None, None, "0.0.2", by_key=True)
+    ok = group == "marked"
+elif case == "not-asked":
+    group, out, _ = um.reconcile(dump(ours), dump(new), dump(base), "0.0.1", "0.0.2")
+    ok = group == "marked"
+print(case, ok)
+PY
+}
+for c in clean crlf same-key hand-formatted no-base not-asked; do
+  pj_case "$c" | grep -qx "$c True" || miss "package.json upgrade: key merge case '$c' is wrong ($(pj_case "$c" 2>&1 | tail -1))"
+done
+
 echo "ok  upgrade path (or misses reported above)"
