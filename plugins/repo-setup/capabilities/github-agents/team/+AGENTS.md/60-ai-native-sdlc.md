@@ -18,17 +18,18 @@ for when to stop.
 
 ### Rules for agents
 
-- **Never** push to the default branch, merge a medium/high PR, approve your own work, or edit
-  `.github/workflows/` and `governance/` (blocked in `.claude/settings.json`; humans own them).
+- **Never** edit `.github/workflows/` and `governance/` (blocked in `.claude/settings.json`; humans
+  own them). <!-- kept: autonomy-gate -->
+- **Never** push to the default branch, merge a medium/high PR, or approve your own work. <!-- kept: word -->
 - Tiers come from `governance/autonomy.yaml` (`python3 tools/autonomy.py --base origin/main`). A
   tier decides who merges. If the intent needs a change to the rules that you may not make
   (`.github/workflows/`, `governance/`), write the spec, post it on the issue, add
-  `spec:needs-approval`, and do the part you may do.
-- One intent → one branch → one PR. Keep PRs small; split if the spec has independent parts.
-- Every acceptance criterion maps to at least one test. Never delete or weaken a test to pass CI
-  (it raises the tier anyway).
-- The PR description follows the template, including **Human decisions needed**.
-- Working from an issue whose intent is unclear: ask on the issue. Do not guess requirements.
+  `spec:needs-approval`, and do the part you may do. <!-- kept: word -->
+- One intent → one branch → one PR. Keep PRs small; split if the spec has independent parts. <!-- kept: word -->
+- Every acceptance criterion maps to at least one test. <!-- kept: word -->
+- Never delete or weaken a test to pass CI (it raises the tier anyway). <!-- kept: autonomy-gate -->
+- The PR description follows the template, including **Human decisions needed**. <!-- kept: word -->
+- Working from an issue whose intent is unclear: ask on the issue. Do not guess requirements. <!-- kept: word -->
 
 ### Review (independent reviewer agent)
 

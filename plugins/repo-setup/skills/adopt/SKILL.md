@@ -57,7 +57,9 @@ Do these by hand, one at a time, each with the user's OK, and keep the repo's to
 - **CI**: if the repo has its own workflow, add `make check` (or the missing steps) to it
   instead of a second pipeline.
 - **AGENTS.md / CLAUDE.md**: if one already exists, merge the preset's sections
-  (commands, rules, after-a-task) into it instead of replacing it.
+  (commands, rules, after-a-task) into it instead of replacing it. Take them from the `AGENTS.md`
+  that `apply.py --dry-run --diff` shows, never from the plugin's template fragments: those carry
+  the plugin's own `<!-- kept: … -->` marks, which must not reach a repository.
 
 ## 4b. Decisions
 

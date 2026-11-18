@@ -6,46 +6,48 @@ Stack: {{stack}}
 
 ## Commands (always use these, never ad-hoc tool invocations)
 
-- `make setup` — check that the tools this repo needs are present (nothing is installed)
-- `make lint` — check the marketplace and plugin manifests (`tools/plugin_lint.py`)
-- `make test` — run the tests (`tests/run.sh`)
-- `make check` — everything CI runs offline. **Run it before you say a task is done.**
-- `make validate` — the official Claude Code validator (needs network; CI runs it)
-- `make bump V=patch|minor|major` — set the next version in every manifest and the changelog
+- `make setup` — check that the tools this repo needs are present (nothing is installed) <!-- kept: none -->
+- `make lint` — check the marketplace and plugin manifests (`tools/plugin_lint.py`) <!-- kept: none -->
+- `make test` — run the tests (`tests/run.sh`) <!-- kept: none -->
+- `make check` — everything CI runs offline. **Run it before you say a task is done.** <!-- kept: word -->
+- `make validate` — the official Claude Code validator (needs network; CI runs it) <!-- kept: none -->
+- `make bump V=patch|minor|major` — set the next version in every manifest and the changelog <!-- kept: none -->
 
 ## Before you change a plugin
 
-1. Read `.claude-plugin/marketplace.json` to see which plugins exist and where they live.
-2. Read the plugin's own `README.md` and the skill, command or hook you are about to change.
-3. Try the result from this checkout: `claude --plugin-dir plugins/<name>`.
+1. Read `.claude-plugin/marketplace.json` to see which plugins exist and where they live. <!-- kept: none -->
+2. Read the plugin's own `README.md` and the skill, command or hook you are about to change. <!-- kept: none -->
+3. Try the result from this checkout: `claude --plugin-dir plugins/<name>`. <!-- kept: none -->
 
 ## Rules
 
-- One folder per plugin under `plugins/<name>/`, each with `.claude-plugin/plugin.json`. A plugin's
-  `source` in the marketplace is never the repository root: an install copies the whole source folder.
-- A skill is `skills/<name>/SKILL.md`, and `name` in its front matter equals the folder name.
+- One folder per plugin under `plugins/<name>/`, each with `.claude-plugin/plugin.json`. <!-- kept: word -->
+- A plugin's `source` in the marketplace is never the repository root: an install copies the whole
+  source folder. <!-- kept: plugin-lint -->
+- A skill is `skills/<name>/SKILL.md`, and `name` in its front matter equals the folder name. <!-- kept: word -->
 - Keep every `description` short (at most 1024 characters): it says what the plugin or skill is for
-  and when to use it. Release notes go in `CHANGELOG.md`, never in a description.
-- Never edit a version by hand. `make bump` changes every manifest together.
+  and when to use it. Release notes go in `CHANGELOG.md`, never in a description. <!-- kept: word -->
+- Never edit a version by hand. `make bump` changes every manifest together. <!-- kept: word -->
 - Scripts and hooks run on other people's machines: standard library only, no network call and no
-  write outside the project unless the skill says so and the user can see it.
-- Every behaviour change comes with a test and a line under "Unreleased" in `CHANGELOG.md`.
-- Never commit secrets or `.env`.
-- Keep changes small and focused; one concern per PR.
-- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+  write outside the project unless the skill says so and the user can see it. <!-- kept: word -->
+- Every behaviour change comes with a test and a line under "Unreleased" in `CHANGELOG.md`. <!-- kept: word -->
+- Never commit secrets. <!-- kept: secret-scan -->
+- Never commit `.env`. <!-- kept: word -->
+- Keep changes small and focused; one concern per PR. <!-- kept: word -->
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). <!-- kept: commit-format -->
 
 ## After you finish a task
 
-- `make check` is green.
-- `CHANGELOG.md` has a line for the change, written for the people who install the plugin.
+- `make check` is green. <!-- kept: word -->
+- `CHANGELOG.md` has a line for the change, written for the people who install the plugin. <!-- kept: word -->
 - A significant choice (a new plugin, a changed contract between plugins, a dropped feature) gets a
-  short record in `docs/decisions/NNNN-title.md`: context, decision, consequences.
+  short record in `docs/decisions/NNNN-title.md`: context, decision, consequences. <!-- kept: word -->
 
 ## Project map
 
-- `.claude-plugin/marketplace.json` — the list of plugins this repository offers
-- `plugins/<name>/` — one plugin: manifest, skills, and its own README
-- `tests/` — offline tests
-- `tools/` — manifest lint and version bump (run through `make`)
-- `docs/decisions/` — decision records, when there are any
-- `.claude/skills/` — procedures for agents working on this repository (independent review)
+- `.claude-plugin/marketplace.json` — the list of plugins this repository offers <!-- kept: none -->
+- `plugins/<name>/` — one plugin: manifest, skills, and its own README <!-- kept: none -->
+- `tests/` — offline tests <!-- kept: none -->
+- `tools/` — manifest lint and version bump (run through `make`) <!-- kept: none -->
+- `docs/decisions/` — decision records, when there are any <!-- kept: none -->
+- `.claude/skills/` — procedures for agents working on this repository (independent review) <!-- kept: none -->
