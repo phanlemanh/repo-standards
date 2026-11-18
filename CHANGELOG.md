@@ -34,7 +34,8 @@ merged. A repository that already resolved the markers by hand has nothing to re
 ### Tiered CI (RS3)
 Design: `docs/superpowers/specs/2026-11-17-tiered-ci-design.md`. A pull request that is not ready to
 merge no longer pays for the heavy checks, and a push that changes nothing a heavy check reads
-reuses the last green heavy run. Not yet run on GitHub (see "Known gaps"). Measured before
+reuses the last green heavy run. Tried on the probe repository: the six trials passed (see
+"Known gaps" for what they did not cover). Measured before
 building, on `onehub-inventory`: 31 of 251 runs made while `gate` was red (12.4%) could have reused
 a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
 (`docs/reports/2026-11-18-heavy-reuse-measure.md`).
@@ -94,8 +95,9 @@ a green heavy tier, 1,071 of 8,150 heavy minutes in those runs
 
 **Known gaps**
 
-- Not yet run on GitHub: the probe repository (`design-ci-probe`, six trials in section 8 of the
-  design) is not done, so cache scope, restore hits and save collisions are unverified. The
+- Run on the probe repository (`design-ci-probe`, the six trials in section 8 of the design, all
+  passed): a pull request restores a key it saved, and a cancelled run saves none. Not yet seen:
+  two runs saving the same key, and a pull request reusing a key saved on the main branch. The
   ruleset on `main` of this repository is still missing (section 9 of the design).
 - Reuse assumes a test gives the same result on the same inputs. A flaky test can be reused once
   it was green; the full run on main is the net.
