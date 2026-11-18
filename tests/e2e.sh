@@ -172,16 +172,18 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
   echo "ok  $spec"
 done
 
-# Upgrade from the previous release (docs/superpowers/specs/2026-11-17-upgrade-path-design.md):
-# build a repository with the last tagged release, edit two files in place, upgrade with this
-# tree. The fresh installs above never take this path. The base is downloaded, as a user's is.
+# Upgrade from an earlier release (docs/superpowers/specs/2026-11-17-upgrade-path-design.md):
+# build a repository with a tagged release, edit two files in place, upgrade with this tree. The
+# fresh installs above never take this path. The base is downloaded, as a user's is.
 # It runs with the default list; UPGRADE=1 runs it also when PRESETS narrows the list above.
-if [ -z "${PRESETS:-}" ] || [ -n "${UPGRADE:-}" ]; then
-  # The newest release, read the way apply.py reads it (git ls-remote): CI checks out one commit
-  # and no tags, so `git describe` finds none.
-  tag=$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import upgrade_base; print(upgrade_base.TAG_PREFIX + upgrade_base.released_versions(None)[0])" "$ROOT/plugins/repo-setup/scripts")
-  prev="$TMP/prev"; mkdir -p "$prev"
-  python3 - "$tag" "$prev" <<'PY'
+#   python, from the newest release.
+#   ts-node, from UPGRADE_NODE_FROM (default repo-setup-v0.7.0, the last release before its
+#   package.json template changed), with that release's real install run before the upgrade:
+#   npm writes devDependencies right after `scripts`, where the template adds its line too
+#   (found on design-ci-probe, 0.7.0 -> 0.8.0: package.json came out marked).
+# fetch_release <tag> <dir>: the release's tree, as GitHub serves it
+fetch_release() {
+  python3 - "$1" "$2" <<'PY'
 import io, sys, tarfile, urllib.request
 tag, dest = sys.argv[1], sys.argv[2]
 url = f"https://codeload.github.com/phanlemanh/repo-standards/tar.gz/refs/tags/{tag}"
@@ -189,42 +191,72 @@ data = urllib.request.urlopen(url, timeout=60).read()
 with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
     tar.extractall(dest, filter="data")
 PY
-  old_apply=$(find "$prev" -path '*/plugins/repo-setup/scripts/apply.py' | head -1)
+}
+# run_install <label> <apply --json output>: its install commands, pre-commit left out
+run_install() {
+  local c
+  while IFS= read -r c; do
+    case "$c" in "") continue ;; *"pre-commit install"*) continue ;; esac
+    echo "[$1] \$ $c"; bash -c "$c" >/dev/null </dev/null
+  done < <(python3 -c 'import json,sys;[print(c) for c in json.loads(sys.argv[1])["next_commands"]["install"]]' "$2")
+}
+# upgrade_case <preset> <tag> <codegen lang> <install first: yes|no>
+upgrade_case() {
+  local preset="$1" tag="$2" lang="$3" install_first="$4"
+  local prev="$TMP/prev-$tag" label="upgrade-$preset-from-$tag"
+  [ -d "$prev" ] || { mkdir -p "$prev"; fetch_release "$tag" "$prev"; }
+  local old_apply; old_apply=$(find "$prev" -path '*/plugins/repo-setup/scripts/apply.py' | head -1)
   [ -n "$old_apply" ] || { echo "FAIL: $tag has no apply.py"; exit 1; }
-  d="$TMP/upgrade-from-$tag"; mkdir -p "$d"; cd "$d"; git init -q -b main
-  python3 "$old_apply" --preset python --level team --var "project_name=Coffee Shop" \
-    --var "description=E2E upgrade" --var owner=acme >/dev/null
-  # What a repository of that release looks like: the three ledgers and the generated code are
-  # hand-kept files in git (the release has no fragments).
+  local d="$TMP/$label"; mkdir -p "$d"; cd "$d"; git init -q -b main
+  local old_out; old_out=$(python3 "$old_apply" --preset "$preset" --level team --var "project_name=Coffee Shop" \
+    --var "description=E2E upgrade" --var owner=acme --json)
+  [ "$install_first" = yes ] && run_install "$label (before)" "$old_out"
   gen_out=$(sed -n 's/^GEN_OUT := //p' Makefile | sed "s/\$(PKG)/$(sed -n 's/^PKG := //p' Makefile)/")
-  mkdir -p "$(dirname "$gen_out")"
-  python3 tools/ontology_codegen.py --lang python --out "$gen_out" >/dev/null
-  git add -f -A; git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: base from $tag"
+  # A release from before ledgers-as-fragments (0.8.0) has no mk/derived.mk: there the three
+  # ledgers and the generated code are hand-kept files in git. A later release keeps them out.
+  local one_file=no
+  if [ ! -f mk/derived.mk ]; then
+    one_file=yes
+    mkdir -p "$(dirname "$gen_out")"
+    python3 tools/ontology_codegen.py --lang "$lang" --out "$gen_out" >/dev/null
+    git add -f -A
+  else
+    git add -A
+  fi
+  git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: base from $tag"
   printf '# kept by the repository\n' | cat - .editorconfig > x && mv x .editorconfig
   echo "Kept by the repository." >> README.md
   rc=0; out=$(python3 "$S/apply.py" --json) || rc=$?
   field() { python3 -c "import json,sys; print(json.dumps(json.loads(sys.argv[1])[sys.argv[2]]))" "$out" "$1"; }
-  [ "$(field base_unread)" = "[]" ] || { echo "FAIL: upgrade from $tag could not read a base: $(field base_reasons)"; exit 1; }
-  grep -q '^# kept by the repository' .editorconfig || { echo "FAIL: upgrade from $tag lost an edit in .editorconfig"; exit 1; }
-  grep -q '^Kept by the repository.' README.md || { echo "FAIL: upgrade from $tag lost an edit in README.md"; exit 1; }
-  install=$(python3 -c 'import json,sys;[print(c) for c in json.loads(sys.argv[1])["next_commands"]["install"]]' "$out")
-  while IFS= read -r c; do
-    case "$c" in "") continue ;; *"pre-commit install"*) continue ;; esac
-    echo "[upgrade-from-$tag] \$ $c"; bash -c "$c" >/dev/null </dev/null
-  done <<<"$install"
+  [ "$(field base_unread)" = "[]" ] || { echo "FAIL: $label could not read a base: $(field base_reasons)"; exit 1; }
+  grep -q '^# kept by the repository' .editorconfig || { echo "FAIL: $label lost an edit in .editorconfig"; exit 1; }
+  grep -q '^Kept by the repository.' README.md || { echo "FAIL: $label lost an edit in README.md"; exit 1; }
+  if [ "$install_first" = yes ]; then
+    case "$(field marked)" in *'"package.json"'*) echo "FAIL: $label marked package.json after npm install"; exit 1 ;; esac
+    grep -q '"prepare"' package.json || { echo "FAIL: $label did not bring the prepare script into package.json"; exit 1; }
+    python3 -c "import json,sys; d=json.load(open('package.json')); sys.exit(0 if d.get('devDependencies') else 1)" \
+      || { echo "FAIL: $label lost the devDependencies npm wrote"; exit 1; }
+  fi
+  run_install "$label" "$out"
   git add -A
   marked=$(field marked)
-  if [ "$marked" = "[]" ]; then
-    [ "$rc" = 0 ] || { echo "FAIL: upgrade from $tag ended with $rc and nothing marked"; exit 1; }
-    make check >/dev/null || { echo "FAIL: make check is red after the upgrade from $tag"; exit 1; }
+  if [ "$marked" = "[]" ] && [ "$one_file" = no ]; then
+    [ "$rc" = 0 ] || { echo "FAIL: $label ended with $rc and nothing marked"; exit 1; }
+    make check >/dev/null || { echo "FAIL: make check is red after $label"; exit 1; }
+    for l in log index glossary; do
+      [ "$(python3 tools/ledgers.py shape $l)" = fragments ] || { echo "FAIL: shape $l is not fragments after $label"; exit 1; }
+    done
+  elif [ "$marked" = "[]" ]; then
+    [ "$rc" = 0 ] || { echo "FAIL: $label ended with $rc and nothing marked"; exit 1; }
+    make check >/dev/null || { echo "FAIL: make check is red after $label"; exit 1; }
     # The upgrade created no fragment and moved nothing: the four ledgers are still one file each.
     for l in log index glossary; do
-      [ "$(python3 tools/ledgers.py shape $l)" = one-file ] || { echo "FAIL: shape $l is not one-file after the upgrade from $tag"; exit 1; }
+      [ "$(python3 tools/ledgers.py shape $l)" = one-file ] || { echo "FAIL: shape $l is not one-file after $label"; exit 1; }
     done
-    [ "$(python3 tools/ledgers.py shape gen --gen-out "$gen_out")" = one-file ] || { echo "FAIL: shape gen is not one-file after the upgrade from $tag"; exit 1; }
+    [ "$(python3 tools/ledgers.py shape gen --gen-out "$gen_out")" = one-file ] || { echo "FAIL: shape gen is not one-file after $label"; exit 1; }
     # Then the owner splits them, one at a time, and a clean clone still passes make check.
     for l in log index glossary gen; do
-      make split L=$l >/dev/null || { echo "FAIL: make split L=$l failed after the upgrade from $tag"; exit 1; }
+      make split L=$l >/dev/null || { echo "FAIL: make split L=$l failed after $label"; exit 1; }
     done
     for l in log index glossary; do
       [ "$(python3 tools/ledgers.py shape $l)" = fragments ] || { echo "FAIL: shape $l is not fragments after its split"; exit 1; }
@@ -233,19 +265,23 @@ PY
     git add -A; git -c user.name=e2e -c user.email=e2e@example.com commit -qm "feat: split the ledgers"
     drawn=$(git ls-files | grep -xE "wiki/log.md|wiki/index.md|ontology/glossary.md|$gen_out" || true)
     [ -z "$drawn" ] || { echo "FAIL: git ls-files lists drawn files after the splits: $drawn"; exit 1; }
-    git clone -q "$d" "$TMP/upgrade-clone"; ( cd "$TMP/upgrade-clone"
-      while IFS= read -r c; do
-        case "$c" in "") continue ;; *"pre-commit install"*) continue ;; esac
-        bash -c "$c" >/dev/null </dev/null
-      done <<<"$install"
+    git clone -q "$d" "$TMP/$label-clone"; ( cd "$TMP/$label-clone"
+      run_install "$label (clone)" "$out" >/dev/null
       make check >/dev/null ) || { echo "FAIL: make check is red on a fresh clone after the splits"; exit 1; }
-    echo "ok  split all four ledgers after the upgrade from $tag"
+    echo "ok  split all four ledgers after $label"
   else
-    [ "$rc" = 1 ] || { echo "FAIL: upgrade from $tag marked $marked but ended with $rc"; exit 1; }
+    [ "$rc" = 1 ] || { echo "FAIL: $label marked $marked but ended with $rc"; exit 1; }
     wall=$(make upgrade 2>&1) && { echo "FAIL: make upgrade is green with $marked marked"; exit 1; }
     first=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])[0])" "$marked")
     grep -qF "$first:" <<<"$wall" || { echo "FAIL: make upgrade does not name $first"; exit 1; }
   fi
-  echo "ok  upgrade from $tag (marked: $marked)"
+  echo "ok  $label (marked: $marked)"
+}
+if [ -z "${PRESETS:-}" ] || [ -n "${UPGRADE:-}" ]; then
+  # The newest release, read the way apply.py reads it (git ls-remote): CI checks out one commit
+  # and no tags, so `git describe` finds none.
+  tag=$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import upgrade_base; print(upgrade_base.TAG_PREFIX + upgrade_base.released_versions(None)[0])" "$ROOT/plugins/repo-setup/scripts")
+  upgrade_case python "$tag" python no
+  upgrade_case ts-node "${UPGRADE_NODE_FROM:-repo-setup-v0.7.0}" ts yes
 fi
 echo "E2E passed."

@@ -4,11 +4,16 @@
 labelled so the reader knows which side is which; `tools/upgrade_markers.py` keeps `make check`
 red until they are gone. An empty base is a two-way merge: everything that differs is marked.
 
+package.json is merged key by key where the line merge meets: npm writes the keys it adds right
+after the last block, so a line the template adds at the end of `scripts` always touches them.
+
 Only the Python standard library and git are used (Python 3.11+).
 """
 
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -16,6 +21,7 @@ from pathlib import Path
 OURS_LABEL = "this repository"
 NO_BASE_LABEL = "repo-setup: no matching base"
 MERGE_TIMEOUT = 60  # seconds
+KEY_MERGED_NAMES = frozenset({"package.json"})
 
 
 class MergeUnavailable(Exception):
@@ -52,6 +58,79 @@ def three_way(
     return proc.stdout, proc.returncode == 0
 
 
+class _KeyConflict(Exception):
+    """Both sides changed the same key, differently."""
+
+
+_MISSING = object()  # a key one side does not have
+_INDENT = re.compile(r"\A\{\n([ \t]+)\"")
+
+
+def _merge_value(ours: object, base: object, theirs: object) -> object:
+    if theirs == base:
+        return ours
+    if ours == base or ours == theirs:
+        return theirs
+    if all(isinstance(v, dict) for v in (ours, base, theirs)):
+        return _merge_object(ours, base, theirs)  # type: ignore[arg-type]
+    raise _KeyConflict
+
+
+def _merge_object(ours: dict, base: dict, theirs: dict) -> dict:
+    """This repository's keys in its order; a key only the template adds goes after the key that
+    comes before it in the template (first when none does)."""
+    items = [
+        (key, value)
+        for key, value in (
+            (k, _merge_value(v, base.get(k, _MISSING), theirs.get(k, _MISSING)))
+            for k, v in ours.items()
+        )
+        if value is not _MISSING
+    ]
+    anchor = None
+    for key, value in theirs.items():
+        if key not in ours:
+            merged = _merge_value(_MISSING, base.get(key, _MISSING), value)
+            if merged is _MISSING:
+                continue
+            keys = [k for k, _ in items]
+            items.insert(0 if anchor is None else keys.index(anchor) + 1, (key, merged))
+        if any(k == key for k, _ in items):
+            anchor = key
+    return dict(items)
+
+
+def _as_npm_writes(data: dict, indent: str, newline: bool) -> str:
+    """What npm (JSON.stringify with the file's own indent) writes for `data`."""
+    return json.dumps(data, indent=indent, ensure_ascii=False) + ("\n" if newline else "")
+
+
+def merge_by_key(current: bytes, base: bytes, new: bytes) -> bytes | None:
+    """A three-way merge of a JSON object key by key, or None when it cannot be one.
+
+    None when a side is not a JSON object, when both sides changed one key differently, or when
+    this repository's file is not written the way npm writes package.json: the merge writes the
+    whole file again, and a file someone formatted by hand must not be reformatted."""
+    crlf = _is_crlf(current)
+    try:
+        text = current.decode("utf-8").replace("\r\n", "\n")
+        ours, old, theirs = (json.loads(t) for t in (text, base.decode("utf-8"), new.decode("utf-8")))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    indent = _INDENT.match(text)
+    if not all(isinstance(v, dict) for v in (ours, old, theirs)) or indent is None:
+        return None
+    newline = text.endswith("\n")
+    if _as_npm_writes(ours, indent.group(1), newline) != text:
+        return None
+    try:
+        merged = _merge_object(ours, old, theirs)
+    except _KeyConflict:
+        return None
+    out = _as_npm_writes(merged, indent.group(1), newline).encode("utf-8")
+    return _crlf(out) if crlf else out
+
+
 def _is_crlf(data: bytes) -> bool:
     return b"\r\n" in data and data.count(b"\n") == data.count(b"\r\n")
 
@@ -60,25 +139,42 @@ def _crlf(data: bytes) -> bytes:
     return data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
 
 
+def merges_by_key(path: str) -> bool:
+    """package.json: npm writes it again on every install, and puts the keys it adds right after
+    the last block, where the template adds its own lines too."""
+    return Path(path).name in KEY_MERGED_NAMES
+
+
 def reconcile(
-    current: bytes, new: bytes, base: bytes | None, base_version: str | None, new_version: str
+    current: bytes,
+    new: bytes,
+    base: bytes | None,
+    base_version: str | None,
+    new_version: str,
+    by_key: bool = False,
 ) -> tuple[str, bytes | None, str]:
     """What to do with a file the repository edited in place, now that the template is `new`.
 
     `base` is what the plugin wrote last time (None when no release gives it: the merge is then
     two-way). Returns (group, content to write or None, reason): `edited` (nothing to do),
     `merged`, `marked` (written with conflict markers) or `base_unread` (git could not merge).
-    A repository whose file ends its lines with CRLF keeps them."""
+    A repository whose file ends its lines with CRLF keeps them. With `by_key`, a JSON object
+    whose line merge meets is merged key by key when that keeps both sides (`merge_by_key`)."""
     if base is not None and base == new:
         return "edited", None, ""
     base_bytes = base if base is not None else b""
     base_label = release_label(base_version) if base is not None and base_version else NO_BASE_LABEL
+    template = new
     if _is_crlf(current):
         base_bytes, new = _crlf(base_bytes), _crlf(new)
     try:
         merged, clean = three_way(current, base_bytes, new, base_label, release_label(new_version))
     except MergeUnavailable as exc:
         return "base_unread", None, str(exc)
+    if not clean and by_key and base is not None:
+        keyed = merge_by_key(current, base, template)
+        if keyed is not None:
+            merged, clean = keyed, True
     if not clean:
         return "marked", merged, ""
     if merged == current:

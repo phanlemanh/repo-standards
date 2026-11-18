@@ -18,7 +18,9 @@ Safety rules:
   * A file the plugin wrote before and the repository edited since is merged with the new
     template, three ways, against what the plugin wrote last time (rebuilt from that release's
     templates, see upgrade_base.py). Where the two meet, the file gets conflict markers
-    ("marked") and `make check` stays red until they are gone. Without a base to read, the file
+    ("marked") and `make check` stays red until they are gone; package.json, which npm writes
+    again on every install, is first merged key by key, and is marked only where one key changed
+    on both sides (upgrade_merge.merge_by_key). Without a base to read, the file
     is left as it is ("base_unread"). Either ends the run with exit code 1.
   * A file the repository had before repo-setup wrote it is never overwritten: it is reported as
     "conflict" (or "kept" for files the repository owns) and left untouched (--diff shows why).
@@ -756,7 +758,8 @@ def main(argv: list[str] | None = None) -> int:
                     base_reasons[key] = base.reason
                     continue
                 group, write, why = upgrade_merge.reconcile(
-                    current, content, base.content, base.version, now)
+                    current, content, base.content, base.version, now,
+                    by_key=upgrade_merge.merges_by_key(key))
                 results[group].append(key)
                 if group == "base_unread":
                     base_reasons[key] = why

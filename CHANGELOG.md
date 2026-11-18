@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Fixed: package.json no longer gets conflict markers when a Node repository upgrades
+Found on the probe repository (0.7.0 -> 0.8.0, ts-node): 0.8.0 adds `"prepare"` as the last line
+of `scripts`, and `npm install` had written `devDependencies` right after the `scripts` block. The
+two changes touch, so the line merge (`git merge-file`) gave up and the upgrade reported
+`package.json` as `marked`, with `make check` red until someone resolved it by hand.
+
+- `package.json` is now merged key by key where the line merge meets
+  (`upgrade_merge.merge_by_key`): this repository's keys keep their order and values, a key the
+  template adds goes after the key that comes before it in the template, a key the template drops
+  goes unless this repository changed it, and nested objects (`scripts`, `engines`) are merged
+  the same way. The file is written the way npm writes it (`JSON.stringify` with the file's own
+  indent, CRLF kept). The upgrade reports the file as `merged` and reminds you to run
+  `npm install` again.
+- The line merge and its markers stay where a key merge cannot keep both sides: one key changed
+  on both sides to different values, a `package.json` that is not written the way npm writes it
+  (someone formatted it by hand, which a rewrite would undo), or no base to read (a two-way merge).
+- Only `package.json` is merged this way; every other file is merged by line as before.
+- `tests/e2e.sh` runs a second upgrade case: ts-node from `repo-setup-v0.7.0` (override with
+  `UPGRADE_NODE_FROM`), with that release's real install (`npm install`) run before the upgrade.
+  Until now the upgrade case ran the python preset only, which is why this was missed.
+- `tests/e2e.sh`, python upgrade case: it upgrades from the newest release, which is now 0.8.0, and
+  it still built the base as a pre-0.8.0 repository (ledgers force-added to git, then `shape` must
+  read `one-file`), so it was red on main. The case now reads the shape from the base release: a
+  release with `mk/derived.mk` keeps its ledgers out of git and must stay `fragments`; an older one
+  is checked and split as before.
+
+**What breaks on upgrade**: nothing. A `package.json` that 0.8.0 would have marked now comes out
+merged. A repository that already resolved the markers by hand has nothing to redo.
+
 ## 0.8.0 — 2026-11-18
 
 ### Ledgers as fragments (RS2b)
