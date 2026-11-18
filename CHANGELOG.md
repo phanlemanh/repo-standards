@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Fixed: `dependency-audit` is green again on a `react-vite` setup with `design`
+`npm audit --omit=dev --audit-level=high` (workflow "Security") had been red on every such setup since
+2026-11-18: 8 high advisories, all through `shadcn`. The root is GHSA-fc5q-39xc-vjpf, a ReDoS in
+`picomatch` (`<= 4.0.7`, no patched version yet), which `shadcn` pulls in through `@dotenvx/dotenvx`,
+`@shadcn/registry`, `fast-glob`/`micromatch` and `ts-morph`.
+
+- The design capability now installs `shadcn@4.23.0` with `--save-dev`. The app reads it only at
+  build time: its CLI (`npx shadcn add`) and `@import "shadcn/tailwind.css"`, which Vite bundles. None
+  of its code reaches the browser.
+- Checked on a fresh `react-vite --with design` setup: `npm audit --omit=dev` finds 0
+  vulnerabilities (10 before), `npm run build` gives the same CSS byte for byte, and `make check` is
+  green with its 18 browser tests. The container `Dockerfile` runs `npm ci` before `npm run build`,
+  so the build still has `shadcn`.
+- `tests/run.sh` checks that the install line holds `shadcn@` only with `--save-dev`.
+- The same advisory still reaches dev tools (`vite`, `vitest`, `typescript-eslint`). The job reads
+  only what ships (`--omit=dev`), so it stays green until it matters there.
+
+**What breaks on upgrade**: nothing turns red. A repository set up before this release keeps
+`shadcn` under `dependencies` (npm wrote that `package.json`, the upgrade does not move a package),
+so its `dependency-audit` stays red until it runs `npm install --save-dev shadcn@4.23.0` once.
+
 ## 0.9.0 — 2026-11-18
 
 ### Fixed: package.json no longer gets conflict markers when a Node repository upgrades

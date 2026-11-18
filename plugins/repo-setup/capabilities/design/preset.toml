@@ -13,8 +13,9 @@ currency = "USD"
 
 [starter]
 install = [
-  "npm install @base-ui/react class-variance-authority cn lucide-react tw-animate-css @fontsource-variable/geist shadcn@4.23.0",
-  "npm install --save-dev tailwindcss @tailwindcss/vite @shadcn/lint@0.2.5 @playwright/test @axe-core/playwright",
+  "npm install @base-ui/react class-variance-authority cn lucide-react tw-animate-css @fontsource-variable/geist",
+  # shadcn is read only at build time (its CLI, and shadcn/tailwind.css that Vite bundles).
+  "npm install --save-dev shadcn@4.23.0 tailwindcss @tailwindcss/vite @shadcn/lint@0.2.5 @playwright/test @axe-core/playwright",
   "npx shadcn@4.23.0 add button input label table card badge dialog select skeleton empty alert -y --overwrite",
   "make ui-patch",
   "npx playwright install chromium",
