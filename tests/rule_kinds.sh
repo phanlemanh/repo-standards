@@ -306,4 +306,78 @@ PY
   [ "$same" = ok ] || miss "rule kinds: planned_files does not rebuild the AGENTS.md apply wrote ($(basename "$d"): $same)"
 done
 
+# --- an upgrade from a release before rule kinds ------------------------------------------------
+# Two stand-in releases: 0.0.1 is the plugin before rule kinds (rk_old, built above), 0.0.2 is the
+# plugin as it is.
+rk_new="$TMP/rk-arch/repo-setup-v0.0.2"; rk_release "$rk_new" 0.0.2
+# rk_run <plugin dir> <repo> <apply arguments...>: run apply again; the answer goes to <repo>.json
+rk_run() {
+  local plugin="$1" repo="$2" rc=0; shift 2
+  python3 "$plugin/scripts/apply.py" --target "$repo" --json --base-from "$TMP/rk-arch" "$@" > "$repo.json" 2> "$repo.err" || rc=$?
+  echo "$rc" > "$repo.rc"
+}
+# the group apply put AGENTS.md in (updated, merged, marked, edited, base_unread, unchanged...)
+rk_group() { python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(next((g for g, v in d.items() if isinstance(v, list) and 'AGENTS.md' in v), 'none'))" "$1.json" 2>/dev/null || echo unreadable; }
+rk_note() { awk -v at="$2" '{ print } NR == at { print ""; print "Team note: ask in the dev channel." }' "$1/AGENTS.md" > "$1/AGENTS.tmp" && mv "$1/AGENTS.tmp" "$1/AGENTS.md"; }
+rk_expect() { [ "$(rk_group "$1")" = "$2" ] || miss "rule kinds: $3: AGENTS.md is '$(rk_group "$1")', want '$2' ($(head -c 300 "$1.err" 2>/dev/null))"; }
+
+# 50t. a file nobody edited: updated, with the section
+rk_u="$TMP/rk-up-u"; rk_install "$rk_old" "$rk_u" --preset ts-node --level team
+grep -q 'What holds' "$rk_u/AGENTS.md" && miss "rule kinds: the stand-in for the older release already writes the section"
+rk_run "$rk_new" "$rk_u"
+rk_expect "$rk_u" updated "an upgrade of an untouched file"
+[ "$(cat "$rk_u.rc")" = 0 ] || miss "rule kinds: an upgrade of an untouched AGENTS.md ends with exit code $(cat "$rk_u.rc")"
+grep -q '^- commit format:' "$rk_u/AGENTS.md" || miss "rule kinds: an upgraded repository lacks the section"
+
+# 50u. a file with a line of the repository's own, away from what changed: merged, both kept
+rk_v="$TMP/rk-up-v"; rk_install "$rk_old" "$rk_v" --preset ts-node --level team; rk_note "$rk_v" 3
+rk_run "$rk_new" "$rk_v"
+rk_expect "$rk_v" merged "an upgrade of a file with a line of its own"
+grep -q '^Team note: ask in the dev channel\.$' "$rk_v/AGENTS.md" || miss "rule kinds: the upgrade lost the repository's own line"
+grep -q '^- Never commit secrets\.$' "$rk_v/AGENTS.md" && grep -q '^## What holds these rules$' "$rk_v/AGENTS.md" \
+  || miss "rule kinds: the merged file lacks the split rule or the section"
+
+# 50v. the repository edited the very line that is now two: conflict markers, never an unread base
+rk_w="$TMP/rk-up-w"; rk_install "$rk_old" "$rk_w" --preset ts-node --level team
+subst 's/^- Never commit secrets or `\.env`\./- Never, ever commit secrets or `.env`./' "$rk_w/AGENTS.md"
+rk_run "$rk_new" "$rk_w"
+rk_expect "$rk_w" marked "an upgrade of a file edited where the template changed"
+[ "$(cat "$rk_w.rc")" = 1 ] || miss "rule kinds: a marked AGENTS.md does not end the run with exit code 1"
+
+# 50w. the repository added its own rules at the end, where the section goes: the two meet, so
+#      the file is marked for a person or an agent to put them in order; nothing is lost
+rk_e="$TMP/rk-up-e"; rk_install "$rk_old" "$rk_e" --preset ts-node --level team
+printf '\n## Our own rules\n\n- Deploy on Tuesdays only.\n' >> "$rk_e/AGENTS.md"
+rk_run "$rk_new" "$rk_e"
+rk_expect "$rk_e" marked "an upgrade of a file with rules added at the end"
+grep -q '^- Deploy on Tuesdays only\.$' "$rk_e/AGENTS.md" && grep -q '^## What holds these rules$' "$rk_e/AGENTS.md" \
+  || miss "rule kinds: a file marked at its end lost the repository's rules or the section"
+
+# 50x. the base of a file this release wrote, with its section, is found again: edited in place
+#      and run again, it is never "base_unread" (new repository, and one set up with --adopt)
+rk_x="$TMP/rk-up-x"; rk_install "$rk_new" "$rk_x" --preset ts-node --level team; rk_note "$rk_x" 3
+rk_run "$rk_new" "$rk_x"
+rk_expect "$rk_x" edited "a second run on an edited file"
+rk_y="$TMP/rk-up-y"; mkdir -p "$rk_y/src" && echo 'export {};' > "$rk_y/src/index.ts"
+rk_install "$rk_new" "$rk_y" --preset ts-node --level team --adopt; rk_note "$rk_y" 3
+rk_run "$rk_new" "$rk_y"
+rk_expect "$rk_y" edited "a second run on an edited file of an adopted repository"
+
+# 50y. an adopted repository on the older release: the rules as they are now worded, no section
+rk_ya="$TMP/rk-up-ya"; mkdir -p "$rk_ya/src" && echo 'export {};' > "$rk_ya/src/index.ts"
+rk_install "$rk_old" "$rk_ya" --preset ts-node --level team --adopt
+rk_run "$rk_new" "$rk_ya"
+rk_expect "$rk_ya" updated "an upgrade of an adopted repository"
+grep -q 'What holds\|kept:' "$rk_ya/AGENTS.md" && miss "rule kinds: an upgraded adopted repository gets the section, or a kind"
+
+# 50z. starter to team: the section grows by the machines the team level brings
+rk_z="$TMP/rk-up-z"; rk_install "$rk_new" "$rk_z" --preset ts-node
+grep -q '^- commit format:' "$rk_z/AGENTS.md" && miss "rule kinds: a starter repository names the commit check"
+rk_run "$rk_new" "$rk_z" --level team
+rk_expect "$rk_z" updated "starter to team"
+grep -q '^- commit format:' "$rk_z/AGENTS.md" || miss "rule kinds: going to team does not add the commit check to the section"
+
 echo "ok  rule kinds: $(rk_check 2>/dev/null | tail -1 | sed 's/^rule kinds: //') (or misses reported above)"
