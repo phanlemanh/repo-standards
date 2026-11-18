@@ -218,6 +218,7 @@ if ( cd "$o" && python3 tools/wiki_lint.py >/dev/null ); then fail "wiki-lint mi
 subst 's/target: Client/target: Customer/' "$o/ontology/entities/Order.yaml"
 printf -- '---\ntype: decision\ntitle: Bad\n---\n# x\n' > "$o/wiki/decisions/bad.md"
 errs=$( cd "$o" && { python3 tools/wiki_lint.py --json || true; } | json 'len(d["errors"])' )
+# rule-check: wiki-format
 [ "$errs" -ge 3 ] || fail "wiki-lint: bad decision page gave only $errs errors"
 echo "ok  ontology tools (wiki-lint, codegen)"
 
@@ -250,6 +251,7 @@ echo "ok  incompatible combination rejected"
 # 14. module boundaries catch violations
 b="$TMP/combo-python-modular-monolith-none-x"
 printf 'from coffee_bad import x\nfrom ..loyalty import points_for\n' >> "$b/src/combo/modules/sales/pricing.py"
+# rule-check: module-boundaries
 if ( cd "$b" && python3 tools/boundaries.py >/dev/null ); then fail "boundaries missed a forbidden dependency"; fi
 echo "ok  module boundaries"
 
@@ -307,6 +309,7 @@ p = sys.argv[1]; d = json.load(open(p))
 d["paths"]["/v1/actions/gone"] = {"post": {"operationId": "gone", "responses": {"200": {"description": "ok"}}}}
 json.dump(d, open(p, "w"))
 PY
+# rule-check: api-compat
 if python3 "$a/tools/api_compat.py" --base "$TMP/old.json" --head "$a/contracts/openapi.json" >/dev/null 2>&1; then fail "api-compat missed a removed operation"; fi
 python3 "$a/tools/api_compat.py" --base "$a/contracts/openapi.json" --head "$a/contracts/openapi.json" >/dev/null || fail "api-compat false positive"
 echo "ok  api breaking-change detection"
@@ -344,6 +347,7 @@ expect_tier "source file renamed into docs/" medium
 start c3; mkdir -p "$r/tests/b"; git -C "$r" mv tests/a/test_x.py tests/b/test_x.py; subst '$d' "$r/tests/b/test_x.py"; commit c3
 expect_tier "test moved with a line removed" medium
 start c4; printf 'describe.skip("off", () => {});\n' >> "$r/tests/a/app.test.ts"; commit c4
+# rule-check: autonomy-gate
 expect_tier "describe.skip added" medium
 start c5; printf '@pytest.mark.skip\ndef test_y(): ...\n' >> "$r/tests/a/test_x.py"; commit c5
 expect_tier "pytest skip marker added" medium
@@ -1199,6 +1203,7 @@ x="$TMP/pd-notests"; fresh "$x"; rm -rf "$x/tests"
 expect "$x" tests '^fail: Automated tests exist'
 # the repo's own lint command says the same thing
 if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-drift" >/dev/null 2>&1; then :; else miss "plugin_lint: independent versions rejected despite the declared policy"; fi
+# rule-check: plugin-lint
 if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-version" >/dev/null 2>"$TMP/lint.err"; then miss "plugin_lint: version mismatch accepted"; fi
 grep -q "\[versions\] plugin 'beta': the marketplace says 1.2.0 but plugin.json says 1.3.0" "$TMP/lint.err" || miss "plugin_lint: no message for a version mismatch"
 { python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep -q '^False False$' || miss "plugin_lint --json"
@@ -1605,6 +1610,7 @@ pd="$TMP/people-decide"; mkdir -p "$pd" && git -C "$pd" init -q -b main
 python3 "$S/apply.py" --target "$pd" --preset python --level team --with github-agents --var project_name=P --var description=x --var owner=acme >/dev/null
 tier_of() { ( cd "$pd" && python3 tools/autonomy.py --files "$@" | json 'd["tier"]' ); }
 # 43a. high is the rules of the game and nothing else: no product path is high because of its name
+# rule-check: autonomy-gate
 for f in governance/autonomy.yaml .github/workflows/ci.yml .claude/settings.json tools/autonomy.py Makefile AGENTS.md; do
   [ "$(tier_of "$f")" = high ] || miss "people decide: a rule file is not high: $f is $(tier_of "$f")"
 done
@@ -1670,6 +1676,7 @@ pd_tier() { actual=$(cd "$pd" && python3 tools/autonomy.py --base main --head HE
   [ "$actual" = "$2" ] || miss "people decide: tier of '$1': got $actual, want $2"; }
 pd_save base
 pd_start e1; subst '/agent: forbidden/d' "$pd/ontology/actions.yaml"; pd_save e1
+# rule-check: autonomy-gate
 pd_tier "agent: forbidden removed" high
 pd_start e2; subst 's/agent: confirm/agent: allowed/' "$pd/ontology/actions.yaml"; pd_save e2
 pd_tier "agent: confirm made allowed" high
@@ -1833,6 +1840,7 @@ if command -v gitleaks >/dev/null 2>&1 && [ -n "$scan" ]; then
   # Made at run time, so no token-shaped text sits in this file.
   python3 -c "import random, string; print('const token = \"ghp_' + ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(36)) + '\";')" > "$rw/src/planted.ts"
   rw_save "feat: planted"
+  # rule-check: secret-scan
   if rw_scan; then miss "real walls: a committed token passes the secret scan"; fi
   git -C "$rw" rm -q src/planted.ts && rw_save "fix: remove the token"
   if rw_scan; then miss "real walls: a token deleted by a later commit passes the secret scan"; fi
@@ -1898,6 +1906,7 @@ cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
     RUNNER_TEMP="$TMP/ccrun" GITHUB_STEP_SUMMARY="$TMP/cc-summary" bash -e -c "$(steps_of 'Check every commit the branch would add')" ) 2>&1; }
 cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a branch whose commits are all conventional"
 [ "$(wc -l < "$TMP/cc-calls" | tr -d ' ')" = 2 ] || miss "real walls: the commit check did not judge both commits"
+# rule-check: commit-format
 if cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a commit that is not conventional"; fi
 { cc true 'changed stuff' || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name the commit it rejects"
 cc false 'changed stuff' >/dev/null || miss "real walls: the commit check judges commits in a repository that squashes"

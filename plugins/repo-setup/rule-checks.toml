@@ -1,0 +1,69 @@
+# The machines that may be named as holding a rule of the generated AGENTS.md, and every word of
+# the section "What holds these rules" that apply.py adds to it (scripts/rule_kinds.py).
+#
+# A rule in a `+AGENTS.md/` fragment names one of these with `<!-- kept: <code> -->`. A machine
+# is listed here only when a test of this repository, tagged `# rule-check: <code>`, breaks the
+# rule in a generated repository and sees the machine react the way `kind` says:
+#   red          a check fails
+#   refuses      the action does not run
+#   raises-tier  the gate hands the change to a person
+# `present_when` is the file the machine lives in; a repository whose templates do not give it
+# that file is not told of the machine.
+#
+# The words live here, not in the code, so a later release still rebuilds the AGENTS.md this
+# release wrote, byte for byte (the base of an upgrade). Changing them changes what every
+# repository is told.
+
+[summary]
+heading = "## What holds these rules"
+intro = "A machine catches a miss of these:"
+closing = """
+Nothing listed here covers the other rules in this file. Do not count on a machine to catch a
+miss: keeping them is on you."""
+closing_alone = """
+No machine is listed for the rules in this file. Do not count on one to catch a miss: keeping
+them is on you."""
+
+[checks.wiki-format]
+catches = "a wiki page that breaks its page format"
+reaction = "`make check` goes red"
+kind = "red"
+present_when = "tools/wiki_lint.py"
+
+[checks.secret-scan]
+catches = "a secret in a commit"
+reaction = "`secret-scan` goes red (GitHub)"
+kind = "red"
+present_when = ".github/workflows/security.yml"
+
+[checks.commit-format]
+catches = "commit format"
+reaction = "`conventional-title` or `conventional-commits` goes red (GitHub)"
+kind = "red"
+present_when = ".github/workflows/pr-title.yml"
+
+[checks.autonomy-gate]
+catches = """
+a deleted or weakened test, a looser `agent:` setting, a change to `.github/workflows/` or
+  `governance/`"""
+reaction = "the gate raises the tier, and a person decides"
+kind = "raises-tier"
+present_when = "tools/autonomy.py"
+
+[checks.module-boundaries]
+catches = "a module reaching past another module's public API"
+reaction = "`make check` goes red"
+kind = "red"
+present_when = "tools/boundaries.py"
+
+[checks.api-compat]
+catches = "a breaking change to the API contract"
+reaction = "`make check` goes red"
+kind = "red"
+present_when = "tools/api_compat.py"
+
+[checks.plugin-lint]
+catches = "manifest versions that disagree, a plugin whose source is the repository root"
+reaction = "`make check` goes red"
+kind = "red"
+present_when = "tools/plugin_lint.py"

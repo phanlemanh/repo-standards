@@ -6,58 +6,59 @@ Stack: {{stack}}
 
 ## Commands (always use these, never ad-hoc tool invocations)
 
-- `make setup` — install dependencies from the lockfile
-- `make format` — auto-format
-- `make lint` — lint + format check
-- `make typecheck` — strict type check
-- `make test` — run tests
-- `make gen` — regenerate types from `ontology/` (never edit generated files)
-- `make ontology` — check `ontology/` + `wiki/` consistency and generated code
-- `make check` — everything CI runs. **Run it before you say a task is done.**
+- `make setup` — install dependencies from the lockfile <!-- kept: none -->
+- `make format` — auto-format <!-- kept: none -->
+- `make lint` — lint + format check <!-- kept: none -->
+- `make typecheck` — strict type check <!-- kept: none -->
+- `make test` — run tests <!-- kept: none -->
+- `make gen` — regenerate types from `ontology/` (never edit generated files) <!-- kept: word -->
+- `make ontology` — check `ontology/` + `wiki/` consistency and generated code <!-- kept: none -->
+- `make check` — everything CI runs. **Run it before you say a task is done.** <!-- kept: word -->
 
 ## Before you change code
 
 1. Read `wiki/index.md` to orient yourself. `wiki/log.md`, `wiki/index.md` and `ontology/glossary.md`
    are drawn by `make derived`; edit the fragments, not the drawn files. If one is missing, run
-   `make derived`.
+   `make derived`. <!-- kept: word -->
 2. If the task touches business logic, read `ontology/glossary.md` and the
-   relevant `ontology/entities/*.yaml`.
+   relevant `ontology/entities/*.yaml`. <!-- kept: none -->
 3. Look for an existing implementation of the rule before writing a new one.
-   Every business rule should live in exactly one place.
+   Every business rule should live in exactly one place. <!-- kept: word -->
 
 ## Rules
 
 - Use the names from `ontology/glossary.md`. Do not invent synonyms
-  (e.g. `Client` when the glossary says `Customer`).
-- Use the generated domain types; to change them, change `ontology/` and run `make gen`.
+  (e.g. `Client` when the glossary says `Customer`). <!-- kept: word -->
+- Use the generated domain types; to change them, change `ontology/` and run `make gen`. <!-- kept: word -->
 - Do not add a new entity, relation or rule to the code without adding it to
   `ontology/` in the same change. Changes to `ontology/` change what the business
-  means: call them out in the PR description.
-- Every behaviour change comes with a test.
-- Never commit secrets or `.env`. Configuration goes in `.env.example`.
-- Keep changes small and focused; one concern per PR.
-- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+  means: call them out in the PR description. <!-- kept: word -->
+- Every behaviour change comes with a test. <!-- kept: word -->
+- Never commit secrets. <!-- kept: secret-scan -->
+- Never commit `.env`. Configuration goes in `.env.example`. <!-- kept: word -->
+- Keep changes small and focused; one concern per PR. <!-- kept: word -->
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). <!-- kept: commit-format -->
 
 ## After you finish a task
 
-- `make check` is green.
-- Update the wiki:
+- `make check` is green. <!-- kept: word -->
+- Update the wiki: <!-- kept: word -->
   - `make log m="what changed — link to PR/issue"` adds one entry to the wiki log: one new file in
-    `wiki/log/`, so two branches never edit the same line;
-  - a new term: `python3 tools/ledgers.py add-term <Term> --definition "..."`;
+    `wiki/log/`, so two branches never edit the same line; <!-- kept: none -->
+  - a new term: `python3 tools/ledgers.py add-term <Term> --definition "..."`; <!-- kept: none -->
   - a new wiki page needs only `type` and `title` in its front matter: the index lists it by itself.
-    If `wiki/index.md` is still in git (this repository has not split it yet), add the link there;
-  - significant technical choice → new `wiki/decisions/NNNN-title.md`;
-  - production bug or outage → `wiki/incidents/YYYY-MM-DD-title.md`;
-  - an entity's behaviour changed → update `wiki/entities/<entity>.md`.
-- Follow the page formats in `ontology/page-types.yaml`. Link to code paths,
-  do not paste code into the wiki.
+    If `wiki/index.md` is still in git (this repository has not split it yet), add the link there; <!-- kept: none -->
+  - significant technical choice → new `wiki/decisions/NNNN-title.md`; <!-- kept: word -->
+  - production bug or outage → `wiki/incidents/YYYY-MM-DD-title.md`; <!-- kept: word -->
+  - an entity's behaviour changed → update `wiki/entities/<entity>.md`. <!-- kept: word -->
+- Follow the page formats in `ontology/page-types.yaml`. <!-- kept: wiki-format -->
+- Link to code paths, do not paste code into the wiki. <!-- kept: word -->
 
 ## Project map
 
-- `src/` — application code
-- `tests/` — tests
-- `ontology/` — domain model (source of truth for business concepts)
-- `wiki/` — decisions, incidents, entity notes
-- `tools/` — wiki-lint and ontology code generator (run through `make`)
-- `.claude/skills/` — procedures for agents (ontology, wiki, independent review)
+- `src/` — application code <!-- kept: none -->
+- `tests/` — tests <!-- kept: none -->
+- `ontology/` — domain model (source of truth for business concepts) <!-- kept: none -->
+- `wiki/` — decisions, incidents, entity notes <!-- kept: none -->
+- `tools/` — wiki-lint and ontology code generator (run through `make`) <!-- kept: none -->
+- `.claude/skills/` — procedures for agents (ontology, wiki, independent review) <!-- kept: none -->

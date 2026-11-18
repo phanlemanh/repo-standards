@@ -213,4 +213,97 @@ PY
   [ "$same" = ok ] || miss "rule kinds: planned_files does not rebuild the AGENTS.md apply wrote ($d: $same)"
 done
 
-echo "ok  rule kinds (or misses reported above)"
+# --- the plugin's own fragments and registry ---------------------------------------------------
+rk_plugin="$ROOT/plugins/repo-setup"
+rk_check() { python3 "$S/rule_kinds.py" check --root "${1:-$rk_plugin}" --tests "${2:-$ROOT/tests}"; }
+
+# 50m. every list item of every fragment has a kind, and every machine has a tagged test
+rk_real=$(rk_check 2>&1) || miss "rule kinds: the plugin's own fragments fail: $(echo "$rk_real" | head -5)"
+
+# 50n. the red direction, on copies: a new rule without a kind, a machine nobody registered, a
+#      machine whose proof lost its tag
+rk_copy="$TMP/rk-copy"; cp -R "$rk_plugin" "$rk_copy"
+printf -- '- A rule nobody owns.\n' >> "$rk_copy/presets/_core/team/+AGENTS.md/55-autonomy.md"
+out=$(rk_check "$rk_copy" 2>&1) && miss "rule kinds: a new rule without a kind passes"
+echo "$out" | grep -q '55-autonomy.md:[0-9]*: list item has no kind' || miss "rule kinds: the new rule is not named: $(echo "$out" | head -3)"
+rm -rf "$rk_copy"; cp -R "$rk_plugin" "$rk_copy"
+subst 's/<!-- kept: module-boundaries -->/<!-- kept: module-walls -->/' "$rk_copy/archetypes/modular-monolith/starter/+AGENTS.md/40-modular-monolith.md"
+out=$(rk_check "$rk_copy" 2>&1) && miss "rule kinds: a machine nobody registered passes"
+echo "$out" | grep -q "unknown check 'module-walls'" || miss "rule kinds: the unregistered machine is not named: $(echo "$out" | head -3)"
+mkdir -p "$TMP/rk-tests"; cp "$ROOT"/tests/*.sh "$TMP/rk-tests/"
+subst '/# rule-check: module-boundaries/d' "$TMP/rk-tests/run.sh"
+out=$(rk_check "$rk_plugin" "$TMP/rk-tests" 2>&1) && miss "rule kinds: a machine without a tagged test passes"
+echo "$out" | grep -q "check 'module-boundaries' has no test tagged" || miss "rule kinds: the unproven machine is not named: $(echo "$out" | head -3)"
+
+# Five repositories, set up by the plugin as it is.
+rk_s="$TMP/rk-starter"; rk_install "$rk_plugin" "$rk_s" --preset ts-node
+rk_t="$TMP/rk-team"; rk_install "$rk_plugin" "$rk_t" --preset ts-node --level team --archetype modular-monolith
+rk_f="$TMP/rk-full"; rk_install "$rk_plugin" "$rk_f" --preset ts-api --level team --archetype service-api --deploy container --with mcp,ai,github-agents
+rk_p="$TMP/rk-plugin"; rk_install "$rk_plugin" "$rk_p" --preset claude-plugin --level team
+rk_a="$TMP/rk-adopt"; mkdir -p "$rk_a/src" && echo 'export {};' > "$rk_a/src/index.ts"
+rk_install "$rk_plugin" "$rk_a" --preset ts-node --level team --adopt
+rk_has() { grep -q -- "$2" "$1/AGENTS.md"; }
+
+# 50o. by install: a starter repository is not told of the commit check or the secret scan; a
+#      team repository is told of both, and of what its layers add
+rk_has "$rk_s" '^- a wiki page that breaks its page format: `make check` goes red$' || miss "rule kinds: starter lacks the line for the wiki format"
+for line in '^- commit format:' '^- a secret in a commit:' '^- a deleted or weakened test'; do
+  rk_has "$rk_s" "$line" && miss "rule kinds: starter names a machine it does not have: $line"
+done
+for line in '^- commit format: `conventional-title` or `conventional-commits` goes red (GitHub)$' '^- a secret in a commit: `secret-scan` goes red (GitHub)$' \
+  '^- a module reaching past another module.s public API: `make check` goes red$' '^- a deleted or weakened test, a looser `agent:` setting,'; do
+  rk_has "$rk_t" "$line" || miss "rule kinds: team lacks the line $line"
+done
+rk_has "$rk_f" '^- a breaking change to the API contract: `make check` goes red$' || miss "rule kinds: a service API lacks the line for api-compat"
+rk_has "$rk_f" 'a module reaching past' && miss "rule kinds: a repository without modules is told of module boundaries"
+rk_has "$rk_p" '^- manifest versions that disagree, a plugin whose source is the repository root: `make check` goes red$' || miss "rule kinds: a plugin repository lacks the line for the manifest lint"
+rk_has "$rk_p" 'a wiki page' && miss "rule kinds: a plugin repository is told of a wiki it does not have"
+
+# 50p. every new repository: one section, no kind left, the closing sentence, and every machine
+#      it names is a file the repository has
+for d in "$rk_s" "$rk_t" "$rk_f" "$rk_p"; do
+  [ "$(grep -c '^## What holds these rules$' "$d/AGENTS.md")" = 1 ] || miss "rule kinds: $(basename "$d") does not have the section exactly once"
+  grep -q 'kept:' "$d/AGENTS.md" && miss "rule kinds: $(basename "$d") has a kind left in AGENTS.md"
+  [ "$(tail -1 "$d/AGENTS.md")" = "miss: keeping them is on you." ] || miss "rule kinds: $(basename "$d") does not end with the sentence about the other rules"
+  grep -q ' $' "$d/AGENTS.md" && miss "rule kinds: $(basename "$d") has a line that ends with a space"
+  named=$(python3 - "$rk_plugin" "$d" <<'PY' 2>&1 || true
+import pathlib, sys, tomllib
+plugin, repo = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+checks = tomllib.load(open(plugin / "rule-checks.toml", "rb"))["checks"]
+first = {f"- {e['catches']}: {e['reaction']}".splitlines()[0]: e for e in checks.values()}
+section = (repo / "AGENTS.md").read_text(encoding="utf-8").split("## What holds these rules", 1)[1]
+lines = [line for line in section.splitlines() if line.startswith("- ")]
+bad = [line for line in lines if line not in first or not (repo / first[line]["present_when"]).exists()]
+print("ok" if lines and not bad else "bad: " + "; ".join(bad or ["no machine listed"]))
+PY
+)
+  [ "$named" = ok ] || miss "rule kinds: $(basename "$d") names a machine it does not have ($named)"
+done
+
+# 50q. a repository set up with --adopt: the kinds go, no section
+grep -q 'What holds\|kept:' "$rk_a/AGENTS.md" && miss "rule kinds: an adopted repository gets the section, or keeps a kind"
+grep -q '^- Never commit secrets\.$' "$rk_a/AGENTS.md" || miss "rule kinds: an adopted repository lacks a rule as the fragments now word it"
+
+# 50r. the section adds no stop of its own (the phrases of 43g)
+for phrase in 'get approval before you start' 'ask in the issue and stop' 'need human review' 'need a human reviewer' 'one approval is required' '(high tier)'; do
+  for d in "$rk_t" "$rk_f" "$rk_p"; do
+    sed -n '/^## What holds these rules$/,$p' "$d/AGENTS.md" | grep -qiF "$phrase" && miss "rule kinds: the section stops for a person: $phrase"
+  done
+done
+
+# 50s. what apply wrote is what planned_files rebuilds: the base of the next upgrade
+for d in "$rk_t" "$rk_a"; do
+  same=$(python3 - "$S" "$d" <<'PY' 2>&1 || true
+import hashlib, json, sys
+sys.path.insert(0, sys.argv[1])
+import apply
+m = json.load(open(f"{sys.argv[2]}/.repo-setup.json"))
+choices = apply.choices_from_manifest(m)
+plan = apply.planned_files(choices, apply.render_variables(m["vars"], choices), adopt=bool(m.get("adopt")))
+print("ok" if hashlib.sha256(plan["AGENTS.md"]["content"]).hexdigest() == m["files"]["AGENTS.md"] else "differ")
+PY
+)
+  [ "$same" = ok ] || miss "rule kinds: planned_files does not rebuild the AGENTS.md apply wrote ($(basename "$d"): $same)"
+done
+
+echo "ok  rule kinds: $(rk_check 2>/dev/null | tail -1 | sed 's/^rule kinds: //') (or misses reported above)"
