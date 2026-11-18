@@ -3,6 +3,10 @@
 #     ROOT, TMP and miss.
 
 ci_tools="$ROOT/plugins/repo-setup/presets/_core/starter/tools"
+# The checks below test the default list, which ci_inputs.py uses when HEAVY_NOT_INPUTS is unset.
+# A workflow sets it for every job (this repository's test.yml: "docs/** *.md"), so drop it here;
+# the checks that need it set it themselves.
+unset HEAVY_NOT_INPUTS
 
 # a throwaway repository with its own identity; prints its path
 ci_repo() {
