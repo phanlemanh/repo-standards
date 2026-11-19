@@ -11,8 +11,11 @@ requires this check, so there the same edit would have blocked every merge.
 
 - The job now runs the commit-msg stage (`pre-commit run --hook-stage commit-msg`), with no hook
   id: the hooks `git commit` runs in that repository judge each commit, whatever they are called.
-- A repository with no hook at commit-msg is still red, and the job says so ("No hook in
-  `.pre-commit-config.yaml` runs at commit-msg"): a green check that judges nothing is no wall.
+- A repository whose hooks refuse no message is still red, and the job says so ("No hook of this
+  repository refuses a message at commit-msg"): a green check that judges nothing is no wall. The
+  job finds out by asking the hooks: before the commits, it gives them a message no format accepts
+  (`.`) and expects a refusal. It does not read the config for a `stages` line, so a hook whose
+  stage comes from its own manifest counts too.
 - The error line now reads "does not pass this repository's commit-msg hooks", since the format
   is the repository's.
 
@@ -20,6 +23,10 @@ requires this check, so there the same edit would have blocked every merge.
 run in this job, once per commit, as they do at `git commit`; they see only the message file, so
 a hook limited by `files` is skipped. A repository that edited `pr-title.yml` in place gets the
 change through the three-way merge.
+
+**Known gap**: a hook that names no `stages`, runs on every commit (`always_run`) and needs the
+project installed fails in this job, which installs nothing, and the check then goes red on every
+commit. Give such a hook `stages: [pre-commit]`.
 
 ### Fixed: `dependency-audit` is green again on a `react-vite` setup with `design`
 `npm audit --omit=dev --audit-level=high` (workflow "Security") had been red on every such setup since

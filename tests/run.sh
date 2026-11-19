@@ -1916,6 +1916,8 @@ case "${4:-}" in
 esac
 for a in "$@"; do f=$a; done
 echo "$f" >> "$CC_CALLS"
+# With no hook at commit-msg, pre-commit runs nothing on the message and ends green.
+grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep -q 'commit-msg\|id: conventional-pre-commit$' || exit 0
 grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f"
 SH
 chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
@@ -1923,7 +1925,7 @@ cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
   ( cd "${CC_REPO:-$rw}" && PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" PR=7 GITHUB_REPOSITORY=acme/sample \
     RUNNER_TEMP="$TMP/ccrun" GITHUB_STEP_SUMMARY="$TMP/cc-summary" bash -e -c "$(steps_of 'Check every commit the branch would add')" ) 2>&1; }
 cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a branch whose commits are all conventional"
-[ "$(wc -l < "$TMP/cc-calls" | tr -d ' ')" = 2 ] || miss "real walls: the commit check did not judge both commits"
+[ "$(grep -c '/message$' "$TMP/cc-calls")" = 2 ] || miss "real walls: the commit check did not judge both commits"
 # rule-check: commit-format
 if cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a commit that is not conventional"; fi
 { cc true 'changed stuff' || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name the commit it rejects"
@@ -1932,10 +1934,10 @@ cc false 'changed stuff' >/dev/null || miss "real walls: the commit check judges
 { cc unreadable 'changed stuff' || true; } | grep -q '::warning::' || miss "real walls: the commit check is silent when it cannot read how the repository merges"
 # a repository that replaced the hook with one of its own (another id) is still judged, by that hook;
 # one with no commit-msg hook at all is red and says so: a green check that judges nothing is no wall
-mkdir -p "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-none"
-python3 - "$rw/.pre-commit-config.yaml" "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-none" <<'PY_CC'
+mkdir -p "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-bare" "$TMP/cc-none"
+python3 - "$rw/.pre-commit-config.yaml" "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-bare" "$TMP/cc-none" <<'PY_CC'
 import sys
-src, own, block, none = sys.argv[1:]
+src, own, block, bare, none = sys.argv[1:]
 text = open(src, encoding="utf-8").read()
 mark = "  - repo: https://github.com/compilerla/conventional-pre-commit"
 head, found, tail = text.partition(mark)
@@ -1947,12 +1949,16 @@ hook = ("  - repo: local\n    hooks:\n      - id: commit-message\n        name: 
 def write(folder, body):
     open(f"{folder}/.pre-commit-config.yaml", "w", encoding="utf-8").write(body)
 write(own, head + hook + "        stages: [commit-msg]" + after)
-write(block, head + hook + "        stages:\n          - pre-commit\n          - commit-msg" + after)
+write(block, head + hook + "        stages:\n          - pre-commit\n          - \"commit-msg\"" + after)
+# the hook listed with no `stages` line: its own manifest puts it at commit-msg
+write(bare, text.replace("      - id: conventional-pre-commit\n        stages: [commit-msg]\n",
+                         "      - id: conventional-pre-commit\n"))
+assert "stages: [commit-msg]" not in open(f"{bare}/.pre-commit-config.yaml", encoding="utf-8").read()
 write(none, head.rstrip("\n") + after)
 PY_CC
-for own in cc-own cc-block; do
-  CC_REPO="$TMP/$own" cc true 'fix: two' >/dev/null || miss "real walls: the commit check is red in a repository whose commit-msg hook has its own id ($own)"
-  if CC_REPO="$TMP/$own" cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a bad commit in a repository whose commit-msg hook has its own id ($own)"; fi
+for own in cc-own cc-block cc-bare; do
+  CC_REPO="$TMP/$own" cc true 'fix: two' >/dev/null || miss "real walls: the commit check is red in a repository whose commit-msg hook is written another way ($own)"
+  if CC_REPO="$TMP/$own" cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a bad commit in a repository whose commit-msg hook is written another way ($own)"; fi
 done
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
 { CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
