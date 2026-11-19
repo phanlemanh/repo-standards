@@ -360,14 +360,136 @@ rk_run "$rk_new" "$rk_w"
 rk_expect "$rk_w" marked "an upgrade of a file edited where the template changed"
 [ "$(cat "$rk_w.rc")" = 1 ] || miss "rule kinds: a marked AGENTS.md does not end the run with exit code 1"
 
-# 50w. the repository added its own rules at the end, where the section goes: the two meet, so
-#      the file is marked for a person or an agent to put them in order; nothing is lost
-rk_e="$TMP/rk-up-e"; rk_install "$rk_old" "$rk_e" --preset ts-node --level team
-printf '\n## Our own rules\n\n- Deploy on Tuesdays only.\n' >> "$rk_e/AGENTS.md"
+# rk_line <file> <fixed text>: the number of the first line that holds it (0 when none does)
+rk_line() { grep -nF -- "$2" "$1" | head -1 | cut -d: -f1 | grep . || echo 0; }
+# rk_tail <repo>: the section, from its heading to the end of the file
+rk_tail() { sed -n '/^## What holds these rules/,$p' "$1/AGENTS.md"; }
+rk_own_rules() { printf '\n## Our own rules\n\n- Deploy on Tuesdays only.\n' >> "$1/AGENTS.md"; }
+
+# 50w. the repository added its own rules at the end, where the section goes. The section is the
+#      machine's and its place is last, so the order is known: the repository's rules stay where
+#      they are, the section follows them, and nobody is asked to put them in order
+rk_e="$TMP/rk-up-e"; rk_install "$rk_old" "$rk_e" --preset ts-node --level team; rk_own_rules "$rk_e"
 rk_run "$rk_new" "$rk_e"
-rk_expect "$rk_e" marked "an upgrade of a file with rules added at the end"
-grep -q '^- Deploy on Tuesdays only\.$' "$rk_e/AGENTS.md" && grep -q '^## What holds these rules$' "$rk_e/AGENTS.md" \
-  || miss "rule kinds: a file marked at its end lost the repository's rules or the section"
+rk_expect "$rk_e" merged "an upgrade of a file with rules added at the end"
+[ "$(cat "$rk_e.rc")" = 0 ] || miss "rule kinds: an upgrade of a file with rules added at the end ends with exit code $(cat "$rk_e.rc")"
+grep -q '^<<<<<<<\|^=======\|^>>>>>>>' "$rk_e/AGENTS.md" && miss "rule kinds: rules added at the end leave conflict markers in AGENTS.md"
+[ "$(grep -c '^## What holds these rules$' "$rk_e/AGENTS.md")" = 1 ] || miss "rule kinds: a file with rules added at the end does not have the section exactly once"
+rk_own=$(rk_line "$rk_e/AGENTS.md" '- Deploy on Tuesdays only.'); rk_sec=$(rk_line "$rk_e/AGENTS.md" '## What holds these rules')
+[ "$rk_own" -gt 0 ] && [ "$rk_sec" -gt "$rk_own" ] || miss "rule kinds: the section does not come after the repository's own rules (rules at line $rk_own, section at line $rk_sec)"
+[ "$(rk_tail "$rk_e")" = "$(rk_tail "$rk_u")" ] || miss "rule kinds: the section after the repository's own rules is not the one an untouched file gets"
+grep -q '^- Never commit secrets\.$' "$rk_e/AGENTS.md" || miss "rule kinds: a file with rules added at the end lacks the split rule"
+# and the next run has nothing to do: the base of what was written is found again
+rk_run "$rk_new" "$rk_e"
+rk_expect "$rk_e" edited "a second run on a file with rules added at the end"
+
+# 50w2. the same with CRLF line ends: merged the same way, and every line keeps its CRLF
+rk_ec="$TMP/rk-up-ec"; rk_install "$rk_old" "$rk_ec" --preset ts-node --level team; rk_own_rules "$rk_ec"
+python3 -c "
+import sys
+p = sys.argv[1]; d = open(p, 'rb').read().replace(b'\n', b'\r\n'); open(p, 'wb').write(d)" "$rk_ec/AGENTS.md"
+rk_run "$rk_new" "$rk_ec"
+rk_expect "$rk_ec" merged "an upgrade of a CRLF file with rules added at the end"
+[ "$(python3 -c "
+import sys
+d = open(sys.argv[1], 'rb').read(); print(d.count(b'\n') - d.count(b'\r\n'))" "$rk_ec/AGENTS.md")" = 0 ] \
+  || miss "rule kinds: a CRLF file with rules added at the end gets lines that end with LF alone"
+[ "$(tr -d '\r' < "$rk_ec/AGENTS.md")" = "$(cat "$rk_e/AGENTS.md")" ] || miss "rule kinds: the CRLF file is not merged like the LF one"
+
+# 50w3. rules added at the end and one of the six split lines edited: the edited line is marked,
+#       as it must be, and the end of the file is not a second thing to sort out
+rk_em="$TMP/rk-up-em"; rk_install "$rk_old" "$rk_em" --preset ts-node --level team; rk_own_rules "$rk_em"
+subst 's/^- Never commit secrets or `\.env`\./- Never, ever commit secrets or `.env`./' "$rk_em/AGENTS.md"
+rk_run "$rk_new" "$rk_em"
+rk_expect "$rk_em" marked "an upgrade of a file edited where the template changed, with rules added at the end"
+[ "$(grep -c '^<<<<<<<' "$rk_em/AGENTS.md")" = 1 ] || miss "rule kinds: rules added at the end add a second marked place ($(grep -c '^<<<<<<<' "$rk_em/AGENTS.md") in all)"
+rk_last=$(grep -n '^>>>>>>>' "$rk_em/AGENTS.md" | tail -1 | cut -d: -f1)
+rk_own=$(rk_line "$rk_em/AGENTS.md" '- Deploy on Tuesdays only.'); rk_sec=$(rk_line "$rk_em/AGENTS.md" '## What holds these rules')
+[ "${rk_last:-0}" -gt 0 ] && [ "$rk_own" -gt "$rk_last" ] && [ "$rk_sec" -gt "$rk_own" ] \
+  || miss "rule kinds: with one marked line, the repository's rules and the section are not in order after it (marker ends at ${rk_last:-0}, rules at $rk_own, section at $rk_sec)"
+[ "$(rk_tail "$rk_em")" = "$(rk_tail "$rk_u")" ] || miss "rule kinds: with one marked line, the section is not the one an untouched file gets"
+
+# 50w4. later, with the section in place: rules the repository adds after it stay there when the
+#       section grows (starter to team). The line merge alone gives this; it is pinned here because
+#       the CHANGELOG says so
+rk_zt="$TMP/rk-up-zt"; rk_install "$rk_new" "$rk_zt" --preset ts-node; rk_own_rules "$rk_zt"
+rk_run "$rk_new" "$rk_zt" --level team
+rk_expect "$rk_zt" merged "starter to team with rules added after the section"
+grep -q '^- commit format:' "$rk_zt/AGENTS.md" && grep -q '^- Deploy on Tuesdays only\.$' "$rk_zt/AGENTS.md" \
+  || miss "rule kinds: starter to team with rules after the section lost the commit check or the repository's rules"
+[ "$(grep -c '^## What holds these rules$' "$rk_zt/AGENTS.md")" = 1 ] || miss "rule kinds: starter to team with rules after the section does not have the section exactly once"
+
+# 50w5. a known gap, pinned so the CHANGELOG stays true: rules kept right before the section meet
+#       the fragments the team level adds at the end of the rules. No rule says which comes first,
+#       so the file is marked; nothing is lost and the section is there once
+rk_zb="$TMP/rk-up-zb"; rk_install "$rk_new" "$rk_zb" --preset ts-node
+awk '/^## What holds these rules$/ { print "## Our own rules"; print ""; print "- Deploy on Tuesdays only."; print "" } { print }' \
+  "$rk_zb/AGENTS.md" > "$rk_zb/AGENTS.tmp" && mv "$rk_zb/AGENTS.tmp" "$rk_zb/AGENTS.md"
+rk_run "$rk_new" "$rk_zb" --level team
+rk_expect "$rk_zb" marked "starter to team with rules right before the section"
+grep -q '^- Deploy on Tuesdays only\.$' "$rk_zb/AGENTS.md" && [ "$(grep -c '^## What holds these rules$' "$rk_zb/AGENTS.md")" = 1 ] \
+  || miss "rule kinds: a file marked before its section lost the repository's rules, or does not have the section exactly once"
+
+# 50w6. an adopted repository has no section to put last: its own rules at the end are merged
+#       as before, and it still gets no section
+rk_ae="$TMP/rk-up-ae"; mkdir -p "$rk_ae/src" && echo 'export {};' > "$rk_ae/src/index.ts"
+rk_install "$rk_old" "$rk_ae" --preset ts-node --level team --adopt; rk_own_rules "$rk_ae"
+rk_run "$rk_new" "$rk_ae"
+rk_expect "$rk_ae" merged "an upgrade of an adopted repository with rules added at the end"
+grep -q '^- Deploy on Tuesdays only\.$' "$rk_ae/AGENTS.md" || miss "rule kinds: an adopted repository lost the rules it added at the end"
+grep -q 'What holds\|kept:' "$rk_ae/AGENTS.md" && miss "rule kinds: an adopted repository with rules at the end gets the section, or a kind"
+
+# 50w7. the two-part merge itself, on files the installs above do not make
+rk_parts=$(python3 - "$S" <<'PY' 2>&1 || true
+import sys
+sys.path.insert(0, sys.argv[1])
+import upgrade_merge as um
+
+H = b"## What holds these rules"
+BODY = b"# Guide\n\n- rule one\n- rule two\n"
+SEC1 = H + b"\n\nA machine catches a miss of these:\n\n- a\n\nNothing listed covers the rest.\n"
+SEC2 = SEC1.replace(b"- a\n", b"- a\n- b\n")
+OWN = b"\n## Ours\n\n- deploy on Tuesdays\n"
+
+
+def run(current: bytes, new: bytes, base: bytes) -> tuple[str, bytes]:
+    group, content, _ = um.reconcile(current, new, base, "0.0.1", "0.0.2", tail_heading=H)
+    return group, content or b""
+
+
+def want(name: str, got: tuple[str, bytes], group: str, *kept: bytes, headings: int | None = None) -> None:
+    if got[0] != group:
+        print(f"{name}: '{got[0]}', want '{group}'")
+    for text in kept:
+        if text not in got[1]:
+            print(f"{name}: lost {text!r}")
+    if headings is not None and got[1].count(H) != headings:
+        print(f"{name}: the heading is there {got[1].count(H)} times, want {headings}")
+
+
+# the first upgrade to a release with the section
+first = BODY + b"\n" + SEC1
+got = run(BODY + OWN.rstrip(b"\n"), first, BODY)
+want("own text with no newline at the end", got, "merged", b"- deploy on Tuesdays\n\n" + SEC1, headings=1)
+if not got[1].endswith(SEC1):
+    print("own text with no newline at the end: the section is not last")
+want("a heading of the repository's own, written before the release had one",
+     run(BODY + b"\n" + H + b"\n\nOur own words.\n", first, BODY), "marked", b"Our own words.", b"- a\n")
+want("the same, with a space after the heading",
+     run(BODY + b"\n" + H + b" \n\nOur own words.\n", first, BODY), "marked", b"Our own words.", b"- a\n")
+# a later release whose section grew
+grown = BODY + b"\n" + SEC2
+# its own heading does not meet the line the section gained: the ordinary merge keeps both
+want("the repository changed the heading",
+     run(BODY + b"\n" + SEC1.replace(H, b"## What holds our rules") + OWN, grown, first), "merged",
+     b"## What holds our rules", b"- deploy on Tuesdays", b"- b\n", headings=0)
+want("the repository deleted the section", run(BODY + OWN, grown, first), "marked", b"- deploy on Tuesdays", b"- b\n")
+want("the repository wrote inside the section",
+     run(BODY + b"\n" + SEC1.replace(b"- a\n", b"- a (ours)\n") + OWN, grown, first), "marked",
+     b"- a (ours)", b"- deploy on Tuesdays", b"- b\n", headings=1)
+PY
+)
+[ -z "$rk_parts" ] || miss "rule kinds: the two-part merge: $(echo "$rk_parts" | head -5 | tr '\n' ';')"
 
 # 50x. the base of a file this release wrote, with its section, is found again: edited in place
 #      and run again, it is never "base_unread" (new repository, and one set up with --adopt)

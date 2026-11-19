@@ -88,11 +88,12 @@ holds from a sentence. Now every rule says what holds it.
   rules themselves did not change.
 
 **On upgrade.** `AGENTS.md` gains the section and the six split items. A file nobody edited is
-updated; a file with edits elsewhere is merged. Two cases end with conflict markers (`marked`,
-`make check` red until they are resolved): the repository edited one of the six lines that are
-now split, or it added its own text at the very end of `AGENTS.md`, where the section goes. In the
-second case both parts are kept between the markers: put the section last and remove the markers.
-A repository set up with `--adopt` gets the split items and no section.
+updated; a file with edits elsewhere is merged. A repository that added its own text at the very
+end of `AGENTS.md`, where the section goes, keeps that text where it is and gets the section after
+it, with no conflict markers: the section's place is last, so the order is known and nobody is
+asked to sort it out. One case ends with conflict markers (`marked`, `make check` red until they
+are resolved): the repository edited one of the six lines that are now split. A repository set up
+with `--adopt` gets the split items and no section.
 
 **For the plugin's authors.** A new list item in a `+AGENTS.md/` fragment needs a kind, or
 `tests/run.sh` is red. Use `word` unless a tagged test proves a machine.
@@ -101,6 +102,14 @@ A repository set up with `--adopt` gets the split items and no section.
 - Rules written in a paragraph or a table (the autonomy and SDLC fragments have some) are not
   list items, so nothing asks for their kind.
 - "Not a rule" is the author's call; no check can tell a rule from a fact.
+- On upgrade the section is found by its heading line. A repository that changed that line, or
+  wrote inside the section, gets the ordinary merge: conflict markers where its edit meets a
+  change of the template. So does text written right after the section's last sentence, when a
+  release changes that sentence.
+- Text the repository keeps right before the section still meets a release, or a move from
+  starter to team, that adds a fragment at the end of the rules: both add at the same place and
+  no rule says which comes first, so the file is marked. Text kept after the section does not
+  meet such a fragment.
 - The section follows the templates and the choices in `.repo-setup.json`, not the disk and not
   GitHub: a repository that deleted a check after setup still reads its line, and a check that the
   ruleset does not require is still named. `doctor` answers the second question.
