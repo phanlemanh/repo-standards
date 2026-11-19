@@ -19,8 +19,12 @@ requires this check, so there the same edit would have blocked every merge.
   `stages` line, so a hook whose stage comes from its own manifest counts too.
 - When pre-commit itself cannot run (no `.pre-commit-config.yaml`, a config it cannot read, a hook
   repository it cannot fetch), the job says "pre-commit could not run in this repository" with
-  pre-commit's own words, and does not blame the commits. It tells the two apart by pre-commit's
-  exit code: 1 when a hook refuses, 3 on an error of its own.
+  pre-commit's own words, and does not blame the commits. It tells the two apart in two ways.
+  An exit code above 1 is an error of pre-commit (3 when it cannot fetch a hook repository). A
+  missing or unreadable config also ends with 1, like a refusal, so there the job looks for
+  pre-commit's own error line, "An error has occurred: <kind>:", at the start of a line. Hooks
+  print the commit message back, and those words inside a message are not read as an error: such
+  a commit is reported as refused, like any other.
 - The error line now reads "does not pass this repository's commit-msg hooks", since the format
   is the repository's.
 

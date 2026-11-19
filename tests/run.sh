@@ -1928,7 +1928,7 @@ case "${CC_HOOK:-format}" in
   # the network fails only once the commits are judged: the probes were answered
   flaky) case "$f" in */message) echo "An unexpected error has occurred: CalledProcessError: command: ('git', 'fetch', 'origin', '--tags')"; exit 3 ;; esac ;;
 esac
-grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f" || { echo "stand-in: refused"; exit 1; }
+grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f" || { echo "stand-in: refused"; cat "$f"; exit 1; }
 SH
 chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
 cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
@@ -1985,6 +1985,12 @@ for how in unfetched flaky; do
 done
 # what the hook said about a refused commit is in the log, for whoever has to fix the message
 { cc true 'changed stuff' || true; } | grep -q 'stand-in: refused' || miss "real walls: the commit check hides what the hook said about the commit it refuses"
+# hooks print the message back: a refused commit that holds pre-commit's error words is still a refused commit
+for words in 'An error has occurred in login' 'An unexpected error has occurred: the page is blank'; do
+  if cc true "$words" >/dev/null; then miss "real walls: the commit check accepts a bad commit whose message holds pre-commit's error words ($words)"; fi
+  { cc true "$words" || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name a refused commit whose message holds pre-commit's error words ($words)"
+  if { cc true "$words" || true; } | grep -q '::error::pre-commit could not run'; then miss "real walls: the commit check reads a refused commit as pre-commit failing, from words in its message ($words)"; fi
+done
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
 { CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then

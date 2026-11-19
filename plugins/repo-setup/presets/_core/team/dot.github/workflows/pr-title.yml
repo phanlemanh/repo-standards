@@ -63,11 +63,14 @@ jobs:
           # judge <file> says what they answer: 0 accepted, 1 refused, 2 pre-commit could not run
           # (no config, a config it cannot read, a hook repository it cannot fetch). pre-commit ends
           # with 1 when a hook refuses and with 3 on an error of its own; its error with exit 1
-          # says "An error has occurred".
+          # (no config, a config it cannot read) is known by its own line, "An error has occurred:
+          # <kind>:". Hooks print the commit message back, so only that whole line counts, from the
+          # start of a line: the same words inside a message are not an error of pre-commit.
+          own_error='^An (unexpected )?error has occurred: [A-Za-z_.]+:'
           judge() {
             code=0
             pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$1" > "$RUNNER_TEMP/hook-out" 2>&1 || code=$?
-            if [ "$code" -gt 1 ] || grep -Eq 'An (unexpected )?error has occurred' "$RUNNER_TEMP/hook-out"; then
+            if [ "$code" -gt 1 ] || grep -Eq "$own_error" "$RUNNER_TEMP/hook-out"; then
               return 2
             fi
             return "$code"
@@ -75,7 +78,7 @@ jobs:
           # An error of pre-commit is not a refusal: the commits are not blamed for it.
           could_not_run() {
             cat "$RUNNER_TEMP/hook-out"
-            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -E -A1 'An (unexpected )?error has occurred' "$RUNNER_TEMP/hook-out" | tr '\n' ' ')"
+            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -E -A1 "$own_error" "$RUNNER_TEMP/hook-out" | tr '\n' ' ')"
             exit 1
           }
           # First, do the hooks judge anything? Two messages no rule should accept, one a single
