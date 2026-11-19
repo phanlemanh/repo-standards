@@ -245,9 +245,11 @@ manifest_set "$up" 'm["files"][".gitattributes"] = "0" * 64'
 up_apply "$S/apply.py" "$up" --base-from "$arch" >/dev/null
 in_group "$up" marked .gitattributes || miss "upgrade: a file with no matching base is not marked"
 grep -qxF '||||||| repo-setup: no matching base' "$up/.gitattributes" || miss "upgrade: a two-way merge is not labelled as having no base"
-# unread base: no release to read leaves the file as it is, with the reason, and fails
+# unread base: no release to read leaves the file as it is, with the reason, and fails. The
+# recorded content is one only release 0.0.1 could give: what today's template gives is found
+# without reading a release (47n).
 { cat "$TMP/gitattributes.template"; echo "local-only"; } > "$up/.gitattributes"
-h=$(shasum -a 256 "$TMP/gitattributes.template" | cut -d' ' -f1)
+h=$(printf 'what only release 0.0.1 wrote\n' | shasum -a 256 | cut -d' ' -f1)
 manifest_set "$up" "m['files']['.gitattributes'] = '$h'; m['file_versions']['.gitattributes'] = '0.0.1'"
 before=$(shasum < "$up/.gitattributes")
 up_apply "$S/apply.py" "$up" --base-from "$TMP/arch-empty" >/dev/null
@@ -493,5 +495,46 @@ PY
 for c in clean crlf same-key hand-formatted no-base not-asked; do
   pj_case "$c" | grep -qx "$c True" || miss "package.json upgrade: key merge case '$c' is wrong ($(pj_case "$c" 2>&1 | tail -1))"
 done
+
+# 47n. found on design-ci-probe (main before 0.10.0 -> the 0.10.0 tag): a build between two
+#      releases carries the version of the release before it, so the manifest names a release the
+#      file was not written from, and no release up to that one gives the recorded content. The
+#      templates of the running plugin are tried too: a hash that matches proves the content,
+#      whatever version the manifest names.
+mid="$TMP/mid"; cp -R "$PLUGIN" "$mid"
+find "$mid" -name __pycache__ -prune -exec rm -rf {} +
+subst 's/"version": "[^"]*"/"version": "0.0.1"/' "$mid/.claude-plugin/plugin.json"
+up_n="$TMP/up-n"; up_install "$up_n" "$mid"
+[ "$(manifest_get "$up_n" 'm["file_versions"]["CLAUDE.md"]')" = 0.0.1 ] \
+  || miss "upgrade: the build between releases does not record the version of the release before it"
+echo "- A rule of this repository." >> "$up_n/CLAUDE.md"
+found=$(up_find "$up_n" "$arch" CLAUDE.md "" 0.0.1 2>&1 || true)
+case "$found" in "found $NOW "*) ;; *) miss "upgrade: the running plugin's templates are not tried as the base ($found)" ;; esac
+before=$(shasum < "$up_n/CLAUDE.md")
+up_apply "$S/apply.py" "$up_n" --base-from "$arch" >/dev/null
+[ "$(cat "$up_n.rc")" = 0 ] || miss "upgrade: a file written by a build between releases fails the upgrade (exit $(cat "$up_n.rc"))"
+in_group "$up_n" marked CLAUDE.md && miss "upgrade: a file written from today's template is marked"
+in_group "$up_n" edited CLAUDE.md || miss "upgrade: a file written from today's template, then edited, is not reported as edited"
+[ "$(shasum < "$up_n/CLAUDE.md")" = "$before" ] || miss "upgrade: a file written from today's template was changed"
+[ "$(manifest_get "$up_n" 'm["file_versions"]["CLAUDE.md"]')" = "$NOW" ] \
+  || miss "upgrade: an edited file whose template did not change does not record the running version"
+# The base is the running templates as the repository chose them: a move from starter to team in
+# the same run still merges three ways, and the repository's line stays. Here release 0.0.1 words
+# one rule of AGENTS.md differently, so it does not give the base.
+arch_n="$TMP/arch-n"; mkdir -p "$arch_n"; cp -R "$old" "$arch_n/repo-setup-v0.0.1"
+subst 's/Every behaviour change comes with a test\./Each behaviour change comes with a test./' \
+  "$arch_n/repo-setup-v0.0.1/presets/_core/starter/+AGENTS.md/10-guide.md.tmpl"
+grep -q 'Each behaviour change' "$arch_n/repo-setup-v0.0.1/presets/_core/starter/+AGENTS.md/10-guide.md.tmpl" \
+  || miss "upgrade: the stand-in release did not change AGENTS.md"
+up_n2="$TMP/up-n2"; up_install "$up_n2" "$mid"
+python3 - "$up_n2/AGENTS.md" <<'PY2'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); lines = p.read_text().splitlines(True)
+p.write_text(lines[0] + "\nA note of this repository.\n" + "".join(lines[1:]))
+PY2
+up_apply "$S/apply.py" "$up_n2" --base-from "$arch_n" --level team >/dev/null
+in_group "$up_n2" merged AGENTS.md || miss "upgrade: starter to team from a build between releases does not merge AGENTS.md three ways"
+grep -qxF 'A note of this repository.' "$up_n2/AGENTS.md" || miss "upgrade: the merge lost the repository's note in AGENTS.md"
+grep -q '^<<<<<<< ' "$up_n2/AGENTS.md" && miss "upgrade: AGENTS.md holds conflict markers after starter to team"
 
 echo "ok  upgrade path (or misses reported above)"
