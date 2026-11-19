@@ -7,6 +7,10 @@ red until they are gone. An empty base is a two-way merge: everything that diffe
 package.json is merged key by key where the line merge meets: npm writes the keys it adds right
 after the last block, so a line the template adds at the end of `scripts` always touches them.
 
+A file whose template ends with a section the plugin writes (AGENTS.md) is merged in two parts
+where the line merge meets: a repository adds its own text at the end too, and there the order is
+known, since the section's place is last.
+
 Only the Python standard library and git are used (Python 3.11+).
 """
 
@@ -139,6 +143,47 @@ def _crlf(data: bytes) -> bytes:
     return data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
 
 
+def _split_tail(data: bytes, heading: bytes, newline: bytes) -> tuple[bytes, bytes]:
+    """(what comes before the line `heading`, from that line to the end of the file). Without
+    such a line the second part is empty. The blank lines between the two belong to neither, and
+    spaces after the heading do not hide it."""
+    lines = data.splitlines(keepends=True)
+    for at, line in enumerate(lines):
+        if line.rstrip() == heading:
+            before = b"".join(lines[:at]).rstrip(b"\r\n")
+            return (before + newline if before else b""), b"".join(lines[at:])
+    return data, b""
+
+
+def merge_with_tail(
+    current: bytes, base: bytes, new: bytes, heading: bytes, base_label: str, new_label: str
+) -> tuple[bytes, bool] | None:
+    """The three-way merge in two parts, for a template that ends with a section the plugin
+    writes, from the line `heading` to the end: what comes before the section, then the section.
+
+    The section's place is last, so text the repository added at the end of its file stays before
+    it and the two no longer meet. Returns (content, True when the part before the section needed
+    no conflict markers), or None when this is no better than the merge of the whole file: the
+    template has no such section, the section itself meets what the repository did to it, or git
+    cannot merge."""
+    newline = b"\r\n" if _is_crlf(current) else b"\n"
+    (ours, our_tail), (old, old_tail), (theirs, their_tail) = (
+        _split_tail(data, heading, newline) for data in (current, base, new)
+    )
+    if not their_tail:
+        return None
+    try:
+        tail, tail_clean = three_way(our_tail, old_tail, their_tail, base_label, new_label)
+        if not tail_clean:
+            return None
+        body, body_clean = three_way(ours, old, theirs, base_label, new_label)
+    except MergeUnavailable:
+        return None
+    if not tail:
+        return body, body_clean
+    return body.rstrip(b"\r\n") + newline * 2 + tail, body_clean
+
+
 def merges_by_key(path: str) -> bool:
     """package.json: npm writes it again on every install, and puts the keys it adds right after
     the last block, where the template adds its own lines too."""
@@ -152,6 +197,7 @@ def reconcile(
     base_version: str | None,
     new_version: str,
     by_key: bool = False,
+    tail_heading: bytes | None = None,
 ) -> tuple[str, bytes | None, str]:
     """What to do with a file the repository edited in place, now that the template is `new`.
 
@@ -159,18 +205,25 @@ def reconcile(
     two-way). Returns (group, content to write or None, reason): `edited` (nothing to do),
     `merged`, `marked` (written with conflict markers) or `base_unread` (git could not merge).
     A repository whose file ends its lines with CRLF keeps them. With `by_key`, a JSON object
-    whose line merge meets is merged key by key when that keeps both sides (`merge_by_key`)."""
+    whose line merge meets is merged key by key when that keeps both sides (`merge_by_key`).
+    With `tail_heading`, a file whose line merge meets is merged in two parts, the section that
+    starts at that line apart from what comes before it (`merge_with_tail`)."""
     if base is not None and base == new:
         return "edited", None, ""
     base_bytes = base if base is not None else b""
     base_label = release_label(base_version) if base is not None and base_version else NO_BASE_LABEL
+    new_label = release_label(new_version)
     template = new
     if _is_crlf(current):
         base_bytes, new = _crlf(base_bytes), _crlf(new)
     try:
-        merged, clean = three_way(current, base_bytes, new, base_label, release_label(new_version))
+        merged, clean = three_way(current, base_bytes, new, base_label, new_label)
     except MergeUnavailable as exc:
         return "base_unread", None, str(exc)
+    if not clean and tail_heading and base is not None:
+        parted = merge_with_tail(current, base_bytes, new, tail_heading, base_label, new_label)
+        if parted is not None:
+            merged, clean = parted
     if not clean and by_key and base is not None:
         keyed = merge_by_key(current, base, template)
         if keyed is not None:

@@ -237,6 +237,14 @@ def finish(content: bytes, root: Path, present: Callable[[str], bool], adopt: bo
     return f"{body}\n\n{section}\n".encode("utf-8")
 
 
+def section_heading(root: Path) -> bytes | None:
+    """The line the section starts with, as it stands in AGENTS.md; None when the templates have no
+    registry, or one without that line."""
+    registry = load_registry(root)
+    heading = str((registry or {}).get("summary", {}).get("heading", "")).strip("\n")
+    return heading.encode("utf-8") or None
+
+
 def total(counts: dict[str, dict[str, int]]) -> dict[str, int]:
     return {key: sum(c[key] for c in counts.values()) for key in ("machine", "word", "none")}
 

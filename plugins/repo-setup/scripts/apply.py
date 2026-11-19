@@ -789,7 +789,8 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 group, write, why = upgrade_merge.reconcile(
                     current, content, base.content, base.version, now,
-                    by_key=upgrade_merge.merges_by_key(key))
+                    by_key=upgrade_merge.merges_by_key(key),
+                    tail_heading=rule_kinds.section_heading(PLUGIN_ROOT) if key == RULES_FILE else None)
                 results[group].append(key)
                 if group == "base_unread":
                     base_reasons[key] = why
