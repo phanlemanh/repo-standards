@@ -103,7 +103,7 @@ This layer has not yet been run against a real Claude session.
 
 The plugin stops at setup. It runs when you call it and has no hooks. To build features with an
 agent loop and acceptance gates, use a separate tool such as
-[Acceptance Gate Kit](https://github.com/phanlemanh/acceptance-gate-kit).
+[delivery-loop](https://github.com/phanlemanh/delivery-loop).
 
 ## Procedures generated into the repo
 
