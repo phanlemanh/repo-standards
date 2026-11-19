@@ -10,7 +10,8 @@ or three reasoned options at each, gets an independent critique, then builds and
 /plugin install repo-setup@repo-standards
 ```
 
-Needs Python 3.11+ for the scripts.
+Needs Python 3.11+ for the scripts, and git 2.38+ for the flow metrics of a team-level repo
+(`tools/sdlc_metrics.py` uses `git merge-tree --write-tree`).
 
 ## How setup works
 

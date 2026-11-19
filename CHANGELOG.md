@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Docs: git 2.38 or newer is listed in the install requirements
+`tools/sdlc_metrics.py` (team level) replays merges of the default branch with
+`git merge-tree --write-tree`, which git added in 2.38. On git 2.37 the back-merge numbers fail and
+`tests/run.sh` reports 12 misses in its flow section. The READMEs now say so next to Python 3.11.
+
 ### Fixed: `dependency-audit` is green again on a `react-vite` setup with `design`
 `npm audit --omit=dev --audit-level=high` (workflow "Security") had been red on every such setup since
 2026-11-18: 8 high advisories, all through `shadcn`. The root is GHSA-fc5q-39xc-vjpf, a ReDoS in
