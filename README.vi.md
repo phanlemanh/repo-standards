@@ -6,7 +6,7 @@ Marketplace này chứa một plugin là **repo-setup**. Plugin dựng, chuẩn 
 
 ## Cài đặt
 
-Bạn cần [Claude Code](https://code.claude.com) và Python 3.11 trở lên cho các script của plugin. Tài khoản GitHub chỉ cần khi muốn đẩy code lên. Trong Claude Code:
+Bạn cần [Claude Code](https://code.claude.com) và Python 3.11 trở lên cho các script của plugin. Cần git 2.38 trở lên cho số đo luồng của repo cấp team (`tools/sdlc_metrics.py` dựng lại các lần merge bằng `git merge-tree --write-tree`) và cho `tests/run.sh`. Tài khoản GitHub chỉ cần khi muốn đẩy code lên. Trong Claude Code:
 
 ```
 /plugin marketplace add phanlemanh/repo-standards

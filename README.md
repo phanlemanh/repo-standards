@@ -14,7 +14,9 @@ acceptance gates, use a separate tool such as
 ## Install
 
 You need [Claude Code](https://code.claude.com). You need Python 3.11 or newer for the plugin's
-scripts, and a GitHub account only if you want to push code. In Claude Code:
+scripts, git 2.38 or newer for the flow metrics of a team-level repo (`tools/sdlc_metrics.py`
+replays merges with `git merge-tree --write-tree`) and for `tests/run.sh`, and a GitHub account
+only if you want to push code. In Claude Code:
 
 ```
 /plugin marketplace add phanlemanh/repo-standards
