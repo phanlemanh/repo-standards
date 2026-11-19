@@ -694,7 +694,7 @@ grep -q '.claude/skills/review-change/SKILL.md' "$u/.github/workflows/pr-pipelin
 if grep -qE '^ +plugins:' "$u"/.github/workflows/*.yml; then miss "agent workflows still install the plugin"; fi
 grep -q 'page-types.yaml' "$u/AGENTS.md" || miss "AGENTS.md lost the spec format"
 if python3 "$u/tools/github_setup.py" --help | grep -q marketplace; then miss "github_setup still sets a marketplace for CI"; fi
-grep -q 'acceptance-gate-kit' "$ROOT/README.md" || miss "README does not say where the feature loop lives"
+grep -q 'phanlemanh/delivery-loop' "$ROOT/README.md" || miss "README does not say where the feature loop lives"
 echo "ok  setup only (or misses reported above)"
 
 # 30. PR pipeline: bots can be reviewed, review runs no PR code, the gate runs no PR code

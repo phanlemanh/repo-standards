@@ -5,7 +5,7 @@ repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh 
 
 ## Ý định
 
-Repo Standards sinh ra để vòng làm tính năng (Acceptance Gate Kit, tức delivery-loop) chạy cùng
+Repo Standards sinh ra để vòng làm tính năng (delivery-loop, trước đây là Acceptance Gate Kit) chạy cùng
 Claude Code hiệu quả hơn: ít lần người xuất hiện hơn, thời gian ngắn hơn, ít token hơn, mà vẫn tin
 được. Người đứng ở biên.
 
