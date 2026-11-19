@@ -1923,8 +1923,12 @@ case "${CC_HOOK:-format}" in
   broken) echo "An error has occurred: InvalidConfigError: "; echo "=====> .pre-commit-config.yaml is not a file"; exit 1 ;;
   # a hook whose only rule is the length of the first line
   maxlen) [ "$(head -1 "$f" | wc -c)" -le 73 ]; exit $? ;;
+  # a hook repository pre-commit cannot fetch: its other wording, and exit code 3
+  unfetched) echo "An unexpected error has occurred: CalledProcessError: command: ('git', 'fetch', 'origin', '--tags')"; exit 3 ;;
+  # the network fails only once the commits are judged: the probes were answered
+  flaky) case "$f" in */message) echo "An unexpected error has occurred: CalledProcessError: command: ('git', 'fetch', 'origin', '--tags')"; exit 3 ;; esac ;;
 esac
-grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f"
+grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f" || { echo "stand-in: refused"; exit 1; }
 SH
 chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
 cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
@@ -1974,6 +1978,13 @@ if CC_HOOK=maxlen cc true "$long_title" >/dev/null; then miss "real walls: the c
 if CC_HOOK=broken cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit cannot run"; fi
 { CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run"
 if { CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits when pre-commit cannot run"; fi
+for how in unfetched flaky; do
+  if CC_HOOK=$how cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit ends with an unexpected error ($how)"; fi
+  { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run ($how)"
+  if { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits for an unexpected error of pre-commit ($how)"; fi
+done
+# what the hook said about a refused commit is in the log, for whoever has to fix the message
+{ cc true 'changed stuff' || true; } | grep -q 'stand-in: refused' || miss "real walls: the commit check hides what the hook said about the commit it refuses"
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
 { CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then

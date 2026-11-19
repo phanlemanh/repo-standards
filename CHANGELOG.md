@@ -17,16 +17,18 @@ requires this check, so there the same edit would have blocked every merge.
   accept (a single dot, and a line of 300 dots) and expects one refusal, so a hook that judges
   only the length counts as well as one that judges the format. It does not read the config for a
   `stages` line, so a hook whose stage comes from its own manifest counts too.
-- When pre-commit itself cannot run (no `.pre-commit-config.yaml`, a hook that cannot be
-  installed), the job says "pre-commit could not run in this repository" with pre-commit's own
-  words, and does not blame the commits.
+- When pre-commit itself cannot run (no `.pre-commit-config.yaml`, a config it cannot read, a hook
+  repository it cannot fetch), the job says "pre-commit could not run in this repository" with
+  pre-commit's own words, and does not blame the commits. It tells the two apart by pre-commit's
+  exit code: 1 when a hook refuses, 3 on an error of its own.
 - The error line now reads "does not pass this repository's commit-msg hooks", since the format
   is the repository's.
 
-**What breaks on upgrade**: nothing turns red that was green. Hooks that name no `stages` also
-run in this job, once per commit, as they do at `git commit`; they see only the message file, so
-a hook limited by `files` is skipped. A repository that edited `pr-title.yml` in place gets the
-change through the three-way merge.
+**What breaks on upgrade**: a `.pre-commit-config.yaml` as the plugin writes it gives the same
+result as before. Hooks that name no `stages` now also run in this job, once per commit, as they do
+at `git commit`; they see only the message file, so a hook limited by `files` is skipped. One such
+hook can turn a green check red: see the known gap. A repository that edited `pr-title.yml` in
+place gets the change through the three-way merge.
 
 **Known gap**: a hook that names no `stages`, runs on every commit (`always_run`) and needs the
 project installed fails in this job, which installs nothing, and the check then goes red on every
