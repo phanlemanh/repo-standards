@@ -58,13 +58,59 @@ jobs:
               echo "::warning::The merge settings could not be read: the commits of this branch were not checked."
               exit 0 ;;
           esac
+          # The commits are judged by this repository's own commit-msg hooks, whatever their id and
+          # however the config names their stage: the same hooks `git commit` runs.
+          # judge <file> says what they answer: 0 accepted, 1 refused, 2 pre-commit could not run
+          # (no config, a config it cannot read, a hook repository it cannot fetch). pre-commit ends
+          # with 1 when a hook refuses and with 3 on an error of its own; its error with exit 1
+          # (no config, a config it cannot read) is known by its own line, "An error has occurred:
+          # <kind>:". Hooks print the commit message back, so only that whole line counts, from the
+          # start of a line: the same words inside a message are not an error of pre-commit.
+          own_error='^An (unexpected )?error has occurred: [A-Za-z_.]+:'
+          judge() {
+            code=0
+            pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$1" > "$RUNNER_TEMP/hook-out" 2>&1 || code=$?
+            if [ "$code" -gt 1 ] || grep -Eq "$own_error" "$RUNNER_TEMP/hook-out"; then
+              return 2
+            fi
+            return "$code"
+          }
+          # An error of pre-commit is not a refusal: the commits are not blamed for it.
+          could_not_run() {
+            cat "$RUNNER_TEMP/hook-out"
+            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -E -A1 "$own_error" "$RUNNER_TEMP/hook-out" | tr '\n' ' ')"
+            exit 1
+          }
+          # First, do the hooks judge anything? Two messages no rule should accept, one a single
+          # dot and one a line of 300 dots: a hook that judges the format or the length refuses at
+          # least one. If both pass, this check would be green and judge nothing.
+          printf '.\n' > "$RUNNER_TEMP/probe-short"
+          printf '%0300d\n' 0 | tr 0 . > "$RUNNER_TEMP/probe-long"
+          refused=0
+          for probe in probe-short probe-long; do
+            answer=0; judge "$RUNNER_TEMP/$probe" || answer=$?
+            case "$answer" in
+              0) ;;
+              1) refused=1; break ;;
+              *) could_not_run ;;
+            esac
+          done
+          if [ "$refused" = 0 ]; then
+            echo "::error::No hook of this repository refuses a message at commit-msg (see .pre-commit-config.yaml): nothing judges the commits of this branch."
+            exit 1
+          fi
           # Merge commits (two parents) carry Git's own message.
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/commits" \
             --jq '.[] | select((.parents | length) < 2) | .sha' > "$RUNNER_TEMP/shas"
           failed=0
           while read -r sha; do
             gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq .commit.message > "$RUNNER_TEMP/message"
-            pipx run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message" \
-              || { echo "::error::Commit $sha does not follow Conventional Commits: $(head -1 "$RUNNER_TEMP/message")"; failed=1; }
+            answer=0; judge "$RUNNER_TEMP/message" || answer=$?
+            case "$answer" in
+              0) ;;
+              1) cat "$RUNNER_TEMP/hook-out"
+                 echo "::error::Commit $sha does not pass this repository's commit-msg hooks: $(head -1 "$RUNNER_TEMP/message")"; failed=1 ;;
+              *) could_not_run ;;
+            esac
           done < "$RUNNER_TEMP/shas"
           exit "$failed"

@@ -1888,7 +1888,10 @@ for job in conventional-title conventional-commits; do
 done
 grep -q 'squashMergeAllowed' "$pt" || miss "real walls: the title check does not read whether the repository squashes"
 grep -q 'mergeCommitAllowed' "$pt" || miss "real walls: the commit check does not read whether the repository keeps commits"
-grep -q 'pre-commit run conventional-pre-commit --hook-stage commit-msg' "$pt" || miss "real walls: commits are not judged by the repository's own commit-msg hook"
+grep -q 'pre-commit run --hook-stage commit-msg' "$pt" || miss "real walls: commits are not judged by the repository's own commit-msg hooks"
+if grep -q 'pre-commit run conventional-pre-commit' "$pt"; then
+  miss "real walls: the commit check names one hook id, so a repository with its own commit-msg hook is red on every pull request"
+fi
 # the commit check, run with stand-ins for gh (two commits, the second one given) and for the hook
 pipeline="$pt"
 mkdir -p "$TMP/ccbin" "$TMP/ccrun"
@@ -1904,23 +1907,92 @@ esac
 SH
 cat > "$TMP/ccbin/pipx" <<'SH'
 #!/bin/sh
-# Stand-in for the commit-msg hook: the last argument is the file with the message.
+# Stand-in for `pipx run pre-commit run [<hook id>] --hook-stage commit-msg --commit-msg-filename <file>`.
+# Like pre-commit, it refuses a hook id the repository's config does not have; then it judges the
+# message in the file given last.
+case "${4:-}" in
+  --*|"") ;;
+  *) grep -q "id: $4\$" .pre-commit-config.yaml || { echo "No hook with id $4 in stage commit-msg"; exit 1; } ;;
+esac
 for a in "$@"; do f=$a; done
 echo "$f" >> "$CC_CALLS"
-grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f"
+# With no hook at commit-msg, pre-commit runs nothing on the message and ends green.
+grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep -q 'commit-msg\|id: conventional-pre-commit$' || exit 0
+case "${CC_HOOK:-format}" in
+  # pre-commit itself cannot run (its own words)
+  broken) echo "An error has occurred: InvalidConfigError: "; echo "=====> .pre-commit-config.yaml is not a file"; exit 1 ;;
+  # a hook whose only rule is the length of the first line
+  maxlen) [ "$(head -1 "$f" | wc -c)" -le 73 ]; exit $? ;;
+  # a hook repository pre-commit cannot fetch: its other wording, and exit code 3
+  unfetched) echo "An unexpected error has occurred: CalledProcessError: command: ('git', 'fetch', 'origin', '--tags')"; exit 3 ;;
+  # the network fails only once the commits are judged: the probes were answered
+  flaky) case "$f" in */message) echo "An unexpected error has occurred: CalledProcessError: command: ('git', 'fetch', 'origin', '--tags')"; exit 3 ;; esac ;;
+esac
+grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f" || { echo "stand-in: refused"; cat "$f"; exit 1; }
 SH
 chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
 cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
-  ( PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" PR=7 GITHUB_REPOSITORY=acme/sample \
+  ( cd "${CC_REPO:-$rw}" && PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" CC_HOOK="${CC_HOOK:-format}" PR=7 GITHUB_REPOSITORY=acme/sample \
     RUNNER_TEMP="$TMP/ccrun" GITHUB_STEP_SUMMARY="$TMP/cc-summary" bash -e -c "$(steps_of 'Check every commit the branch would add')" ) 2>&1; }
 cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a branch whose commits are all conventional"
-[ "$(wc -l < "$TMP/cc-calls" | tr -d ' ')" = 2 ] || miss "real walls: the commit check did not judge both commits"
+[ "$(grep -c '/message$' "$TMP/cc-calls")" = 2 ] || miss "real walls: the commit check did not judge both commits"
 # rule-check: commit-format
 if cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a commit that is not conventional"; fi
 { cc true 'changed stuff' || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name the commit it rejects"
 cc false 'changed stuff' >/dev/null || miss "real walls: the commit check judges commits in a repository that squashes"
 [ ! -s "$TMP/cc-calls" ] || miss "real walls: the commit check ran the hook in a repository that squashes"
 { cc unreadable 'changed stuff' || true; } | grep -q '::warning::' || miss "real walls: the commit check is silent when it cannot read how the repository merges"
+# a repository that replaced the hook with one of its own (another id) is still judged, by that hook;
+# one with no commit-msg hook at all is red and says so: a green check that judges nothing is no wall
+mkdir -p "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-bare" "$TMP/cc-none"
+python3 - "$rw/.pre-commit-config.yaml" "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-bare" "$TMP/cc-none" <<'PY_CC'
+import sys
+src, own, block, bare, none = sys.argv[1:]
+text = open(src, encoding="utf-8").read()
+mark = "  - repo: https://github.com/compilerla/conventional-pre-commit"
+head, found, tail = text.partition(mark)
+assert found, "the sample config has no conventional-pre-commit block"
+rest = tail.split("\n  - repo:", 1)
+after = "\n  - repo:" + rest[1] if len(rest) == 2 else "\n"
+hook = ("  - repo: local\n    hooks:\n      - id: commit-message\n        name: Commit message\n"
+        "        entry: python3 tools/commit_msg.py\n        language: system\n")
+def write(folder, body):
+    open(f"{folder}/.pre-commit-config.yaml", "w", encoding="utf-8").write(body)
+write(own, head + hook + "        stages: [commit-msg]" + after)
+write(block, head + hook + "        stages:\n          - pre-commit\n          - \"commit-msg\"" + after)
+# the hook listed with no `stages` line: its own manifest puts it at commit-msg
+write(bare, text.replace("      - id: conventional-pre-commit\n        stages: [commit-msg]\n",
+                         "      - id: conventional-pre-commit\n"))
+assert "stages: [commit-msg]" not in open(f"{bare}/.pre-commit-config.yaml", encoding="utf-8").read()
+write(none, head.rstrip("\n") + after)
+PY_CC
+for own in cc-own cc-block cc-bare; do
+  CC_REPO="$TMP/$own" cc true 'fix: two' >/dev/null || miss "real walls: the commit check is red in a repository whose commit-msg hook is written another way ($own)"
+  if CC_REPO="$TMP/$own" cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a bad commit in a repository whose commit-msg hook is written another way ($own)"; fi
+done
+# a hook that judges something else than the format (here only the length of the title) is a wall too
+CC_HOOK=maxlen cc true 'any words at all' >/dev/null || miss "real walls: the commit check calls a length-only commit-msg hook no hook"
+long_title=$(printf '%0100d' 0)
+if CC_HOOK=maxlen cc true "$long_title" >/dev/null; then miss "real walls: the commit check accepts a commit the length-only hook refuses"; fi
+# pre-commit that cannot run is said to be that: the commits are not blamed
+if CC_HOOK=broken cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit cannot run"; fi
+{ CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run"
+if { CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits when pre-commit cannot run"; fi
+for how in unfetched flaky; do
+  if CC_HOOK=$how cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit ends with an unexpected error ($how)"; fi
+  { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run ($how)"
+  if { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits for an unexpected error of pre-commit ($how)"; fi
+done
+# what the hook said about a refused commit is in the log, for whoever has to fix the message
+{ cc true 'changed stuff' || true; } | grep -q 'stand-in: refused' || miss "real walls: the commit check hides what the hook said about the commit it refuses"
+# hooks print the message back: a refused commit that holds pre-commit's error words is still a refused commit
+for words in 'An error has occurred in login' 'An unexpected error has occurred: the page is blank'; do
+  if cc true "$words" >/dev/null; then miss "real walls: the commit check accepts a bad commit whose message holds pre-commit's error words ($words)"; fi
+  { cc true "$words" || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name a refused commit whose message holds pre-commit's error words ($words)"
+  if { cc true "$words" || true; } | grep -q '::error::pre-commit could not run'; then miss "real walls: the commit check reads a refused commit as pre-commit failing, from words in its message ($words)"; fi
+done
+if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
+{ CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then
   miss "real walls: the github skill still asks a person to edit pr-title.yml by hand"
 fi

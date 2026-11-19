@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### Fixed: `conventional-commits` judges by the repository's own commit-msg hooks
+Found on `onehub-inventory` after its upgrade to 0.9.0: `conventional-commits` (workflow "PR title")
+was red on every pull request. The job called one hook by its id, `conventional-pre-commit`, and
+that repository had replaced it with a commit-msg hook of its own, so pre-commit answered "No hook
+with id `conventional-pre-commit` in stage `commit-msg`". A setup made by `tools/github_setup.py`
+requires this check, so there the same edit would have blocked every merge.
+
+- The job now runs the commit-msg stage (`pre-commit run --hook-stage commit-msg`), with no hook
+  id: the hooks `git commit` runs in that repository judge each commit, whatever they are called.
+- A repository whose hooks refuse no message is still red, and the job says so ("No hook of this
+  repository refuses a message at commit-msg"): a green check that judges nothing is no wall. The
+  job finds out by asking the hooks: before the commits, it gives them two messages no rule should
+  accept (a single dot, and a line of 300 dots) and expects one refusal, so a hook that judges
+  only the length counts as well as one that judges the format. It does not read the config for a
+  `stages` line, so a hook whose stage comes from its own manifest counts too.
+- When pre-commit itself cannot run (no `.pre-commit-config.yaml`, a config it cannot read, a hook
+  repository it cannot fetch), the job says "pre-commit could not run in this repository" with
+  pre-commit's own words, and does not blame the commits. It tells the two apart in two ways.
+  An exit code above 1 is an error of pre-commit (3 when it cannot fetch a hook repository). A
+  missing or unreadable config also ends with 1, like a refusal, so there the job looks for
+  pre-commit's own error line, "An error has occurred: <kind>:", at the start of a line. Hooks
+  print the commit message back, and those words inside a message are not read as an error: such
+  a commit is reported as refused, like any other.
+- The error line now reads "does not pass this repository's commit-msg hooks", since the format
+  is the repository's.
+
+**What breaks on upgrade**: a `.pre-commit-config.yaml` as the plugin writes it gives the same
+result as before. Hooks that name no `stages` now also run in this job, once per commit, as they do
+at `git commit`; they see only the message file, so a hook limited by `files` is skipped. One such
+hook can turn a green check red: see the known gap. A repository that edited `pr-title.yml` in
+place gets the change through the three-way merge.
+
+**Known gap**: a hook that names no `stages`, runs on every commit (`always_run`) and needs the
+project installed fails in this job, which installs nothing, and the check then goes red on every
+commit. Give such a hook `stages: [pre-commit]`.
+
 ### Docs: git 2.38 or newer is listed in the install requirements
 `tools/sdlc_metrics.py` (team level) replays merges of the default branch with
 `git merge-tree --write-tree`, which git added in 2.38. On git 2.37 the back-merge numbers fail and
