@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.1 — 2026-11-20
 
 ### Fixed: a file written by a build between two releases finds its base on upgrade
 Found on the probe repository, on its upgrade to the 0.10.0 tag: the whole of `AGENTS.md` came back
@@ -26,6 +26,26 @@ without network access goes through for it where it used to report `base_unread`
 upgraded from such a commit, whose template of a file changes again before the next release, still
 has no base for that file: it is merged two ways, with markers, if the repository edited it.
 Upgrade from a tag.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI, on
+  `main` at `f134e6a` (the fix above merged): all five checks green, `e2e` in 26 minutes. The
+  end-to-end suite upgrades python from the newest release, now 0.10.0, and ts-node from
+  `repo-setup-v0.7.0`.
+- On a copy of the probe repository at `a59b938`, the state that 0.10.0 marked: with the fix the
+  run ends with exit code 0, `AGENTS.md` is `edited`, no file is marked and only
+  `.repo-setup.json` changes. With the 0.10.0 tag the same tree ends with exit code 1 and
+  `AGENTS.md` marked from its first line to its last.
+- An independent review of the fix found nothing at the critical, high or medium level.
+- Not yet run: the probe repository itself, which waits for the tag of this release; an upgrade
+  without network access of a file the fix now finds without a release.
+
+### Known gaps
+- The gap of this fix is listed with it above.
+- The gaps 0.10.0 lists are still open.
+- A base found in the running templates is labelled with the running version in conflict markers,
+  since the manifest cannot say which build wrote the file.
 
 ## 0.10.0 — 2026-11-19
 
