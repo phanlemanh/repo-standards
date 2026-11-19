@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Fixed: `conventional-commits` judges by the repository's own commit-msg hooks
+Found on `onehub-inventory` after its upgrade to 0.9.0: `conventional-commits` (workflow "PR title")
+was red on every pull request. The job called one hook by its id, `conventional-pre-commit`, and
+that repository had replaced it with a commit-msg hook of its own, so pre-commit answered "No hook
+with id `conventional-pre-commit` in stage `commit-msg`". A setup made by `tools/github_setup.py`
+requires this check, so there the same edit would have blocked every merge.
+
+- The job now runs the commit-msg stage (`pre-commit run --hook-stage commit-msg`), with no hook
+  id: the hooks `git commit` runs in that repository judge each commit, whatever they are called.
+- A repository with no hook at commit-msg is still red, and the job says so ("No hook in
+  `.pre-commit-config.yaml` runs at commit-msg"): a green check that judges nothing is no wall.
+- The error line now reads "does not pass this repository's commit-msg hooks", since the format
+  is the repository's.
+
+**What breaks on upgrade**: nothing turns red that was green. Hooks that name no `stages` also
+run in this job, once per commit, as they do at `git commit`; they see only the message file, so
+a hook limited by `files` is skipped. A repository that edited `pr-title.yml` in place gets the
+change through the three-way merge.
+
 ### Fixed: `dependency-audit` is green again on a `react-vite` setup with `design`
 `npm audit --omit=dev --audit-level=high` (workflow "Security") had been red on every such setup since
 2026-11-18: 8 high advisories, all through `shadcn`. The root is GHSA-fc5q-39xc-vjpf, a ReDoS in

@@ -58,13 +58,25 @@ jobs:
               echo "::warning::The merge settings could not be read: the commits of this branch were not checked."
               exit 0 ;;
           esac
+          # The commits are judged by this repository's own commit-msg hooks, whatever their id: the
+          # same hooks `git commit` runs. With none, this check would be green and judge nothing.
+          python3 - <<'PY' || { echo "::error::No hook in .pre-commit-config.yaml runs at commit-msg: nothing judges the commits of this branch."; exit 1; }
+          import re, sys
+          try:
+              text = re.sub(r"(?m)#.*$", "", open(".pre-commit-config.yaml", encoding="utf-8").read())
+          except OSError:
+              sys.exit(1)
+          inline = re.search(r"stages:\s*\[[^\]]*\bcommit-msg\b", text)
+          block = re.search(r"stages:\s*\n(?:\s*-\s*[\w-]+\s*\n)*?\s*-\s*commit-msg\b", text)
+          sys.exit(0 if inline or block else 1)
+          PY
           # Merge commits (two parents) carry Git's own message.
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/commits" \
             --jq '.[] | select((.parents | length) < 2) | .sha' > "$RUNNER_TEMP/shas"
           failed=0
           while read -r sha; do
             gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq .commit.message > "$RUNNER_TEMP/message"
-            pipx run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message" \
-              || { echo "::error::Commit $sha does not follow Conventional Commits: $(head -1 "$RUNNER_TEMP/message")"; failed=1; }
+            pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message" \
+              || { echo "::error::Commit $sha does not pass this repository's commit-msg hooks: $(head -1 "$RUNNER_TEMP/message")"; failed=1; }
           done < "$RUNNER_TEMP/shas"
           exit "$failed"
