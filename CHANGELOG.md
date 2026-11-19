@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-19
 
 ### Fixed: `conventional-commits` judges by the repository's own commit-msg hooks
 Found on `onehub-inventory` after its upgrade to 0.9.0: `conventional-commits` (workflow "PR title")
@@ -117,6 +117,50 @@ with `--adopt` gets the split items and no section.
   machine they lack; they get none until the manifest records which machines were written.
 - The tag ties a test to a machine; that the test breaks the very rule is read by a person.
   Section 44b (the secret scan) is skipped on a machine without gitleaks, and its tag still counts.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI, on
+  `main` at `eaea3af` (every package above merged): all five checks green, `e2e` in 20 minutes. The
+  end-to-end suite upgrades python from the newest release (0.9.0) and ts-node from
+  `repo-setup-v0.7.0`.
+- Run on GitHub, on the private probe repository (react-vite, team, design): upgraded from `main`
+  at `7e8a1b5`, the templates of 0.9.0, to `main` at `eaea3af` with no file marked
+  (phanlemanh/design-ci-probe#20). The probe keeps a section of its own at the very end of
+  `AGENTS.md`, added for this trial: the file is `merged` with no conflict markers, the two items
+  it has among the six are split, the probe's section stays where it is and "What holds these
+  rules" comes after it. A second run has nothing to do. `make check` is green on a machine, and
+  all eight checks are green on the pull request, `conventional-commits` with the new
+  `pr-title.yml` among them.
+- The same probe tree upgraded with the build before the fix for own rules at the end of
+  `AGENTS.md` (`cc6390c`): exit code 1 and `AGENTS.md` `marked` in one place, between the probe's
+  section and the new one. This is the case the fix is for.
+- An independent review of that fix compared the merge before and after on 6000 random cases:
+  309 went from `marked` to `merged`, none lost a line of the repository or of the template, none
+  had the heading twice, and none changed a result that was clean before.
+- `dependency-audit` on the probe, a `react-vite` setup with `design` made before this release:
+  green after `shadcn` moved to `devDependencies` there (phanlemanh/design-ci-probe#18).
+- Not yet run: `conventional-commits` on `onehub-inventory`, where the red check was found (that
+  repository is on 0.9.0); an upgrade from the tag of this release (the probe ran from `main`
+  before the tag, so its manifest records 0.9.0); a move from starter to team on a real repository
+  that keeps rules of its own in `AGENTS.md`. This release ran none of the other items 0.9.0 lists
+  as not yet run.
+
+### Known gaps
+- The gaps of rule kinds and of the `conventional-commits` job are listed with their sections
+  above.
+- Still open from 0.7.0: a file without a final newline gets markers, the setup skills do not say
+  that `apply.py --dry-run` ends with 1 when a file would be marked, the marker check misses a
+  closing marker Prettier turned into a quote, `upgrade_wall` looks for the `include` lines exactly
+  as the template writes them, and `production` has no reviewer on a private repository on the free
+  plan.
+- `plugins/repo-setup/scripts/apply.py` is 961 lines (930 at 0.9.0), over the 800-line limit for
+  one file.
+- `offline` on macOS went red once on `main` (at `bc31175`: exit code 1, no `FAIL` line) and green
+  on the second attempt of the same commit. The cause is not found; a `printf | grep` pipe of
+  `tests/run.sh` is suspected.
+- The 0.9.0 gap on `dependency-audit` is closed for a new setup. A setup made before this release
+  needs one command, see "What breaks on upgrade" of that fix.
 
 ## 0.9.0 — 2026-11-18
 
