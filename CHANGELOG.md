@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Fixed: a file written by a build between two releases finds its base on upgrade
+Found on the probe repository, on its upgrade to the 0.10.0 tag: the whole of `AGENTS.md` came back
+between conflict markers ("no matching base") and the run ended with exit code 1, although the
+template of that file had not changed. The probe had been upgraded from `main` before 0.10.0 was
+tagged. A build between two releases carries the version of the release before it, so the manifest
+recorded `AGENTS.md` under 0.9.0 with the hash of a template 0.9.0 does not have. The lookup read
+the recorded release and the older ones, found no match, and merged two ways against an empty
+base.
+
+- The templates of the running plugin are now tried first, whatever version the manifest names
+  (`upgrade_base.BaseFinder.find`): a hash that matches proves the content. A file whose template
+  did not change since it was written is `edited` again, and nothing is written into it.
+- They are rendered with the choices the repository had, so a move from starter to team in the
+  same run gets a three-way merge, not markers around the whole file.
+- When they do not match, the answer is what it was: the recorded release, then the older ones.
+
+**What breaks on upgrade**: nothing. One result changes: a file recorded under an older version
+whose content is what today's template gives no longer needs that release's archive, so an upgrade
+without network access goes through for it where it used to report `base_unread`.
+
+**Known gap**: every commit between two releases carries the same version. A repository set up or
+upgraded from such a commit, whose template of a file changes again before the next release, still
+has no base for that file: it is merged two ways, with markers, if the repository edited it.
+Upgrade from a tag.
+
 ## 0.10.0 — 2026-11-19
 
 ### Fixed: `conventional-commits` judges by the repository's own commit-msg hooks

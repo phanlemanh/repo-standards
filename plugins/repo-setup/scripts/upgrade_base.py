@@ -7,6 +7,10 @@ repository, downloaded, or a folder given with --base-from). A rebuilt file coun
 when its hash is the recorded one. Before the upgrade path existed, every run raised the version of
 the whole repository, also for files it left alone, so older releases are tried as well.
 
+The templates of the running plugin are tried first, whatever version the manifest names: a build
+between two releases carries the version of the release before it, so a file it wrote is recorded
+under a release it was not written from. A hash that matches proves the content.
+
 Only the templates of a downloaded release are read: none of its code runs.
 
 Only the Python standard library is used (Python 3.11+).
@@ -213,6 +217,14 @@ class BaseFinder:
         """`found`; `no_match` only when every release could be read and none matches;
         `unread` when nothing could be read, or when a release that might hold the base could
         not be (running again with network access may find it)."""
+        if recorded_version != self._current_version:
+            # Not one of the releases to read: when it does not match, the answer is what it was
+            # without this try. If these templates cannot be rendered as the repository chose
+            # them, the releases below still decide.
+            local = self._files_of("local", lambda: self._current_root)
+            content = local.get(path) if isinstance(local, dict) else None
+            if content is not None and hashlib.sha256(content).hexdigest() == recorded_hash:
+                return Base("found", content, self._current_version)
         failures: list[str] = []
         missing: list[str] = []
         read_any = False
