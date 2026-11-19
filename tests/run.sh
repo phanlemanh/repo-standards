@@ -1918,11 +1918,17 @@ for a in "$@"; do f=$a; done
 echo "$f" >> "$CC_CALLS"
 # With no hook at commit-msg, pre-commit runs nothing on the message and ends green.
 grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep -q 'commit-msg\|id: conventional-pre-commit$' || exit 0
+case "${CC_HOOK:-format}" in
+  # pre-commit itself cannot run (its own words)
+  broken) echo "An error has occurred: InvalidConfigError: "; echo "=====> .pre-commit-config.yaml is not a file"; exit 1 ;;
+  # a hook whose only rule is the length of the first line
+  maxlen) [ "$(head -1 "$f" | wc -c)" -le 73 ]; exit $? ;;
+esac
 grep -qE '^(feat|fix|chore|docs|test|refactor|perf|ci)(\([a-z-]+\))?!?: .+' "$f"
 SH
 chmod +x "$TMP/ccbin/gh" "$TMP/ccbin/pipx"
 cc() { : > "$TMP/cc-calls"; echo "$2" > "$TMP/cc-second"
-  ( cd "${CC_REPO:-$rw}" && PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" PR=7 GITHUB_REPOSITORY=acme/sample \
+  ( cd "${CC_REPO:-$rw}" && PATH="$TMP/ccbin:$PATH" CC_KEEPS="$1" CC_SECOND="$TMP/cc-second" CC_CALLS="$TMP/cc-calls" CC_HOOK="${CC_HOOK:-format}" PR=7 GITHUB_REPOSITORY=acme/sample \
     RUNNER_TEMP="$TMP/ccrun" GITHUB_STEP_SUMMARY="$TMP/cc-summary" bash -e -c "$(steps_of 'Check every commit the branch would add')" ) 2>&1; }
 cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a branch whose commits are all conventional"
 [ "$(grep -c '/message$' "$TMP/cc-calls")" = 2 ] || miss "real walls: the commit check did not judge both commits"
@@ -1960,6 +1966,14 @@ for own in cc-own cc-block cc-bare; do
   CC_REPO="$TMP/$own" cc true 'fix: two' >/dev/null || miss "real walls: the commit check is red in a repository whose commit-msg hook is written another way ($own)"
   if CC_REPO="$TMP/$own" cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a bad commit in a repository whose commit-msg hook is written another way ($own)"; fi
 done
+# a hook that judges something else than the format (here only the length of the title) is a wall too
+CC_HOOK=maxlen cc true 'any words at all' >/dev/null || miss "real walls: the commit check calls a length-only commit-msg hook no hook"
+long_title=$(printf '%0100d' 0)
+if CC_HOOK=maxlen cc true "$long_title" >/dev/null; then miss "real walls: the commit check accepts a commit the length-only hook refuses"; fi
+# pre-commit that cannot run is said to be that: the commits are not blamed
+if CC_HOOK=broken cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit cannot run"; fi
+{ CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run"
+if { CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits when pre-commit cannot run"; fi
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
 { CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then

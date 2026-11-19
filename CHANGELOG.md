@@ -13,9 +13,13 @@ requires this check, so there the same edit would have blocked every merge.
   id: the hooks `git commit` runs in that repository judge each commit, whatever they are called.
 - A repository whose hooks refuse no message is still red, and the job says so ("No hook of this
   repository refuses a message at commit-msg"): a green check that judges nothing is no wall. The
-  job finds out by asking the hooks: before the commits, it gives them a message no format accepts
-  (`.`) and expects a refusal. It does not read the config for a `stages` line, so a hook whose
-  stage comes from its own manifest counts too.
+  job finds out by asking the hooks: before the commits, it gives them two messages no rule should
+  accept (a single dot, and a line of 300 dots) and expects one refusal, so a hook that judges
+  only the length counts as well as one that judges the format. It does not read the config for a
+  `stages` line, so a hook whose stage comes from its own manifest counts too.
+- When pre-commit itself cannot run (no `.pre-commit-config.yaml`, a hook that cannot be
+  installed), the job says "pre-commit could not run in this repository" with pre-commit's own
+  words, and does not blame the commits.
 - The error line now reads "does not pass this repository's commit-msg hooks", since the format
   is the repository's.
 

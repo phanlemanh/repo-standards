@@ -60,10 +60,22 @@ jobs:
           esac
           # The commits are judged by this repository's own commit-msg hooks, whatever their id and
           # however the config names their stage: the same hooks `git commit` runs. First, do they
-          # judge anything? A message no format accepts must be refused; if it passes, this check
-          # would be green and judge nothing.
-          printf '.\n' > "$RUNNER_TEMP/probe"
-          if pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/probe" > /dev/null 2>&1; then
+          # judge anything? Two messages no rule should accept, one a single dot and one a line of
+          # 300 dots: a hook that judges the format or the length refuses at least one. If both
+          # pass, this check would be green and judge nothing.
+          printf '.\n' > "$RUNNER_TEMP/probe-short"
+          printf '%0300d\n' 0 | tr 0 . > "$RUNNER_TEMP/probe-long"
+          refused=0
+          for probe in probe-short probe-long; do
+            pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/$probe" > "$RUNNER_TEMP/probe-out" 2>&1 \
+              || { refused=1; break; }
+          done
+          # pre-commit that cannot run (no config, a hook that cannot be installed) is not a refusal.
+          if grep -q 'An error has occurred' "$RUNNER_TEMP/probe-out"; then
+            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -A1 'An error has occurred' "$RUNNER_TEMP/probe-out" | tr '\n' ' ')"
+            exit 1
+          fi
+          if [ "$refused" = 0 ]; then
             echo "::error::No hook of this repository refuses a message at commit-msg (see .pre-commit-config.yaml): nothing judges the commits of this branch."
             exit 1
           fi
