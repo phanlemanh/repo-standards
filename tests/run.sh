@@ -1602,7 +1602,7 @@ for agents in (False, True):
 " ) || miss "merge method: the plan for merge commits differs from squash in more than the merge settings"
 out=$(dry "$gs" --merge-method rebase || true)
 printf '%s\n' "$out" | grep -q "invalid choice: 'rebase'" || miss "merge method: an unknown method was not refused by name: $out"
-dry "$gsm" --merge-method merge --reviewer @b | grep -q 'human approval by @b' || miss "merge method: --reviewer is lost next to --merge-method"
+dry "$gsm" --merge-method merge --reviewer @b | grep 'human approval by @b' >/dev/null || miss "merge method: --reviewer is lost next to --merge-method"
 [ ! -s "$TMP/gs-calls" ] || miss "merge method: a dry run called gh to change something: $(cat "$TMP/gs-calls")"
 python3 "$gs/tools/github_setup.py" --help | grep -q -- '--merge-method' || miss "merge method: --help does not show the option"
 # agents merge low-tier PRs with the method the repository allows, and squash when it cannot tell
@@ -1631,7 +1631,7 @@ grep -q -- '--merge-method merge' "$ROOT/plugins/repo-setup/skills/github/SKILL.
 #      does not set a repository back to squash. Found on a repository whose feature loop needs merge
 #      commits: one run that forgot --merge-method merge made it squash-only again.
 grep -q '^merge_method: squash$' "$gs/governance/autonomy.yaml" || miss "merge method: a new repository's policy does not store merge_method: squash"
-dry "$gsm" | grep -q 'merge commits only' || miss "merge method: merge_method: merge in the policy is not what github_setup sets"
+dry "$gsm" | grep 'merge commits only' >/dev/null || miss "merge method: merge_method: merge in the policy is not what github_setup sets"
 # an option that disagrees with the policy is refused, and says where the choice is made
 rc=0; out=$(dry "$gs" --merge-method merge) || rc=$?
 [ "$rc" = 2 ] || miss "merge method: --merge-method merge against merge_method: squash ends with $rc, not 2"
@@ -1640,10 +1640,10 @@ case "$out" in *"merge_method: squash"*governance/autonomy.yaml*) ;; *) miss "me
 # a policy from before this key: without the option the merge settings are left as they are, never reset
 gso="$TMP/gs-team-nokey"; gs_policy "$gs" "$gso" '' || true
 out=$(dry "$gso")
-case "$out" in *allow_squash_merge*|*allow_merge_commit*) miss "merge method: a policy with no merge_method still sets the merge settings: $(printf '%s' "$out" | grep -m1 allow_)" ;; esac
+case "$out" in *allow_squash_merge*|*allow_merge_commit*) miss "merge method: a policy with no merge_method still sets the merge settings: $(grep -m1 allow_ <<<"$out")" ;; esac
 case "$out" in *"names no merge_method"*) ;; *) miss "merge method: a policy with no merge_method does not say the merge settings are left as they are" ;; esac
-printf '%s' "$out" | grep -q 'delete_branch_on_merge=true' || miss "merge method: a policy with no merge_method loses the rest of the repository settings"
-dry "$gso" --merge-method merge | grep -q 'merge commits only' || miss "merge method: with no merge_method in the policy, --merge-method merge is not used"
+grep -q 'delete_branch_on_merge=true' <<<"$out" || miss "merge method: a policy with no merge_method loses the rest of the repository settings"
+dry "$gso" --merge-method merge | grep 'merge commits only' >/dev/null || miss "merge method: with no merge_method in the policy, --merge-method merge is not used"
 # a value that is neither squash nor merge: autonomy.py names it, github_setup stops before any change
 gsb="$TMP/gs-team-badkey"; gs_policy "$gs" "$gsb" 'merge_method: rebase' || true
 out=$( cd "$gsb" && python3 -B tools/autonomy.py --check-codeowners 2>&1 || true )
