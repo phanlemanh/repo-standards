@@ -40,7 +40,7 @@ M
 rk_says() {
   local out
   if out=$(rk_tool 2>&1); then miss "rule kinds: the check passes, expected: $1"; return; fi
-  echo "$out" | grep -qF -- "$1" || miss "rule kinds: no report of '$1': $(echo "$out" | head -3)"
+  grep -qF -- "$1" <<<"$out" || miss "rule kinds: no report of '$1': $(echo "$out" | head -3)"
 }
 rk_registry; printf '# rule-check: commit-format\n' > "$rk/tests/x.sh"
 
@@ -48,7 +48,7 @@ rk_registry; printf '# rule-check: commit-format\n' > "$rk/tests/x.sh"
 #      fenced block are read as they are
 rk_fragment ""
 out=$(rk_tool 2>&1) && miss "rule kinds: an item without a kind passes"
-echo "$out" | grep -q '10-a.md:6: list item has no kind' || miss "rule kinds: no line for the item without a kind: $out"
+grep -q '10-a.md:6: list item has no kind' <<<"$out" || miss "rule kinds: no line for the item without a kind: $out"
 [ "$(echo "$out" | grep -c '10-a.md')" = 1 ] || miss "rule kinds: a fenced line or a nested item is misread: $out"
 
 # 50b. every item has one kind: green, and the last line is the count
@@ -92,7 +92,7 @@ rk_registry
 # 50f. --json: the same answer for a program
 rk_fragment ""
 { rk_tool --json 2>/dev/null || true; } | json 'str(d["ok"]) + " " + str(len(d["problems"])) + " " + str(d["total"]) + " " + str(sorted(d["counts"]))' \
-  | grep -qx "False 1 {'machine': 1, 'word': 1, 'none': 1} \['presets/_core/starter/+AGENTS.md/10-a.md'\]" \
+  | grep -x "False 1 {'machine': 1, 'word': 1, 'none': 1} \['presets/_core/starter/+AGENTS.md/10-a.md'\]" >/dev/null \
   || miss "rule kinds: --json does not give ok, problems, counts and total"
 rk_fragment word
 
@@ -229,15 +229,15 @@ rk_real=$(rk_check 2>&1) || miss "rule kinds: the plugin's own fragments fail: $
 rk_copy="$TMP/rk-copy"; cp -R "$rk_plugin" "$rk_copy"
 printf -- '- A rule nobody owns.\n' >> "$rk_copy/presets/_core/team/+AGENTS.md/55-autonomy.md"
 out=$(rk_check "$rk_copy" 2>&1) && miss "rule kinds: a new rule without a kind passes"
-echo "$out" | grep -q '55-autonomy.md:[0-9]*: list item has no kind' || miss "rule kinds: the new rule is not named: $(echo "$out" | head -3)"
+grep -q '55-autonomy.md:[0-9]*: list item has no kind' <<<"$out" || miss "rule kinds: the new rule is not named: $(echo "$out" | head -3)"
 rm -rf "$rk_copy"; cp -R "$rk_plugin" "$rk_copy"
 subst 's/<!-- kept: module-boundaries -->/<!-- kept: module-walls -->/' "$rk_copy/archetypes/modular-monolith/starter/+AGENTS.md/40-modular-monolith.md"
 out=$(rk_check "$rk_copy" 2>&1) && miss "rule kinds: a machine nobody registered passes"
-echo "$out" | grep -q "unknown check 'module-walls'" || miss "rule kinds: the unregistered machine is not named: $(echo "$out" | head -3)"
+grep -q "unknown check 'module-walls'" <<<"$out" || miss "rule kinds: the unregistered machine is not named: $(echo "$out" | head -3)"
 mkdir -p "$TMP/rk-tests"; cp "$ROOT"/tests/*.sh "$TMP/rk-tests/"
 subst '/# rule-check: module-boundaries/d' "$TMP/rk-tests/run.sh"
 out=$(rk_check "$rk_plugin" "$TMP/rk-tests" 2>&1) && miss "rule kinds: a machine without a tagged test passes"
-echo "$out" | grep -q "check 'module-boundaries' has no test tagged" || miss "rule kinds: the unproven machine is not named: $(echo "$out" | head -3)"
+grep -q "check 'module-boundaries' has no test tagged" <<<"$out" || miss "rule kinds: the unproven machine is not named: $(echo "$out" | head -3)"
 
 # Five repositories, set up by the plugin as it is.
 rk_s="$TMP/rk-starter"; rk_install "$rk_plugin" "$rk_s" --preset ts-node
@@ -300,7 +300,7 @@ grep -q 'kept:' "$rk_plugin/skills/adopt/SKILL.md" && grep -q 'apply.py --dry-ru
 # 50r. the section adds no stop of its own (the phrases of 43g)
 for phrase in 'get approval before you start' 'ask in the issue and stop' 'need human review' 'need a human reviewer' 'one approval is required' '(high tier)'; do
   for d in "$rk_t" "$rk_f" "$rk_p"; do
-    sed -n '/^## What holds these rules$/,$p' "$d/AGENTS.md" | grep -qiF "$phrase" && miss "rule kinds: the section stops for a person: $phrase"
+    sed -n '/^## What holds these rules$/,$p' "$d/AGENTS.md" | grep -iF "$phrase" >/dev/null && miss "rule kinds: the section stops for a person: $phrase"
   done
 done
 
