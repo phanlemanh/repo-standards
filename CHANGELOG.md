@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Changed: a build between two tags has a version of its own, `X.Y.Z.devN`
+Every commit between two tags carried the number of the release before it, so a repository set up
+from the default branch recorded files under a release that did not hold them. That is how
+`AGENTS.md` came out between conflict markers on the probe repository (0.10.1 fixed that case;
+the gap stayed for a template that changes twice between tags).
+
+- Right after a release the plugin's version becomes the next patch with `.dev0`
+  (`python3 tools/bump_version.py dev`: 0.10.2 → 0.10.3.dev0; again: 0.10.3.dev1). From a dev
+  version, `patch` releases that very number, and `minor` and `major` count from it. A dev
+  version gets no changelog section and no tag.
+- The upgrade path orders `X.Y.Z.devN` after every release before `X.Y.Z` and before `X.Y.Z`. A
+  base recorded at a dev version is looked for in the plugin that runs, then in the releases
+  before it, and never fetched as a release, since no tag has it. `doctor` reports a file
+  written by a dev build as behind once a later release ran.
+- The fast tests hold the rule for this repository: while `CHANGELOG.md` has entries under
+  `## Unreleased`, the version is a `.devN`.
+
+**What breaks on upgrade**: nothing for a repository set up from a tag. One set up from the
+default branch now records `0.10.3.dev0` (and so on) in `.repo-setup.json` instead of the release
+before.
+
 ### Changed: the flow measure tells where the time and the red go (RS10)
 `tools/sdlc_metrics.py` printed about half the lines of the plan's measure; the rest were counted
 by hand once, in the trace of decision to merge on `onehub-inventory`. It now prints them.
