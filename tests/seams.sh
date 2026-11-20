@@ -103,4 +103,84 @@ smp_rc=0; smp_out=$(python3 "$S/apply.py" --target "$smp" --preset python --var 
 [ "$smp_rc" = 0 ] || miss "seams: a conflict on a file that joins no check ends the run with $smp_rc"
 printf '%s' "$smp_out" | json '".editorconfig" in d["conflict"]' | grep -q True || miss "seams: the repository's own .editorconfig is not reported as a conflict"
 
+# 51c. the four lists of make (docs/seam-contracts.md, section 1): a target another tool adds from its
+#      own mk/ file runs where the page says. CHECK_TARGETS in the light tier (make check-quick, behind
+#      the required check), HEAVY_TARGETS in the heavy tier only, DERIVED_TARGETS in make derived, and a
+#      file named in DERIVED_FILES turns make check red once it is in git, when its first line carries
+#      sha256: (the mark of a drawn file that is not markdown). An unmarked file is the repository's own.
+smk="$TMP/seam-make"; mkdir -p "$smk" && git -C "$smk" init -q -b main
+python3 "$S/apply.py" --target "$smk" --preset ts-node --level team --var project_name=M --var description=x --var owner=acme >/dev/null
+cat > "$smk/mk/other-tool.mk" <<'MK'
+CHECK_TARGETS += seam-light
+HEAVY_TARGETS += seam-heavy
+DERIVED_TARGETS += seam-draw
+DERIVED_FILES += seam/drawn.txt
+.PHONY: seam-light seam-heavy seam-draw
+seam-light:
+	@echo seam-light ran
+seam-heavy:
+	@echo seam-heavy ran
+seam-draw:
+	@mkdir -p seam && echo '# drawn by the other tool, sha256:0123' > seam/drawn.txt
+MK
+# smk_plan <dir> <target>: what make would run, or why it cannot say
+smk_plan() { make -C "$1" -n "$2" 2>&1 || true; }
+smk_runs() { # <dir> <target> <recipe> <yes|no>
+  case "$(smk_plan "$1" "$2")" in
+    *"$3"*) [ "$4" = yes ] || miss "seams: make $2 runs $3, which the contract keeps out of it" ;;
+    *) [ "$4" = no ] || miss "seams: make $2 does not run $3: $(smk_plan "$1" "$2" | head -3)" ;;
+  esac
+}
+smk_runs "$smk" check-quick "seam-light ran" yes
+smk_runs "$smk" check-quick "seam-heavy ran" no
+smk_runs "$smk" check-heavy "seam-heavy ran" yes
+smk_runs "$smk" check-heavy "seam-light ran" no
+smk_runs "$smk" derived "drawn.txt" yes
+git -C "$smk" add -A >/dev/null 2>&1
+mkdir -p "$smk/seam" && echo 'a file of the repository own' > "$smk/seam/drawn.txt" && git -C "$smk" add -f seam/drawn.txt
+smk_out=$( (cd "$smk" && make derived-untracked) 2>&1) || miss "seams: an unmarked file at a DERIVED_FILES path is taken for a drawn one: $smk_out"
+echo '# drawn by the other tool, sha256:0123' > "$smk/seam/drawn.txt" && git -C "$smk" add -f seam/drawn.txt
+smk_out=$( (cd "$smk" && make derived-untracked) 2>&1) && miss "seams: a drawn file named in DERIVED_FILES is in git and make check stays green"
+case "$smk_out" in *seam/drawn.txt*) ;; *) miss "seams: the drawn file in git that DERIVED_FILES names is not named: $smk_out" ;; esac
+# the red direction, on a copy: a Makefile whose light tier forgets CHECK_TARGETS is caught
+smk2="$TMP/seam-make-red"; rm -rf "$smk2"; cp -R "$smk" "$smk2"
+subst 's/^check-quick: \$(CHECK_TARGETS)/check-quick:/' "$smk2/Makefile"
+case "$(smk_plan "$smk2" check-quick)" in *"seam-light ran"*) miss "seams: the check of the light tier passes on a Makefile that does not run CHECK_TARGETS" ;; esac
+
+# 51d. affected.mjs --json (docs/seam-contracts.md, section 2): the keys the page names are exactly the
+#      keys ui_select.mjs reads from the answer, so neither can change alone
+seam_keys() { # <page> <ui_select.mjs>: "same" or what differs
+  python3 - "$1" "$2" <<'PY'
+import pathlib, re, sys
+page = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8") if pathlib.Path(sys.argv[1]).exists() else ""
+code = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
+part = page.split("## 2.", 1)[1].split("\n## ", 1)[0] if "## 2." in page else ""
+named = set(re.findall(r"^\| `([a-z]+)` \|", part, re.M))
+read = set(re.findall(r"\bdata\.([a-z]+)\b", code))
+print("same" if named and named == read else f"page names {sorted(named)}, ui_select.mjs reads {sorted(read)}")
+PY
+}
+sk_ui="$ROOT/plugins/repo-setup/capabilities/design/starter/tools/ui_select.mjs"
+sk=$(seam_keys "$ROOT/docs/seam-contracts.md" "$sk_ui")
+[ "$sk" = same ] || miss "seams: the keys of affected.mjs differ between docs/seam-contracts.md and ui_select.mjs: $sk"
+cp "$ROOT/docs/seam-contracts.md" "$TMP/seam-page.md"; subst '/^| `grep` |/d' "$TMP/seam-page.md"
+[ "$(seam_keys "$TMP/seam-page.md" "$sk_ui")" != same ] || miss "seams: a key left out of the page goes unseen"
+
+# 51e. the names and the list other tools read in the workflows (docs/seam-contracts.md, sections 3
+#      and 4): every ci.yml has the summary job check and leaves _acceptance/** out of the heavy
+#      tier's inputs; the agent pipeline's job is gate
+seam_ci() { # <ci.yml>: nothing, or what is missing
+  grep -q '^  check:$' "$1" || echo "no job check"
+  grep -qE '^  HEAVY_NOT_INPUTS: ".*_acceptance/\*\*' "$1" || echo "_acceptance/** is an input of the heavy tier"
+}
+for ci in "$ROOT"/plugins/repo-setup/presets/*/starter/dot.github/workflows/ci.yml; do
+  sc=$(seam_ci "$ci")
+  [ -z "$sc" ] || miss "seams: ${ci#"$ROOT"/}: $sc"
+done
+grep -q '^  gate:$' "$ROOT/plugins/repo-setup/capabilities/github-agents/team/dot.github/workflows/pr-pipeline.yml" \
+  || miss "seams: the agent pipeline has no job named gate"
+cp "$ROOT/plugins/repo-setup/presets/ts-node/starter/dot.github/workflows/ci.yml" "$TMP/seam-ci.yml"
+subst 's| _acceptance/\*\*||' "$TMP/seam-ci.yml"
+[ -n "$(seam_ci "$TMP/seam-ci.yml")" ] || miss "seams: a ci.yml that reads _acceptance/** as an input goes unseen"
+
 echo "ok  seams with other tools (or misses reported above)"
