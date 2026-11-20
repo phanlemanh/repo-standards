@@ -419,16 +419,22 @@ grep -q '^- commit format:' "$rk_zt/AGENTS.md" && grep -q '^- Deploy on Tuesdays
   || miss "rule kinds: starter to team with rules after the section lost the commit check or the repository's rules"
 [ "$(grep -c '^## What holds these rules$' "$rk_zt/AGENTS.md")" = 1 ] || miss "rule kinds: starter to team with rules after the section does not have the section exactly once"
 
-# 50w5. a known gap, pinned so the CHANGELOG stays true: rules kept right before the section meet
-#       the fragments the team level adds at the end of the rules. No rule says which comes first,
-#       so the file is marked; nothing is lost and the section is there once
+# 50w5. rules kept right before the section, and the team level adds fragments at the end of the rules.
+#       Until 0.10.3 this was a known gap: no rule said which comes first, so the file was marked. Lines
+#       the repository added after the template's last line now go after the template's text, so the
+#       order is known: the team's rules, then the repository's, then the section, each once
 rk_zb="$TMP/rk-up-zb"; rk_install "$rk_new" "$rk_zb" --preset ts-node
 awk '/^## What holds these rules$/ { print "## Our own rules"; print ""; print "- Deploy on Tuesdays only."; print "" } { print }' \
   "$rk_zb/AGENTS.md" > "$rk_zb/AGENTS.tmp" && mv "$rk_zb/AGENTS.tmp" "$rk_zb/AGENTS.md"
 rk_run "$rk_new" "$rk_zb" --level team
-rk_expect "$rk_zb" marked "starter to team with rules right before the section"
-grep -q '^- Deploy on Tuesdays only\.$' "$rk_zb/AGENTS.md" && [ "$(grep -c '^## What holds these rules$' "$rk_zb/AGENTS.md")" = 1 ] \
-  || miss "rule kinds: a file marked before its section lost the repository's rules, or does not have the section exactly once"
+rk_expect "$rk_zb" merged "starter to team with rules right before the section"
+grep -q '^<<<<<<<\|^=======\|^>>>>>>>' "$rk_zb/AGENTS.md" && miss "rule kinds: starter to team with rules right before the section leaves conflict markers"
+rk_team=$(rk_line "$rk_zb/AGENTS.md" '## Autonomy tiers'); rk_own=$(rk_line "$rk_zb/AGENTS.md" '- Deploy on Tuesdays only.')
+rk_sec=$(rk_line "$rk_zb/AGENTS.md" '## What holds these rules')
+[ "$rk_team" -gt 0 ] && [ "$rk_own" -gt "$rk_team" ] && [ "$rk_sec" -gt "$rk_own" ] \
+  || miss "rule kinds: starter to team does not put the team's rules, the repository's and the section in that order (team $rk_team, own $rk_own, section $rk_sec)"
+[ "$(grep -c '^- Deploy on Tuesdays only\.$' "$rk_zb/AGENTS.md")" = 1 ] && [ "$(grep -c '^## What holds these rules$' "$rk_zb/AGENTS.md")" = 1 ] \
+  || miss "rule kinds: starter to team with rules right before the section lost or doubled the repository's rules or the section"
 
 # 50w6. an adopted repository has no section to put last: its own rules at the end are merged
 #       as before, and it still gets no section
@@ -487,6 +493,15 @@ want("the repository deleted the section", run(BODY + OWN, grown, first), "marke
 want("the repository wrote inside the section",
      run(BODY + b"\n" + SEC1.replace(b"- a\n", b"- a (ours)\n") + OWN, grown, first), "marked",
      b"- a (ours)", b"- deploy on Tuesdays", b"- b\n", headings=1)
+# the template changes its last rule, right where the repository added its own: the template's text,
+# then the repository's, with no marker
+last = BODY.replace(b"- rule two\n", b"- rule two, reworded\n") + b"\n" + SEC1
+got = run(BODY + OWN, last, BODY)
+want("the last rule changed, rules added after it", got, "merged", b"- rule two, reworded\n\n## Ours", headings=1)
+# the repository reworded that same last rule too: the two sides meet, and it is marked
+want("the last rule changed on both sides",
+     run(BODY.replace(b"- rule two\n", b"- rule two (ours)\n") + OWN, last, BODY), "marked",
+     b"- rule two (ours)", b"- rule two, reworded", b"- deploy on Tuesdays")
 PY
 )
 [ -z "$rk_parts" ] || miss "rule kinds: the two-part merge: $(echo "$rk_parts" | head -5 | tr '\n' ';')"
@@ -514,5 +529,26 @@ grep -q '^- commit format:' "$rk_z/AGENTS.md" && miss "rule kinds: a starter rep
 rk_run "$rk_new" "$rk_z" --level team
 rk_expect "$rk_z" updated "starter to team"
 grep -q '^- commit format:' "$rk_z/AGENTS.md" || miss "rule kinds: going to team does not add the commit check to the section"
+
+# 50za. a rule says only what holds in every repository that gets it: a repository without the agent
+#       pipeline is not told that a gate raises the tier, in a rule or in "What holds these rules"
+#       (the owner, 2026-11-21).
+#       Found: "The gate sees both and raises the tier" was given to team repositories with no agent
+#       pipeline, where no gate sees anything.
+for rk_with in "" github-agents; do
+  rk_g="$TMP/rk-gate-${rk_with:-team}"; rm -rf "$rk_g"; mkdir -p "$rk_g" && git -C "$rk_g" init -q -b main
+  python3 "$S/apply.py" --target "$rk_g" --preset python --level team ${rk_with:+--with "$rk_with"} \
+    --var project_name=G --var description=x --var owner=acme >/dev/null
+  rk_rules=$(sed '/^## What holds these rules/,$d' "$rk_g/AGENTS.md")
+  rk_held=$(sed -n '/^## What holds these rules/,$p' "$rk_g/AGENTS.md")
+  if [ -z "$rk_with" ]; then
+    case "$rk_rules" in *"raises the tier"*) miss "rule kinds: a rule of a team repository without the agent pipeline says the gate raises the tier" ;; esac
+  fi
+  case "$rk_held" in
+    *"the gate raises the tier"*) [ -n "$rk_with" ] || miss "rule kinds: a repository without the agent pipeline is told the gate raises the tier" ;;
+    *) [ -z "$rk_with" ] || miss "rule kinds: a repository with the agent pipeline is not told the gate raises the tier" ;;
+  esac
+  case "$rk_rules" in *"Never delete or weaken a test"*) ;; *) miss "rule kinds: the rule about tests is gone from ${rk_with:-a team repository}" ;; esac
+done
 
 echo "ok  rule kinds: $(rk_check 2>/dev/null | tail -1 | sed 's/^rule kinds: //') (or misses reported above)"
