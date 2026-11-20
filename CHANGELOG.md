@@ -50,6 +50,30 @@ not change by itself.
 **Known gap**: only files under `mk/` are read this way. A `Makefile` of the repository's own
 where the setup's goes is still a plain conflict, with exit code 0.
 
+### Fixed: what a commit-msg hook prints cannot reach the runner as a workflow command
+Found by the acceptance round of `onehub-inventory` on its upgrade to 0.10.1. `conventional-commits`
+(workflow "PR title") runs from the default branch (`pull_request_target`) and printed what the
+hooks said as it came. A hook that prints the commit message back handed the message's lines to
+the runner, and a line that starts with `::` is a workflow command there. The author of a pull
+request could forge an annotation, mask a string in the log, or stop the commands that follow. The
+verdict was not at stake: the exit code decides it, and a refused commit stayed red.
+
+- What a hook printed is now shown between `::stop-commands::<token>` and `::<token>::`, so the
+  runner reads it as text. The token is 32 hex characters from `/dev/urandom`, new on every call.
+  Where no token can be made, nothing of the hooks' output is shown and the job is red.
+- The job's own error lines quote the commit title, and pre-commit's error line, without control
+  characters and with `%` escaped: a carriage return in a title started a line of its own, and
+  the runner turns `%0A` into a line break.
+- The checkout the hooks run in keeps no token of the repository (`persist-credentials: false`).
+
+**What breaks on upgrade**: nothing. A repository that edited `pr-title.yml` in place gets the
+change through the three-way merge.
+
+**Known gaps**: GitHub lists at most 250 commits of a pull request, so the job judges no more
+than that and does not say when a branch has more. `pipx run pre-commit` and the two actions are
+named by a moving version, not a pinned one. The words of a refused commit's title still appear
+in the job's error line, as text.
+
 ## 0.10.1 — 2026-11-20
 
 ### Fixed: a file written by a build between two releases finds its base on upgrade
