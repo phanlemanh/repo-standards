@@ -48,8 +48,12 @@ TEST_DISABLED = re.compile(
 ONTOLOGY_PATH = re.compile(r"(^|/)ontology/.*\.ya?ml$")
 GUARD_LEVELS = {"forbidden": 2, "confirm": 1}
 AGENT_GUARD = re.compile(r"\bagent:\s*[\"']?(?:forbidden|confirm)\b")
-# The repository's own checks. A proof is a different check, reported by whatever proves the work.
+# The setup's own checks. A proof is a different check, reported by whatever proves the work.
 OWN_CHECKS = ("check", "gate", "secret-scan")
+# `gate` is the job of the agent pipeline. Where that workflow is absent nothing of the setup
+# reports under the name, so it is free: for example for the gate of a feature loop.
+AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
+AGENT_CHECK = "gate"
 
 
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -85,13 +89,20 @@ def named_proof(policy: dict[str, Any]) -> str:
     return str(proof.get("check") or "").strip() if isinstance(proof, dict) else ""
 
 
-def proof_check(policy: dict[str, Any]) -> str:
+def own_checks(root: Path) -> tuple[str, ...]:
+    """The setup's own checks in this repository: `gate` only where the agent pipeline is."""
+    if (root / AGENT_WORKFLOW).exists():
+        return OWN_CHECKS
+    return tuple(name for name in OWN_CHECKS if name != AGENT_CHECK)
+
+
+def proof_check(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> str:
     """Name of the required status check that proves a change, or "" when there is none.
 
-    The repository's own checks prove nothing here, so naming one of them counts as no proof.
+    The setup's own checks (`own`) prove nothing here, so naming one of them counts as no proof.
     """
     name = named_proof(policy)
-    return "" if name in OWN_CHECKS else name
+    return "" if name in own else name
 
 
 def named_checks(policy: dict[str, Any]) -> list[str]:
@@ -102,9 +113,9 @@ def named_checks(policy: dict[str, Any]) -> list[str]:
     return [n.strip() for n in names if isinstance(n, str) and n.strip()]
 
 
-def required_checks(policy: dict[str, Any]) -> list[str]:
+def required_checks(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> list[str]:
     """The repository's own required status checks, each once, without the setup's and the proof."""
-    taken, out = {*OWN_CHECKS, proof_check(policy)}, []
+    taken, out = {*own, proof_check(policy, own)}, []
     for name in named_checks(policy):
         if name and name not in taken:
             taken.add(name)
@@ -112,12 +123,12 @@ def required_checks(policy: dict[str, Any]) -> list[str]:
     return out
 
 
-def policy_problems(policy: dict[str, Any]) -> list[str]:
+def policy_problems(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> list[str]:
     problems = []
     default, named = str(policy.get("default", "medium")), named_proof(policy)
     if default not in TIERS:
         problems.append(f"default: {default} is not one of {', '.join(TIERS)}")
-    if named in OWN_CHECKS:
+    if named in own:
         problems.append(
             f"proof.check: {named} is this repository's own check. Name the check that proves "
             "the work, reported by the tool that does the proving."
@@ -136,7 +147,7 @@ def policy_problems(policy: dict[str, Any]) -> list[str]:
             "reports blocks every pull request."
         )
     for name in named_checks(policy):
-        if name in OWN_CHECKS:
+        if name in own:
             problems.append(
                 f"required_checks: {name} is one of the setup's own checks and is required "
                 "already. Name only the checks this repository adds."
@@ -144,9 +155,9 @@ def policy_problems(policy: dict[str, Any]) -> list[str]:
     return problems
 
 
-def default_tier(policy: dict[str, Any]) -> str:
+def default_tier(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> str:
     """The policy's default; a default that is not allowed counts as medium."""
-    return "medium" if policy_problems(policy) else str(policy.get("default", "medium"))
+    return "medium" if policy_problems(policy, own) else str(policy.get("default", "medium"))
 
 
 def agent_guards(text: str) -> dict[str, int] | None:
@@ -240,8 +251,9 @@ def classify(
     files: list[dict[str, Any]],
     author: str = "",
     update_type: str = "",
+    own: tuple[str, ...] = OWN_CHECKS,
 ) -> dict[str, Any]:
-    default = default_tier(policy)
+    default = default_tier(policy, own)
     rules = policy.get("rules") or {}
     results = []
     for f in files:
@@ -274,10 +286,10 @@ def classify(
             r["tier"], r["reason"] = tier, f"dependency update ({level})"
 
     overall = max((r["tier"] for r in results), key=TIERS.index, default="low")
-    return {"tier": overall, "proof": proof_check(policy), "files": results}
+    return {"tier": overall, "proof": proof_check(policy, own), "files": results}
 
 
-def render_codeowners(policy: dict[str, Any]) -> str:
+def render_codeowners(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> str:
     owners = policy.get("owners") or {}
     medium = " ".join(owners.get("medium") or [])
     high = " ".join(owners.get("high") or [])
@@ -287,7 +299,7 @@ def render_codeowners(policy: dict[str, Any]) -> str:
         "# Last matching pattern wins. A path with no owner needs no person: the checks decide.",
     ]
     # With a machine proof as the default, only the rules of the game keep an owner.
-    if default_tier(policy) != "low":
+    if default_tier(policy, own) != "low":
         lines.append(f"*  {medium}".rstrip())
     lines += ["", "# low"]
     lines += [
@@ -347,13 +359,14 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.root).resolve() if args.root else find_repo_root()
     policy = load_policy(root, args.policy)
+    own = own_checks(root)
     codeowners = root / ".github" / "CODEOWNERS"
 
     if args.write_codeowners or args.check_codeowners:
-        block = render_codeowners(policy)
+        block = render_codeowners(policy, own)
         current = codeowners.read_text(encoding="utf-8") if codeowners.exists() else ""
         if args.check_codeowners:
-            problems = policy_problems(policy)
+            problems = policy_problems(policy, own)
             if problems:
                 print("governance/autonomy.yaml: " + "\n".join(problems), file=sys.stderr)
                 return 1
@@ -379,9 +392,9 @@ def main(argv: list[str] | None = None) -> int:
         files = changed_files(root, args.base, args.head)
     else:
         ap.error("give --base (and --head) or --files")
-    for problem in policy_problems(policy):
+    for problem in policy_problems(policy, own):
         print(f"governance/autonomy.yaml: {problem} Using default: medium.", file=sys.stderr)
-    result = classify(policy, files, args.author, args.update_type)
+    result = classify(policy, files, args.author, args.update_type, own)
     if args.github:
         write_github(result)
     print(json.dumps(result, indent=2))

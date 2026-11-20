@@ -38,7 +38,9 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
      `make check` stays red until they are resolved. `base_unread` means the template the file
      came from could not be read (no network): run again online, or with `--base-from`. Files
      the repo deleted stay deleted (`removed`). Files the repo had before setup (`conflict`,
-     `kept`) are left as they are. Ask for project name/description/owner only if
+     `kept`) are left as they are; a `conflict` on an `mk/` file that joins checks to
+     `make check` ends the run with 1 and names the checks left out (rename the repo's
+     file, run again). Ask for project name/description/owner only if
      `.repo-setup.json` lacks them.
    - Otherwise (or for files that exist but fail a content check, e.g. tsconfig without
      `"strict": true`): make the minimal edit by hand and explain it. Turning on strict

@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autonomy import OWN_CHECKS, proof_check, required_checks
+from autonomy import AGENT_WORKFLOW, own_checks, proof_check, required_checks
 from repo_ontology import find_repo_root, load_yaml_file
 
 LABELS = [
@@ -47,7 +47,6 @@ LABELS = [
     ("agent-review:approved", "0e8a16", "Independent agent review found no blockers"),
     ("agent-review:changes", "d93f0b", "Independent agent review requested changes"),
 ]
-AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
 RULESET_CHECKS = (
     '.rules[] | select(.type == "required_status_checks") '
     "| .parameters.required_status_checks[].context"
@@ -213,7 +212,7 @@ def plan(
     checks += ["secret-scan"] if secret_scan else []
     checks += [name for name in commit_format if name not in checks]
     checks += [name for name in extra if name not in checks and name != proof]
-    if proof and proof not in OWN_CHECKS:
+    if proof and proof not in checks:
         checks.append(proof)
     for name, color, desc in LABELS if agents else []:
         steps.append(
@@ -409,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     owners = (policy.get("owners") or {}).get("high") or []
     reviewer = args.reviewer or (owners[0] if owners else "")
 
-    agents = has_agents(root)
+    agents, own = has_agents(root), own_checks(root)
     commit_format, commit_format_notes, unread_format = commit_format_checks(root, repo, branch)
     commit_format += kept_checks(repo, unread_format)
     steps = plan(
@@ -418,8 +417,8 @@ def main(argv: list[str] | None = None) -> int:
         reviewer,
         agents,
         args.merge_method,
-        proof_check(policy),
-        required_checks(policy),
+        proof_check(policy, own),
+        required_checks(policy, own),
         has_secret_scan(root),
         commit_format,
     )
