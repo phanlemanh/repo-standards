@@ -1,6 +1,6 @@
 # RS5a: tường cho biên thiết kế
 
-Ngày 2026-11-20. Trạng thái: bản thiết kế, chờ chủ kho chọn hướng. Chưa có mã. Gói RS5a ở mục 7 của
+Ngày 2026-11-20. Trạng thái: chủ kho chọn hướng A ngày 2026-11-21: không dựng RS5a. Không có mã. Gói RS5a ở mục 7 của
 [thiết kế tổng quan ba kho](../../three-repo-overview-design.md): «PR đụng khuôn hay dòng màu thương
 hiệu thì lên hạng cao». Gói này chờ design-assembly nêu đường dẫn; nay đã nêu.
 
