@@ -1824,6 +1824,38 @@ ruleset_call() { echo "$1" > "$TMP/ruleset-ids"; rm -f "$TMP/rs-calls"
   grep 'rulesets' "$TMP/rs-calls" 2>/dev/null || true; }
 [ "$(ruleset_call '')" = "api -X POST repos/acme/sample/rulesets --input -" ] || miss "people decide: a first run does not create the ruleset: $(ruleset_call '')"
 [ "$(ruleset_call 41)" = "api -X PUT repos/acme/sample/rulesets/41 --input -" ] || miss "people decide: an old ruleset keeps asking for an approval after the upgrade: $(ruleset_call 41)"
+# 43k. every rule of docs/setup-principles.md has a row in "Luật nằm ở đâu trong mã", and every test
+#      section that row names exists; the three principles of the overview design (section 4: one
+#      check one place, one writer per file, the ladder) are rules there (RS6)
+principles_hold() { # <page>: prints what does not hold, exits 1 when anything does not
+  python3 - "$1" "$ROOT/tests" <<'PY'
+import pathlib, re, sys
+page, tests = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"), pathlib.Path(sys.argv[2])
+headers = "\n".join(p.read_text(encoding="utf-8") for p in sorted(tests.glob("*.sh")))
+rules_part = page.split("## Mười luật", 1)[1].split("\n## ", 1)[0] if "## Mười luật" in page else ""
+rules = {int(n): title for n, title in re.findall(r"^(\d+)\. \*\*(.+?)\*\*", rules_part, re.M)}
+table = page.split("## Luật nằm ở đâu trong mã", 1)[-1].split("\n## ", 1)[0]
+rows = {int(m.group(1)): m.group(2) for m in re.finditer(r"^\| (\d+) \|.*\| ([^|]+) \|$", table, re.M)}
+bad = [f"rule {n} ({title}) has no row" for n, title in sorted(rules.items()) if n not in rows]
+for n, ids in sorted(rows.items()):
+    for tid in re.findall(r"\b\d{2}[a-z]*\b", ids):
+        if not re.search(rf"^# {tid}[.\s(]", headers, re.M):
+            bad.append(f"rule {n} names test section {tid}, which no file in tests/ has")
+for title in ("Một phép kiểm, một chỗ.", "Mỗi tệp một người ghi.", "Bậc thang thay người."):
+    if title not in rules.values():
+        bad.append(f"the principle «{title}» is not a rule of the page")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+}
+out=$(principles_hold "$ROOT/docs/setup-principles.md") || miss "people decide: the principles page does not hold: $out"
+# the red direction, on copies: a rule without a row, a row that names a section nobody has
+cp "$ROOT/docs/setup-principles.md" "$TMP/principles-norow.md"
+subst '/^| 9 | /d' "$TMP/principles-norow.md"
+if principles_hold "$TMP/principles-norow.md" >/dev/null; then miss "people decide: a rule without a row in the table goes unseen"; fi
+cp "$ROOT/docs/setup-principles.md" "$TMP/principles-noid.md"
+subst 's/^\(| 8 | .*| \)49a, /\199z, /' "$TMP/principles-noid.md"
+if principles_hold "$TMP/principles-noid.md" >/dev/null; then miss "people decide: a row that names a test section nobody has goes unseen"; fi
 echo "ok  people decide, machines check (or misses reported above)"
 
 # 44. real walls (docs/superpowers/specs/2026-11-16-real-walls-design.md): a check that carries the
