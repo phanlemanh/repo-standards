@@ -163,6 +163,7 @@ Bốn bài gây phần lớn nhóm «không do PR đó»:
 | `tests/e2e/frame.spec.ts` (bài trợ năng trên mọi khung)       | 4      | 4        |
 
 Bài đầu là bài đơn vị nhưng đọc trạng thái hồ sơ thật của kho, nên đỏ theo việc của nhánh khác.
+Không bài nào trong bốn bài này đỏ từ 19/11: xem mục 9.
 
 Hai số về độ phủ: 113 bài từng đỏ ở GitHub; và trong 102 lần một bài trình duyệt đỏ ở một lượt, 57
 lần chỉ đỏ ở một cỡ màn, 33 lần ở hai cỡ, 12 lần ở cả bốn. Chạy bốn cỡ không phải là lặp thuần tuý.
@@ -192,14 +193,14 @@ gộp ngược, không xung đột.
 Phần lớn nguyên nhân đo được ở đây đã có gói việc trong mục 7 của bản thiết kế. Báo cáo này không
 thêm gói nào cho chúng; nó cho số mới để xếp thứ tự.
 
-| Điều đo được                                                              | Gói đã có | Trạng thái của gói          |
-| ------------------------------------------------------------------------- | --------- | --------------------------- |
-| `LO-TRINH.html` và `_acceptance/config.yaml` gây gần hết xung đột còn lại | DL1       | Chờ delivery-loop           |
-| Gộp ngược và commit chữ ký làm bằng chứng cũ, kéo kiểm lại và một vòng CI | DL2       | Chờ delivery-loop           |
-| Bộ nặng chạy ở Máy mỗi lượt chấm rồi chạy lại ở GitHub; `gate` đỏ khi chờ | DL3       | Chờ delivery-loop           |
-| `wiki/log.md` hết xung đột                                                | RS2       | Xong, số ở mục 3 xác nhận   |
-| Phút máy mỗi PR gộp giảm từ 548 xuống 337                                 | RS3       | Xong; mới 9 PR sau 0.9.0    |
-| Thước lặp lại được                                                        | RS10      | Xong; thiếu ba dòng ở mục 8 |
+| Điều đo được                                                              | Gói đã có | Trạng thái của gói                                  |
+| ------------------------------------------------------------------------- | --------- | --------------------------------------------------- |
+| `LO-TRINH.html` và `_acceptance/config.yaml` gây gần hết xung đột còn lại | DL1       | Kit có bước đầu từ 2.36.0, dạng tuỳ chọn; xem mục 9 |
+| Gộp ngược và commit chữ ký làm bằng chứng cũ, kéo kiểm lại và một vòng CI | DL2       | Vài mảnh đã giao, dạng tuỳ chọn; xem mục 9          |
+| Bộ nặng chạy ở Máy mỗi lượt chấm rồi chạy lại ở GitHub; `gate` đỏ khi chờ | DL3       | Chưa có trong kế hoạch của delivery-loop; xem mục 9 |
+| `wiki/log.md` hết xung đột                                                | RS2       | Xong, số ở mục 3 xác nhận                           |
+| Phút máy mỗi PR gộp giảm từ 548 xuống 337                                 | RS3       | Xong; mới 9 PR sau 0.9.0                            |
+| Thước lặp lại được                                                        | RS10      | Xong; thiếu ba dòng ở mục 8                         |
 
 Hai giả thuyết bị loại trong lúc truy nguyên: tầng nặng chạy nối tiếp sau chữ ký (chỉ 6 PR rời bản
 nháp sau khi ký, trung vị 0,17 giờ), và bản nâng setup bị xếp hạng T3 (PR 93 và PR 94 đi từ Cổng 1
@@ -212,15 +213,83 @@ Mỗi việc chờ chủ kho cho phép ở kho của nó.
 | Việc                                                                                                             | Kho                | Căn cứ                                          |
 | ---------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------- |
 | Đưa DL1 và DL2 lên đầu hàng của delivery-loop                                                                    | delivery-loop      | Mục 3: 60 lần gộp ngược sau chữ ký              |
-| Sửa hoặc tách bốn bài đỏ chéo nhánh; bài `round-metrics` thành phép kiểm sổ, không nằm trong bài đơn vị          | `onehub-inventory` | Mục 5: 45 trên 84 job đỏ không do PR đó         |
+| Đưa «hàng siết bộ kiểm lần hai» vào lộ trình; sửa thật bài `thue-phi` đang được che bằng một lần chạy lại        | `onehub-inventory` | Mục 9: hứa ở Cổng 2 ngày 16/11, chưa có hàng    |
 | `tools/sdlc_metrics.py` in thêm: thời gian từng đoạn của hồ sơ, tỉ lệ bắt lỗi theo job, bài đỏ trên từ hai nhánh | Repo Standards     | Ba phép đo ở đây làm tay, chưa lặp lại được     |
 | `tools/sdlc_metrics.py` đỏ khi một tệp chiếm phần lớn xung đột                                                   | Repo Standards     | Công cụ đã in `LO-TRINH.html: 129`, không gì đỏ |
-| Cho kho khai thêm tệp sinh ra để `derived-untracked` soi                                                         | Repo Standards     | Mục này chỉ soi tệp setup tự biết               |
+| Bật luật gộp `tep-sinh` của kit cho `LO-TRINH.html`                                                              | `onehub-inventory` | Mục 9: kit có từ 2.36.0, kho chưa bật           |
 | Ghi mốc «thẻ Cổng 2 đã trình» trong hồ sơ                                                                        | delivery-loop      | Mục 6: không tách được chờ người khỏi chuẩn bị  |
 | Thước đo hồ sơ dùng một `lib.mjs` chung đã sạch cảnh báo CodeQL                                                  | delivery-loop      | Mục 4: cùng cảnh báo ở PR 94 và PR 95           |
 
-Hai việc ở Repo Standards có thêm một phép kiểm làm đỏ. Theo luật của kho này đó là đổi luật: chủ kho
-quyết.
+Cho `tools/sdlc_metrics.py` đỏ là thêm một phép kiểm làm đỏ. Theo luật của kho này đó là đổi luật: chủ
+kho quyết.
 
 Không đề xuất cho ô `check` xanh khi PR còn nháp: «bỏ qua» được tính là đạt với ô bắt buộc, nên trong
 vài giây sau khi PR rời bản nháp, auto-merge có thể gộp trước khi `e2e` chạy.
+
+## 9. Đính chính và đối chiếu với kế hoạch của từng kho
+
+Thêm cùng ngày, sau khi báo cáo đã gộp. Mục 7 chỉ đối chiếu với bản thiết kế ở kho này; mục này đọc
+kế hoạch của chính từng kho: delivery-loop tại `8baa836`, design-assembly tại `3e1dbf1`,
+`onehub-inventory` tại `f2a49b49`. Ba tác tử chỉ-đọc đọc ba kho đó. Máy tự kiểm lại các dòng có ghi
+«đã kiểm»; các dòng còn lại là lời tác tử.
+
+### Hai dòng sai ở mục 8 của bản đầu
+
+- **`derived-untracked`.** Bản đầu đề xuất «cho kho khai thêm tệp sinh ra» và ghi rằng mục này chỉ soi
+  tệp setup tự biết. Sai: `mk/derived.mk` đã cho mọi lớp khai `DERIVED_FILES += <đường dẫn>` từ RS2b
+  (đã kiểm). Điều còn thiếu nằm ở phía kit và `onehub-inventory`, xem dưới.
+- **«Sửa bốn bài đỏ chéo nhánh».** Số ở mục 5 đúng, nhưng các bài này đã thôi đỏ (đã kiểm trên log):
+
+| Bài                     | Ngày đỏ     | Đã xử lý ở `onehub-inventory`                                   |
+| ----------------------- | ----------- | --------------------------------------------------------------- |
+| `lop-rieng.spec.ts`     | 14–15/11    | Sửa ngày 15/11 (PR 66)                                          |
+| `dia-ly.spec.ts`        | 16/11       | Sửa ngày 16/11 (PR 80)                                          |
+| `thue-phi.spec.ts`      | 16 và 18/11 | Từ 19/11 CI chạy lại một lần; bản sửa thật hoãn, không hàng nào |
+| `round-metrics.test.ts` | 11–17/11    | Không có ghi chú; nằm trong `make test` theo thiết kế           |
+| `frame.spec.ts`         | 11–12/11    | Không có ghi chú                                                |
+
+### Đã có sẵn nhưng chưa bật ở `onehub-inventory` (đã kiểm)
+
+- **Luật gộp của kit cho hai tệp sinh.** Kit 2.36.0 hướng dẫn khai `PRODUCT-MAP.md merge=tep-sinh` và
+  `LO-TRINH.html merge=tep-sinh` trong `.gitattributes`, kèm `git config merge.tep-sinh.driver true`.
+  `.gitattributes` của `onehub-inventory` chỉ có `PRODUCT-MAP.md merge=generated-file`. Khớp với số ở
+  mục 3: `PRODUCT-MAP.md` hết xung đột, `LO-TRINH.html` thì không. Luật này chỉ có tác dụng khi gộp
+  bằng git ở Máy.
+- **Lối gộp nhanh.** Không tệp nào ở `onehub-inventory` nêu khoá `gop_khong_chay_lai_ci`. Đây là câu
+  trả lời cho điều còn mở số 5 của bản thiết kế. Lối này chỉ mở khi PR không chung tệp với nhánh
+  chính, nên cần luật gộp ở trên hoặc DL1 trước.
+- **Thước đo chưa từng được ghi ra.** `onehub-inventory` không có `wiki/metrics/`.
+
+### Kế hoạch của từng kho mang gì
+
+| Gói ở bản thiết kế | Trong kế hoạch của kho phải làm                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DL1                | Bước đầu đã giao (2.36.0, 30/10). «Vẽ lại trên nhánh chính» là một ý đã đạt ngưỡng từ 26/10, chờ chủ kho gọi tên vòng; không thuộc 3.0. Tách `_acceptance/config.yaml`: không có |
+| DL2                | Vài mảnh đã giao, đều tuỳ chọn (cũ theo `paths`, commit chữ ký không làm cũ, gộp không chạy lại CI). Dạng tổng quát gác lại 26/10. Issue 10 còn mở                               |
+| DL3                | Không có. Một ý còn đi ngược hướng: thêm bộ chỉ chạy ở CI vào lượt chấm                                                                                                          |
+| DL4                | Đã giao ở dạng «vùng» (24/10 và 28/10)                                                                                                                                           |
+| DL5                | Không có                                                                                                                                                                         |
+| DL6                | Issue 5, còn mở, chưa mở vòng                                                                                                                                                    |
+| DA1, DA2, DA3      | Xong: giai đoạn 8 của `docs/plan/plan.json` ở design-assembly, đóng ngày 18/11 (đã kiểm). `onehub-inventory` nhận qua PR 84 và PR 86                                             |
+
+delivery-loop không có hàng nào xếp sau bản 3.0; kho đó chỉ mở một vòng khi chủ kho gọi tên. Các mã DL
+vì thế chỉ có ở bản thiết kế của kho này.
+
+### Không có ở kế hoạch nào
+
+- **delivery-loop:** mốc «thẻ Cổng 2 đã trình»; `gate` phân biệt chờ với hỏng; tên `gate` trùng với ô
+  của repo-setup; thư viện chung cho thước đo hồ sơ; tách `_acceptance/config.yaml` theo hồ sơ.
+- **Mối nối, hai bên đều biết, không bên nào nhận:** lưu cách gộp; hạng của bản nâng công cụ máy móc.
+- **`onehub-inventory`:** «hàng siết bộ kiểm lần hai»; bản sửa thật cho `thue-phi.spec.ts`; PR tách sổ
+  thứ hai (`wiki/index.md`, `ontology/glossary.md`) chưa có ngày; ba cảnh báo CodeQL mở trên nhánh
+  chính, đều ở `rang/lib.mjs` của hồ sơ.
+- **Kế hoạch nâng `onehub-inventory`** (các PR 6, 7, 8) chỉ nằm trong một tệp chưa commit ở Máy của kho
+  này; hợp đồng bên đó trích nó (đã kiểm: tệp chưa được theo dõi).
+- **design-assembly:** `design/behaviors.md` chưa tách mảnh; phép đo lại sau 30 PR chưa chạy;
+  `onehub-inventory` ở bản 0.7.1 trong khi plugin là 0.21.0 (đã kiểm), không việc nào kéo lên; giới
+  hạn «`affected` chưa có bên gọi» đã cũ, vì repo-setup 0.9.0 đã gọi nó.
+- **Repo Standards:** ba phép đo ở mục 8 và ngưỡng đỏ; RS5a hết bị chặn vì DA3 đã nêu đường dẫn.
+
+Một số đo trả lời giới hạn ở mục 6: bước `khong-phien` của job `e2e-db` chạy lại đúng 540 bài của
+`tools/e2e_templates/suite.ts` mà job `e2e` đã chạy, khoảng 7 phút mỗi lượt. Việc này cố ý, để lấy số
+đếm bàn giao.

@@ -29,7 +29,8 @@ Hai yêu cầu đi kèm, chủ kho nêu cùng ngày:
 ## 2. Hiện trạng đo được
 
 Số đo trên `onehub-inventory`, nhánh chính tại `b6f4f29`, đọc từ GitHub ngày 15–16/11. Phía Máy
-(thời gian chấm, token, lượt gọi người) chưa đo được từ đây.
+(thời gian chấm, token, lượt gọi người) chưa đo được từ đây. Đo lại ngày 2026-11-20, kèm phía Máy:
+[truy nguyên từ quyết đến gộp](reports/2026-11-20-decision-to-merge-trace.md).
 
 | Dòng                                         | Số đo                                             |
 | -------------------------------------------- | ------------------------------------------------- |
@@ -194,7 +195,7 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 và đo ở kho thử (2026-11-18), mục 48 bộ kiểm |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Phát hành ở 0.9.0 và đo ở kho thử (2026-11-18), mục 49 bộ kiểm |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
-| RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; chờ DA3 nêu đường dẫn |
+| RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; DA3 đã nêu đường dẫn (2026-11-17), không còn chờ |
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
 | RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Làm cùng RS9                         |
 | RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Phát hành ở 0.10.0 và chạy ở kho thử (2026-11-19), mục 50 bộ kiểm: 13 luật máy giữ, 62 lời |
@@ -430,6 +431,11 @@ Ghi chú cho các gói mới và gói đổi:
 Phiên Design Assembly kiểm ba gói này với mã thật ngày 2026-11-16 (design-assembly tại `75d55cc`,
 `onehub-inventory` tại `b6f4f29`). Chưa dựng gì; hướng làm do chủ kho quyết ở kho đó.
 
+**Cập nhật 2026-11-20.** Cả ba gói đã xong ở design-assembly: giai đoạn 8 của `docs/plan/plan.json` ở
+kho đó, đóng ngày 2026-11-18. `onehub-inventory` nhận qua PR 84 (17/11) và PR 86 (18/11). Để lại,
+không hàng nào giữ: `design/behaviors.md` chưa tách mảnh, và phép đo lại sau 30 PR chưa chạy. Các
+nhận xét dưới đây là của ngày 16/11.
+
 - **DA1 đúng với hai trên ba tệp.** Sổ linh kiện là vật dẫn xuất mà vẫn commit: `make check` đỏ khi
   sổ lệch mã, nên PR nào đụng linh kiện cũng phải ghi lại tệp. Sổ màn là một danh sách chung, thêm
   mỗi màn một mục. Vướng: vòng nghiệm thu đang đọc đúng đường dẫn của sổ linh kiện, nên bỏ tệp khỏi
@@ -474,6 +480,11 @@ hạng cho PR đụng khuôn hay dòng màu thương hiệu (RS5). DA2 không c�
 | DL4 | Điều phối đọc bản đồ phạm vi để xếp vòng nối tiếp hay song song                                       | Nhanh               |
 | DL5 | Sổ giới hạn có ngưỡng theo lớp, có hạn, đo sự quay lại; mặc định định tuyến cho mục ngoài hợp đồng     | Ít người, tin cậy   |
 | DL6 | Phiên giám sát đọc bản uỷ quyền thay lời dặn; mỗi quyết định ghi sự kiện kèm tên quyền                 | Ít người            |
+
+**Đọc lại 2026-11-20.** Kế hoạch của chính delivery-loop mang các gói này tới đâu: xem mục 9 của
+[truy nguyên từ quyết đến gộp](reports/2026-11-20-decision-to-merge-trace.md). Tóm tắt: DL1 và DL2 có
+từng mảnh đã giao ở dạng tuỳ chọn, DL4 đã giao ở dạng «vùng», DL3 và DL5 không có, DL6 là một issue
+còn mở. Kho đó không có hàng nào xếp sau bản 3.0.
 
 ## 8. Thứ tự
 
@@ -565,7 +576,8 @@ mới chạy trên `onehub-inventory`.
 2. Tên và chỗ đặt tệp uỷ quyền. Máy gợi ý: trong `governance/` của kho tiêu thụ.
 3. Kho nào giữ phép so của từng bất biến ở mục 5.
 4. Có bắt buộc cả chín ô trên GitHub không, hay chỉ các ô kho khai là tường.
-5. Khoá bật lối gộp nhanh của gói `dieu-phoi` có đang bật ở `onehub-inventory` không.
+5. Khoá bật lối gộp nhanh của gói `dieu-phoi` có đang bật ở `onehub-inventory` không. Đọc ngày
+   2026-11-20: chưa bật; không tệp nào ở kho đó nêu khoá `gop_khong_chay_lai_ci`.
 6. Đã chốt: tệp chưa ai nhận thì theo luật ở cuối mục 7. Còn mở: design-assembly xác nhận nhận ba
    tệp, và cách chuyển sổ khối mà không sửa delivery-loop trước khi kho đó chuyển nhà xong.
 7. Thứ tự A đến F cho Repo Standards ở cuối mục 8.
