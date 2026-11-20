@@ -2242,6 +2242,11 @@ echo "ok  real walls (or misses reported above)"
 #     Vietnamese name from an English one, so the rule is a line in CLAUDE.md, the four documents
 #     that broke it carry English names, and nothing points at the old names.
 grep -q 'names are English' "$ROOT/CLAUDE.md" || miss "own rules: CLAUDE.md does not say that file, folder and branch names are English"
+# 45c. the plugin's own scripts keep the size limit every repository is given: 800 lines a file
+for script in "$ROOT"/plugins/repo-setup/scripts/*.py; do
+  n=$(wc -l < "$script" | tr -d ' ')
+  [ "$n" -le 800 ] || miss "own rules: ${script#"$ROOT"/} has $n lines, more than 800"
+done
 for doc in docs/setup-principles.md docs/three-repo-boundaries.md docs/three-repo-overview-design.md docs/superpowers/specs/2026-11-16-real-walls-design.md; do
   [ -f "$ROOT/$doc" ] || miss "own rules: $doc is missing"
 done
