@@ -24,14 +24,14 @@ sm="$TMP/seam-team"; sma="$TMP/seam-agents"
 sm_fresh "$gs" "$sm"
 sm_set "$sm" '^required_checks: .*$' 'required_checks: [gate]'
 sm_ok "$sm" || miss "seams: without agent workflows, a check named gate is refused under required_checks ($(cat "$sm.err"))"
-dry "$sm" | grep 'ruleset on' | grep -q ', gate$' || miss "seams: without agent workflows, github_setup does not require the gate the policy names: $(dry "$sm" | grep 'ruleset on')"
+dry "$sm" | grep 'ruleset on' | grep ', gate$' >/dev/null || miss "seams: without agent workflows, github_setup does not require the gate the policy names: $(dry "$sm" | grep 'ruleset on')"
 sm_fresh "$gs" "$sm"
 sm_set "$sm" '^  check: ""$' '  check: gate'
 sm_set "$sm" '^default: medium$' 'default: low'
 sm_ok "$sm" || miss "seams: without agent workflows, a proof named gate is refused ($(cat "$sm.err"))"
 [ "$(cd "$sm" && python3 -B tools/autonomy.py --files README.md 2>/dev/null | json 'd["proof"]')" = gate ] \
   || miss "seams: without agent workflows, a proof named gate is not handed on as the proof"
-dry "$sm" | grep 'ruleset on' | grep -q ', gate$' || miss "seams: without agent workflows, github_setup does not require the proof named gate: $(dry "$sm" | grep 'ruleset on')"
+dry "$sm" | grep 'ruleset on' | grep ', gate$' >/dev/null || miss "seams: without agent workflows, github_setup does not require the proof named gate: $(dry "$sm" | grep 'ruleset on')"
 # With the pipeline the name is taken: its own job reports under it.
 sm_fresh "$gsa" "$sma"
 sm_set "$sma" '^required_checks: .*$' 'required_checks: [gate]'
@@ -57,7 +57,7 @@ smd_apply() { python3 "$S/apply.py" --target "$smd" --preset react-vite --level 
 for mode in --dry-run ""; do
   smd_rc=0; smd_out=$(smd_apply --json $mode 2>/dev/null) || smd_rc=$?
   [ "$smd_rc" = 1 ] || miss "seams: a conflict on mk/design.mk ends the run with $smd_rc (${mode:-real run})"
-  printf '%s' "$smd_out" | json '"mk/design.mk" in d["conflict"] and d["exit_code"] == 1' | grep -q True \
+  printf '%s' "$smd_out" | json '"mk/design.mk" in d["conflict"] and d["exit_code"] == 1' | grep True >/dev/null \
     || miss "seams: mk/design.mk is not reported as a conflict with exit code 1 (${mode:-real run})"
   smd_why=$(printf '%s' "$smd_out" | json 'd["skip_reasons"].get("mk/design.mk", "")')
   for target in design-guards ui-floor; do
@@ -80,7 +80,7 @@ smj="$TMP/seam-joined"; mkdir -p "$smj/mk" && git -C "$smj" init -q -b main
 printf 'CHECK_TARGETS += design-guards\nHEAVY_TARGETS += \\\n  ui-floor # browser\n.PHONY: design-guards ui-floor\ndesign-guards ui-floor:\n\t@echo own\n' > "$smj/mk/design.mk"
 smj_rc=0; smj_out=$(python3 "$S/apply.py" --target "$smj" --preset react-vite --level team --with design --var project_name=D --var description=x --var owner=acme --json 2>/dev/null) || smj_rc=$?
 [ "$smj_rc" = 0 ] || miss "seams: a repository whose own mk/design.mk joins the same checks gets exit code $smj_rc"
-printf '%s' "$smj_out" | json '"mk/design.mk" in d["conflict"] and "mk/design.mk" not in d["skip_reasons"]' | grep -q True \
+printf '%s' "$smj_out" | json '"mk/design.mk" in d["conflict"] and "mk/design.mk" not in d["skip_reasons"]' | grep True >/dev/null \
   || miss "seams: checks the repository's own file joins are reported as left out"
 # The wall of the upgrade path joins by putting itself first (`CHECK_TARGETS := upgrade ...`): it counts too.
 smu="$TMP/seam-upgrade"; mkdir -p "$smu/mk" && git -C "$smu" init -q -b main
@@ -101,7 +101,7 @@ smp="$TMP/seam-plain"; mkdir -p "$smp" && git -C "$smp" init -q -b main
 echo 'root = true' > "$smp/.editorconfig"
 smp_rc=0; smp_out=$(python3 "$S/apply.py" --target "$smp" --preset python --var project_name=P --var description=x --var owner=acme --json 2>/dev/null) || smp_rc=$?
 [ "$smp_rc" = 0 ] || miss "seams: a conflict on a file that joins no check ends the run with $smp_rc"
-printf '%s' "$smp_out" | json '".editorconfig" in d["conflict"]' | grep -q True || miss "seams: the repository's own .editorconfig is not reported as a conflict"
+printf '%s' "$smp_out" | json '".editorconfig" in d["conflict"]' | grep True >/dev/null || miss "seams: the repository's own .editorconfig is not reported as a conflict"
 
 # 51c. the four lists of make (docs/seam-contracts.md, section 1): a target another tool adds from its
 #      own mk/ file runs where the page says. CHECK_TARGETS in the light tier (make check-quick, behind

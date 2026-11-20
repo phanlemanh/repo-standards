@@ -394,7 +394,7 @@ python3 "$S/apply.py" --target "$h" --preset python --level team --with github-a
 git -C "$h" add -A
 local_only=$(python3 "$S/doctor.py" --target "$h" --json | json 'd.get("local_only")')
 [ "$local_only" = True ] || miss "doctor does not flag a score without GitHub checks: $local_only"
-python3 "$S/doctor.py" --target "$h" | grep -q 'GitHub protection was not checked' || miss "doctor text does not warn about local-only score"
+python3 "$S/doctor.py" --target "$h" | grep 'GitHub protection was not checked' >/dev/null || miss "doctor text does not warn about local-only score"
 printf 'high:\n  - nothing\n' > "$h/governance/autonomy.yaml"
 printf 'on: push\n# claude-code-action test check\n' > "$h/.github/workflows/pr-pipeline.yml"
 ( cd "$h" && python3 tools/autonomy.py --write-codeowners >/dev/null; git add -A )
@@ -476,10 +476,10 @@ python3 -c "import json;d=json.load(open('$g2/.repo-setup.json'));assert 'mcp' i
 [ ! -e "$TMP/ai-tier-call/ontology/actions.yaml" ] || miss "call tier got the sample ontology"
 grep -q 'purgeNotes' "$g2/ontology/actions.yaml" 2>/dev/null || miss "agent tier lacks the sample ontology"
 echo '{}' > "$g2/uv.lock"; git -C "$g2" add -A
-python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep -q ai_agent_bounded && miss "doctor rejects an intact agent"
+python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep ai_agent_bounded >/dev/null && miss "doctor rejects an intact agent"
 subst 's/MAX_ITERATIONS/MAX_TURNS/g' "$g2/src/t/agent.py" 2>/dev/null || true; git -C "$g2" add -A
-python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep -q ai_agent_bounded || miss "doctor missed an agent without a turn limit"
-python3 "$S/doctor.py" --target "$TMP/ai-tier-call" --json | json '[r["id"] for r in d["failed"]+d["passed"] if isinstance(r,dict)]+d["passed"]' | grep -q ai_agent_bounded && miss "call tier is checked for an agent limit"
+python3 "$S/doctor.py" --target "$g2" --json | json '[r["id"] for r in d["failed"]]' | grep ai_agent_bounded >/dev/null || miss "doctor missed an agent without a turn limit"
+python3 "$S/doctor.py" --target "$TMP/ai-tier-call" --json | json '[r["id"] for r in d["failed"]+d["passed"] if isinstance(r,dict)]+d["passed"]' | grep ai_agent_bounded >/dev/null && miss "call tier is checked for an agent limit"
 echo "ok  ai capability (or misses reported above)"
 
 # 25. blueprint: checked, mapped to apply.py, blocks unfinished work, drift only warns
@@ -503,13 +503,13 @@ if [ -f "$x/.repo-setup.json" ]; then
   cp "$B/ok.yaml" "$x/setup-blueprint.yaml"; git -C "$x" add -A
   drift=$(python3 "$S/doctor.py" --target "$x" --json | json 'd.get("blueprint_drift")')
   [ "$drift" = "[]" ] || miss "blueprint: false drift: $drift"
-  python3 "$S/doctor.py" --target "$x" --json | json 'd["manual_steps"]' | grep -q 'Add a database' || miss "blueprint: manual steps not listed"
+  python3 "$S/doctor.py" --target "$x" --json | json 'd["manual_steps"]' | grep 'Add a database' >/dev/null || miss "blueprint: manual steps not listed"
   before=$(python3 "$S/doctor.py" --target "$x" --json | json 'd["score"]')
   python3 - "$x/.repo-setup.json" <<'PY'
 import json,sys
 p=sys.argv[1]; d=json.load(open(p)); d["level"]="team"; json.dump(d,open(p,"w"))
 PY
-  python3 "$S/doctor.py" --target "$x" --json | json 'len(d["blueprint_drift"])' | grep -qv '^0$' || miss "blueprint: drift not reported"
+  python3 "$S/doctor.py" --target "$x" --json | json 'len(d["blueprint_drift"])' | grep -v '^0$' >/dev/null || miss "blueprint: drift not reported"
   printf 'status: [' > "$x/setup-blueprint.yaml"
   python3 "$S/doctor.py" --target "$x" --json >/dev/null 2>&1 || miss "blueprint: broken file crashed doctor"
 fi
@@ -522,13 +522,13 @@ for l in context repo architecture ai stack domain design quality delivery gover
   for w in "Framing" "automated" "Recommendation"; do grep -q "$w" "$SK/references/layers/$l.md" 2>/dev/null || miss "layer $l lacks: $w"; done
 done
 # 26a. the build step and docs describe the design layer
-sed -n 's/^description: //p' "$SK/SKILL.md" | grep -q 'context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents' \
+sed -n 's/^description: //p' "$SK/SKILL.md" | grep 'context, repo strategy, architecture, AI in the product, stack, domain, design, quality, delivery, agents' >/dev/null \
   || miss "new: description does not list the layers in layers.toml order"
 grep -q 'design/terms.json' "$SK/SKILL.md" && grep -q 'docs_language' "$SK/SKILL.md" || miss "SKILL.md build step lacks design/terms.json and docs_language"
-awk '/^## 6\./{f=1;next} /^## 7\./{f=0} f' "$SK/SKILL.md" | grep -q 'design/terms.json' || miss "SKILL.md step 6 lacks design/terms.json"
+awk '/^## 6\./{f=1;next} /^## 7\./{f=0} f' "$SK/SKILL.md" | grep 'design/terms.json' >/dev/null || miss "SKILL.md step 6 lacks design/terms.json"
 grep -q 'src/example' "$SK/references/tour.md" || miss "tour.md lacks src/example"
 grep -q 'ten layers' "$ROOT/plugins/repo-setup/README.md" || miss "plugin README lacks: ten layers"
-grep '`react-vite`' "$SK/references/layers/stack.md" | grep -q 'design' || miss "stack.md react-vite row lacks design"
+grep '`react-vite`' "$SK/references/layers/stack.md" | grep 'design' >/dev/null || miss "stack.md react-vite row lacks design"
 # 26b. design layer: choices, colours, mapping to apply.py
 python3 "$bp" check "$B/design.yaml" >/dev/null || miss "design.yaml should be valid"
 args=$(python3 -c "
@@ -582,7 +582,7 @@ import sys; sys.path.insert(0, '$S'); import blueprint
 from pathlib import Path
 print(' '.join(blueprint.to_apply_args(blueprint.load(Path('$TMP/dman.yaml')))))")
 case "$args" in *design*) miss "design: a manual base still gives --with design: $args" ;; esac
-grep -E 'needs_review' "$SK/SKILL.md" | grep -q 'not_applicable' || miss "needs_review ignores not_applicable layers"
+grep -E 'needs_review' "$SK/SKILL.md" | grep 'not_applicable' >/dev/null || miss "needs_review ignores not_applicable layers"
 for f in "$ROOT"/plugins/repo-setup/skills/*/SKILL.md; do [ "$(wc -l < "$f")" -lt 500 ] || miss "too long: $f"; done
 grep -q 'references/critic.md' "$SK/SKILL.md" && grep -q 'references/tour.md' "$SK/SKILL.md" && grep -q 'from-blueprint' "$SK/SKILL.md" || miss "new does not use its references"
 grep -qi 'really need an agent' "$SK/references/layers/ai.md" 2>/dev/null || miss "ai layer does not ask whether an agent is needed"
@@ -609,7 +609,7 @@ grep -q '^## Language' "$la/AGENTS.md" && grep -q 'Conversation: vi' "$la/AGENTS
 ( cd "$la" && python3 tools/ledgers.py draw >/dev/null 2>&1 )   # the glossary is drawn from its fragments
 grep -q 'Display name' "$la/ontology/glossary.md" || miss "glossary lacks a display name column"
 git -C "$la" init -q -b main; git -C "$la" add -A
-python3 "$S/doctor.py" --target "$la" --json | json '",".join(r["id"] for r in d["failed"])' | grep -q language_policy && miss "doctor rejects the language section"
+python3 "$S/doctor.py" --target "$la" --json | json '",".join(r["id"] for r in d["failed"])' | grep language_policy >/dev/null && miss "doctor rejects the language section"
 old=/usr/bin/python3
 if [ -x "$old" ] && ! "$old" -c 'import tomllib' 2>/dev/null; then
   for script in apply doctor; do
@@ -639,7 +639,7 @@ import json,sys
 p=sys.argv[1]; d=json.load(open(p)); d["capabilities"]=[]; json.dump(d,open(p,"w"))
 PY
 out=$(python3 "$S/apply.py" --target "$r1" --json)
-echo "$out" | json '"\n".join(d["notes"])' | grep -q github-agents || miss "re-apply: no notice about kept agents"
+echo "$out" | json '"\n".join(d["notes"])' | grep github-agents >/dev/null || miss "re-apply: no notice about kept agents"
 grep -q '## AI-native SDLC' "$r1/AGENTS.md" || miss "re-apply dropped the agent rules while workflows remain"
 python3 -c "import json;assert 'github-agents' in json.load(open('$r1/.repo-setup.json'))['capabilities']" || miss "re-apply did not record github-agents"
 variant() { python3 - "$B/ok.yaml" "$TMP/variant.yaml" "$1" "$2" <<'PY'
@@ -659,11 +659,11 @@ python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1 || miss "blueprint: tool
 variant '    automation: automated
     choice: {level: starter}' '    choice: {level: starter}'
 if python3 "$bp" check "$TMP/variant.yaml" >/dev/null 2>&1; then miss "blueprint: decided layer without automation accepted"; fi
-grep -E 'coverage threshold' "$SK/references/layers/quality.md" | grep -q '`partial`' || miss "quality: mixed option must be partial"
-grep -E '^\| Monorepo' "$SK/references/layers/repo.md" | grep -q '`partial`' || miss "repo: monorepo must be partial"
-grep -E 'Custom tiers' "$SK/references/layers/governance.md" | grep -q '`partial`' || miss "governance: custom tiers must be partial"
+grep -E 'coverage threshold' "$SK/references/layers/quality.md" | grep '`partial`' >/dev/null || miss "quality: mixed option must be partial"
+grep -E '^\| Monorepo' "$SK/references/layers/repo.md" | grep '`partial`' >/dev/null || miss "repo: monorepo must be partial"
+grep -E 'Custom tiers' "$SK/references/layers/governance.md" | grep '`partial`' >/dev/null || miss "governance: custom tiers must be partial"
 grep -q 'tests' "$SK/SKILL.md" && grep -qi 'sample tests' "$SK/SKILL.md" || miss "new forgets the sample tests when replacing the ontology"
-steps "$n" False | grep -q allow_auto_merge && miss "github_setup changes auto-merge without agents"
+steps "$n" False | grep allow_auto_merge >/dev/null && miss "github_setup changes auto-merge without agents"
 echo "ok  review findings (or misses reported above)"
 
 # 29. setup only: the plugin stops at setup; generated repos own their procedures
@@ -693,7 +693,7 @@ python3 "$S/apply.py" --target "$u" --preset python --level team --with github-a
 grep -q '.claude/skills/review-change/SKILL.md' "$u/.github/workflows/pr-pipeline.yml" || miss "pr-pipeline does not use the repo's review procedure"
 if grep -qE '^ +plugins:' "$u"/.github/workflows/*.yml; then miss "agent workflows still install the plugin"; fi
 grep -q 'page-types.yaml' "$u/AGENTS.md" || miss "AGENTS.md lost the spec format"
-if python3 "$u/tools/github_setup.py" --help | grep -q marketplace; then miss "github_setup still sets a marketplace for CI"; fi
+if python3 "$u/tools/github_setup.py" --help | grep marketplace >/dev/null; then miss "github_setup still sets a marketplace for CI"; fi
 grep -q 'phanlemanh/delivery-loop' "$ROOT/README.md" || miss "README does not say where the feature loop lives"
 echo "ok  setup only (or misses reported above)"
 
@@ -702,14 +702,14 @@ g="$TMP/gate-repo"; mkdir -p "$g" && git -C "$g" init -q -b main
 python3 "$S/apply.py" --target "$g" --preset python --level team --with github-agents --var project_name=G --var description=x --var owner=a >/dev/null
 pipeline="$g/.github/workflows/pr-pipeline.yml"
 review=$(sed -n '/^  review:$/,/^  automerge:$/p' "$pipeline")
-echo "$review" | grep -q 'allowed_bots: "claude\[bot\]"' || miss "review rejects PRs opened by claude[bot]"
+grep -q 'allowed_bots: "claude\[bot\]"' <<<"$review" || miss "review rejects PRs opened by claude[bot]"
 if grep -q "allowed_bots: *['\"]\*" "$pipeline"; then miss "pipeline allows every bot"; fi
-if echo "$review" | grep -q 'setup-project'; then miss "review installs the PR's dependencies"; fi
-if echo "$review" | grep -q 'Bash(make:'; then miss "review may run make from the PR"; fi
-echo "$review" | grep -q -- '--strict-mcp-config' || miss "review may start MCP servers from the PR"
-echo "$review" | grep -qF -- "--settings '{\"disableAllHooks\": true}'" || miss "review may run the PR's hooks (SessionStart runs make from the PR)"
-echo "$review" | grep -q 'Bash(gh pr checks:' || miss "review cannot read the CI result"
-echo "$review" | grep -q 'checks: read' || miss "review lacks permission to read checks"
+if grep -q 'setup-project' <<<"$review"; then miss "review installs the PR's dependencies"; fi
+if grep -q 'Bash(make:' <<<"$review"; then miss "review may run make from the PR"; fi
+grep -q -- '--strict-mcp-config' <<<"$review" || miss "review may start MCP servers from the PR"
+grep -qF -- "--settings '{\"disableAllHooks\": true}'" <<<"$review" || miss "review may run the PR's hooks (SessionStart runs make from the PR)"
+grep -q 'Bash(gh pr checks:' <<<"$review" || miss "review cannot read the CI result"
+grep -q 'checks: read' <<<"$review" || miss "review lacks permission to read checks"
 skill="$g/.claude/skills/review-change/SKILL.md"
 grep -q 'In CI' "$skill" || miss "review-change does not say what to skip in CI"
 git -C "$g" add -A && git -C "$g" -c user.name=t -c user.email=t@t -c core.hooksPath=/dev/null commit -qm base
@@ -1029,14 +1029,14 @@ echo "$out" | json '"\n".join(n["what"]+": "+n["reason"] for n in d["not_applica
 grep -q '^Domain ontology and project wiki: A plugin marketplace has no business domain to model' "$TMP/na.txt" || miss "claude-plugin: apply does not say why ontology and wiki are left out"
 grep -q '^\.env\.example: ' "$TMP/na.txt" || miss "claude-plugin: apply does not say why .env.example is left out"
 python3 "$S/apply.py" --target "$TMP/plug-dry" --preset claude-plugin --var project_name=P --var description=x --var owner=a --dry-run \
-  | grep -q 'NOT APPLICABLE to a claude-plugin repository' || miss "claude-plugin: text output hides what is not applicable"
+  | grep 'NOT APPLICABLE to a claude-plugin repository' >/dev/null || miss "claude-plugin: text output hides what is not applicable"
 if grep -qiE 'ontology|wiki/|make gen|typecheck' "$k/AGENTS.md" "$k/CLAUDE.md" "$k/README.md" "$k/.claude/skills/review-change/SKILL.md"; then miss "claude-plugin: guides still talk about ontology, wiki or app tooling"; fi
 grep -q '^## Language' "$k/AGENTS.md" || miss "claude-plugin: AGENTS.md lacks the language rule"
 for t in setup lint test check; do grep -q "^$t:" "$k/Makefile" || miss "claude-plugin: Makefile lacks $t"; done
 grep -q 'make check' "$k/.github/workflows/ci.yml" && grep -q 'make validate' "$k/.github/workflows/ci.yml" || miss "claude-plugin: CI does not run the checks and the validator"
 [ "$(cat "$k/.nvmrc")" = 22 ] || miss "claude-plugin: Node version not pinned"
 ( cd "$k" && make check >/dev/null 2>&1 ) || miss "claude-plugin: make check fails on a fresh skeleton"
-python3 "$S/apply.py" --list-options | json 'd["stacks"]["claude-plugin"]["description"]' | grep -q 'plugin marketplace' || miss "claude-plugin: not in --list-options"
+python3 "$S/apply.py" --list-options | json 'd["stacks"]["claude-plugin"]["description"]' | grep 'plugin marketplace' >/dev/null || miss "claude-plugin: not in --list-options"
 ( cd "$k" && python3 tools/bump_version.py minor >/dev/null ) || miss "claude-plugin: bump failed"
 grep -q '"version": "0.2.0"' "$k/.claude-plugin/marketplace.json" && grep -q '"version": "0.2.0"' "$k/plugins/sample-kit/.claude-plugin/plugin.json" \
   || miss "claude-plugin: bump did not reach every manifest"
@@ -1074,7 +1074,7 @@ kind() { python3 "$S/detect.py" --target "$1" | json 'str(d["suggested_preset"])
 [ "$(kind "$k")" = "claude-plugin True" ] || miss "detect: skeleton gives $(kind "$k")"
 [ "$(kind "$ROOT")" = "claude-plugin True" ] || miss "detect: this repo gives $(kind "$ROOT")"
 [ "$(kind "$ROOT/tests/fixtures/plugin-repos/intact")" = "claude-plugin True" ] || miss "detect: fixture not recognised"
-python3 "$S/detect.py" --target "$ROOT/tests/fixtures/plugin-repos/intact" | json '",".join(d["claude_plugin"]["plugins"])' | grep -q '^alpha,beta$' || miss "detect: plugins not listed"
+python3 "$S/detect.py" --target "$ROOT/tests/fixtures/plugin-repos/intact" | json '",".join(d["claude_plugin"]["plugins"])' | grep '^alpha,beta$' >/dev/null || miss "detect: plugins not listed"
 [ "$(kind "$TMP/ts-node-starter")" = "ts-node False" ] || miss "detect: ts-node repo gives $(kind "$TMP/ts-node-starter")"
 [ "$(kind "$TMP/python-starter")" = "python False" ] || miss "detect: python repo gives $(kind "$TMP/python-starter")"
 [ "$(kind "$e")" = "None False" ] || miss "detect: empty folder gives $(kind "$e")"
@@ -1121,7 +1121,7 @@ for key, label in (("failed", "fail"), ("skipped", "skipped"), ("not_applicable"
     out += [label + ": " + " | ".join(str(r.get(k)) for k in ("detail", "reason", "title", "why", "fix") if r.get(k)) for r in d[key] if r["id"] == cid]
 print(out[0] if out else "absent")' "$2"; }
 expect() { # dir, check id, regex the verdict must match, extra doctor flags
-  got=$(verdict "$1" "$2" "${4:-}"); echo "$got" | grep -qE "$3" || miss "doctor on $(basename "$1"): $2 gave '$got', want /$3/"; }
+  got=$(verdict "$1" "$2" "${4:-}"); grep -qE "$3" <<<"$got" || miss "doctor on $(basename "$1"): $2 gave '$got', want /$3/"; }
 edit_json() { python3 - "$1" "$2" <<'PY'
 import json, sys
 path, code = sys.argv[1:]
@@ -1140,9 +1140,9 @@ expect "$ok" formatter_linter '^na: No application code at the root'
 expect "$ok" env_example '^na: Plugins read no environment configuration'
 for id in ontology wiki ontology_wiki_valid ontology_in_check; do expect "$ok" "$id" '^na: A plugin marketplace has no business domain to model'; done
 text=$(python3 "$S/doctor.py" --target "$ok")
-echo "$text" | grep -q 'Scored as: claude-plugin (detected: Claude Code plugin manifests)' || miss "doctor text does not say how the repo was scored"
-echo "$text" | grep -q 'Not applicable to a claude-plugin repository (not scored):' || miss "doctor text hides the checks that do not apply"
-echo "$text" | grep -q 'Domain ontology: glossary + entity definitions: A plugin marketplace has no business domain' || miss "doctor text gives no reason for skipping the ontology"
+grep -q 'Scored as: claude-plugin (detected: Claude Code plugin manifests)' <<<"$text" || miss "doctor text does not say how the repo was scored"
+grep -q 'Not applicable to a claude-plugin repository (not scored):' <<<"$text" || miss "doctor text hides the checks that do not apply"
+grep -q 'Domain ontology: glossary + entity definitions: A plugin marketplace has no business domain' <<<"$text" || miss "doctor text gives no reason for skipping the ontology"
 # An app profile still demands what an app needs, and has none of the plugin checks.
 expect "$ok" lockfile '^fail' '--preset python'
 expect "$ok" ontology '^fail' '--preset python'
@@ -1215,7 +1215,7 @@ if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-drift" >/dev/null 2>
 if python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-version" >/dev/null 2>"$TMP/lint.err"; then miss "plugin_lint: version mismatch accepted"; fi
 grep -q "\[versions\] plugin 'beta': the marketplace says 1.2.0 but plugin.json says 1.3.0" "$TMP/lint.err" || miss "plugin_lint: no message for a version mismatch"
 # rule-check: plugin-lint
-{ python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep -q '^False False$' || miss "plugin_lint --json"
+{ python3 "$TMP/plug/tools/plugin_lint.py" --root "$TMP/pd-root" --json || true; } | json 'str(d["ok"])+" "+str(d["checks"]["sources"]["ok"])' | grep '^False False$' >/dev/null || miss "plugin_lint --json"
 echo "ok  doctor profile for plugin repos (or misses reported above)"
 
 # 36. version tags without GitHub Releases (--remote, with a stand-in gh)
@@ -1233,13 +1233,13 @@ SH
 chmod +x "$TMP/fakebin/gh"
 remote_verdict() { PATH="$TMP/fakebin:$PATH" FAKE_RELEASES="$TMP/releases.json" verdict "$rl" plugin_releases '--level team --remote'; }
 echo '[]' > "$TMP/releases.json"
-remote_verdict | grep -q '^pass$' || miss "releases: a repo without tags must pass: $(remote_verdict)"
+remote_verdict | grep '^pass$' >/dev/null || miss "releases: a repo without tags must pass: $(remote_verdict)"
 git -C "$rl" tag v1.1.0; git -C "$rl" tag v1.2.0
-remote_verdict | grep -q '^fail: 2 tag(s) and no GitHub Release' || miss "releases: tags without releases: $(remote_verdict)"
+remote_verdict | grep '^fail: 2 tag(s) and no GitHub Release' >/dev/null || miss "releases: tags without releases: $(remote_verdict)"
 echo '[{"tagName":"v1.1.0"},{"tagName":"v1.2.0"}]' > "$TMP/releases.json"
-remote_verdict | grep -q '^pass$' || miss "releases: released tags must pass: $(remote_verdict)"
-verdict "$rl" plugin_releases '--level team' | grep -q '^absent$' || miss "releases: must be a reminder without --remote"
-python3 "$S/doctor.py" --target "$rl" --level team | grep -q 'Version tags are published as GitHub Releases' || miss "releases: no reminder without --remote"
+remote_verdict | grep '^pass$' >/dev/null || miss "releases: released tags must pass: $(remote_verdict)"
+verdict "$rl" plugin_releases '--level team' | grep '^absent$' >/dev/null || miss "releases: must be a reminder without --remote"
+python3 "$S/doctor.py" --target "$rl" --level team | grep 'Version tags are published as GitHub Releases' >/dev/null || miss "releases: no reminder without --remote"
 echo "ok  releases for tags (or misses reported above)"
 
 # 37. bump tool: every manifest together, or one plugin when versions are independent
@@ -1260,7 +1260,7 @@ if python3 "$BT" --root "$b" patch >/dev/null 2>"$TMP/bump.err"; then miss "bump
 grep -q 'pass --plugin NAME' "$TMP/bump.err" || miss "bump: no hint to pass --plugin"
 python3 "$BT" --root "$b" patch --plugin beta >/dev/null; [ "$(ver "$b")" = "1.2.0/1.2.0 1.2.1/1.2.1" ] || miss "bump: --plugin gave $(ver "$b")"
 grep -q '^## beta 1\.2\.1 — ' "$b/CHANGELOG.md" || miss "bump: changelog does not name the plugin"
-python3 "$BT" --root "$b" --notes 1.2.0 | grep -q 'alpha greets' || miss "bump: --notes"
+python3 "$BT" --root "$b" --notes 1.2.0 | grep 'alpha greets' >/dev/null || miss "bump: --notes"
 b="$TMP/bump-kitlike"; fresh "$b"; edit_json "$b/.claude-plugin/marketplace.json" 'del d["plugins"][0]["version"]; del d["plugins"][1]["version"]'
 python3 "$BT" --root "$b" patch >/dev/null; [ "$(ver "$b")" = "None/1.2.1 None/1.2.1" ] || miss "bump: added a version to marketplace entries that had none: $(ver "$b")"
 echo "ok  bump tool (or misses reported above)"
@@ -1327,27 +1327,27 @@ lwarns() { ( cd "$l" && { python3 tools/wiki_lint.py --json || true; } ) | json 
 put ''
 out=$(lerrs)
 [ "$(printf '%s\n' "$out" | grep -c "action for Order")" -eq 3 ] || miss "lifecycle: an entity with only a create action gave: $out"
-printf '%s\n' "$out" | grep -q "no 'delete' action for Order" || miss "lifecycle: the missing delete is not named: $out"
-printf '%s\n' "$out" | grep -q "lifecycle.delete" || miss "lifecycle: the message does not say how to record the choice: $out"
-printf '%s\n' "$out" | grep -q "no 'create' action" && miss "lifecycle: a covered operation was reported: $out"
+grep -q "no 'delete' action for Order" <<<"$out" || miss "lifecycle: the missing delete is not named: $out"
+grep -q "lifecycle.delete" <<<"$out" || miss "lifecycle: the message does not say how to record the choice: $out"
+grep -q "no 'create' action" <<<"$out" && miss "lifecycle: a covered operation was reported: $out"
 put 'lifecycle:\n  query: { later: Order history screen }\n  update: { never: Not changed after it is placed }\n  delete: { later: Yearly clean-up }\n'
-lerrs | grep -q "lifecycle.update: 'never' needs decided_by" || miss "lifecycle: a refusal with nobody behind it passed: $(lerrs)"
+lerrs | grep "lifecycle.update: 'never' needs decided_by" >/dev/null || miss "lifecycle: a refusal with nobody behind it passed: $(lerrs)"
 put 'lifecycle:\n  query:\n    later: Order history screen\n  update:\n    never: Not changed after it is placed\n    decided_by: shop owner 2026-01-05\n  delete: { later: Yearly clean-up }\n'
 [ -z "$(lerrs)" ] || miss "lifecycle: recorded choices still fail: $(lerrs)"
-lwarns | grep -q "Order: 'query' is planned, not built (Order history screen)" || miss "lifecycle: a postponed operation is not listed: $(lwarns)"
-lwarns | grep -q "Order: 'update'" && miss "lifecycle: a decided refusal is listed as a debt: $(lwarns)"
+lwarns | grep "Order: 'query' is planned, not built (Order history screen)" >/dev/null || miss "lifecycle: a postponed operation is not listed: $(lwarns)"
+lwarns | grep "Order: 'update'" >/dev/null && miss "lifecycle: a decided refusal is listed as a debt: $(lwarns)"
 put 'lifecycle:\n  create: { later: x }\n  query: { later: x }\n  update: { later: x }\n  delete: { later: x }\n'
-lwarns | grep -q "lifecycle.create is out of date: placeOrder" || miss "lifecycle: a stale entry is not reported: $(lwarns)"
+lwarns | grep "lifecycle.create is out of date: placeOrder" >/dev/null || miss "lifecycle: a stale entry is not reported: $(lwarns)"
 put 'lifecycle:\n  via: Customer\n'
 [ -z "$(lerrs)" ] || miss "lifecycle: an entity handled through another one fails: $(lerrs)"
 put 'lifecycle:\n  via: Nobody\n'
-lerrs | grep -q "lifecycle.via: 'Nobody' is not an entity" || miss "lifecycle: via an unknown entity passed: $(lerrs)"
+lerrs | grep "lifecycle.via: 'Nobody' is not an entity" >/dev/null || miss "lifecycle: via an unknown entity passed: $(lerrs)"
 put 'lifecycle:\n  via: Order\n'
-lerrs | grep -q "lifecycle.via: an entity cannot be handled through itself" || miss "lifecycle: via itself passed: $(lerrs)"
+lerrs | grep "lifecycle.via: an entity cannot be handled through itself" >/dev/null || miss "lifecycle: via itself passed: $(lerrs)"
 put 'lifecycle:\n  remove: { later: x }\n'
-lerrs | grep -q "lifecycle.remove: unknown key" || miss "lifecycle: an unknown key passed: $(lerrs)"
+lerrs | grep "lifecycle.remove: unknown key" >/dev/null || miss "lifecycle: an unknown key passed: $(lerrs)"
 put 'lifecycle: later\n'
-lerrs | grep -q "lifecycle must be a mapping" || miss "lifecycle: a bare word passed: $(lerrs)"
+lerrs | grep "lifecycle must be a mapping" >/dev/null || miss "lifecycle: a bare word passed: $(lerrs)"
 put ''
 rm "$l/ontology/actions.yaml"
 [ -z "$(lerrs)" ] || miss "lifecycle: a repo that declares no actions was asked for them: $(lerrs)"
@@ -1377,63 +1377,63 @@ grep -q 'lifecycle: { via: Order }' "$rel" || miss "relations: the sample relati
 [ -z "$(rerrs_builtin)" ] || miss "relations: the sample domain fails with the built-in YAML reader: $(rerrs_builtin)"
 relation ''
 out=$(rerrs)
-printf '%s\n' "$out" | grep -q "Customer -places-> Order: no answer for attach, detach, reassign" || miss "relations: a relation nobody can change gave: $out"
+grep -q "Customer -places-> Order: no answer for attach, detach, reassign" <<<"$out" || miss "relations: a relation nobody can change gave: $out"
 [ "$(printf '%s\n' "$out" | grep -c "no answer for")" -eq 1 ] || miss "relations: one relation gave more than one error: $out"
-printf '%s\n' "$out" | grep -q "relations: {places: \[<operation>\]}" || miss "relations: the message does not say how an action answers: $out"
-printf '%s\n' "$out" | grep -q "lifecycle.<operation>: {later: <where it is planned>}" || miss "relations: the message does not say how to record the choice: $out"
-printf '%s\n' "$out" | grep -q "lifecycle: {via: <that entity>}" || miss "relations: the message does not show the one-line form: $out"
+grep -q "relations: {places: \[<operation>\]}" <<<"$out" || miss "relations: the message does not say how an action answers: $out"
+grep -q "lifecycle.<operation>: {later: <where it is planned>}" <<<"$out" || miss "relations: the message does not say how to record the choice: $out"
+grep -q "lifecycle: {via: <that entity>}" <<<"$out" || miss "relations: the message does not show the one-line form: $out"
 relation '' many-to-many
-rerrs | grep -q "Customer -places-> Order: no answer for attach, detach:" || miss "relations: a many-to-many relation was asked to reassign: $(rerrs)"
+rerrs | grep "Customer -places-> Order: no answer for attach, detach:" >/dev/null || miss "relations: a many-to-many relation was asked to reassign: $(rerrs)"
 relation '    lifecycle:\n      attach: { later: Counter sign-up }\n      detach: { never: Orders stay with their customer }\n      reassign: { later: Merge two customers }\n'
-rerrs | grep -q "Customer -places-> Order: lifecycle.detach: 'never' needs decided_by" || miss "relations: a refusal with nobody behind it passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: lifecycle.detach: 'never' needs decided_by" >/dev/null || miss "relations: a refusal with nobody behind it passed: $(rerrs)"
 relation '    lifecycle:\n      attach: { later: Counter sign-up }\n      detach:\n        never: Orders stay with their customer\n        decided_by: shop owner 2026-01-05\n      reassign: { later: Merge two customers }\n'
 [ -z "$(rerrs)" ] || miss "relations: recorded choices still fail: $(rerrs)"
 [ -z "$(rerrs_builtin)" ] || miss "relations: recorded choices fail with the built-in YAML reader: $(rerrs_builtin)"
-rwarns | grep -q "Customer -places-> Order: 'reassign' is planned, not built (Merge two customers)" || miss "relations: a postponed operation is not listed: $(rwarns)"
-rwarns | grep -q "Customer -places-> Order: 'detach'" && miss "relations: a decided refusal is listed as a debt: $(rwarns)"
+rwarns | grep "Customer -places-> Order: 'reassign' is planned, not built (Merge two customers)" >/dev/null || miss "relations: a postponed operation is not listed: $(rwarns)"
+rwarns | grep "Customer -places-> Order: 'detach'" >/dev/null && miss "relations: a decided refusal is listed as a debt: $(rwarns)"
 action '  - name: moveOrder\n    description: Move an order to another customer.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: [reassign] }\n'
-rwarns | grep -q "Customer -places-> Order: lifecycle.reassign is out of date: moveOrder" || miss "relations: a stale entry is not reported: $(rwarns)"
+rwarns | grep "Customer -places-> Order: lifecycle.reassign is out of date: moveOrder" >/dev/null || miss "relations: a stale entry is not reported: $(rwarns)"
 relation ''
 out=$(rerrs)
-printf '%s\n' "$out" | grep -q "Customer -places-> Order: no answer for attach, detach:" || miss "relations: an action that reassigns did not answer reassign: $out"
+grep -q "Customer -places-> Order: no answer for attach, detach:" <<<"$out" || miss "relations: an action that reassigns did not answer reassign: $out"
 relation '    lifecycle: { via: Order }\n'
-rerrs | grep -q "Customer -places-> Order: lifecycle.via says the link never changes, but moveOrder" || miss "relations: via next to an action that changes the link passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: lifecycle.via says the link never changes, but moveOrder" >/dev/null || miss "relations: via next to an action that changes the link passed: $(rerrs)"
 action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: reasign, serves: attach }\n'
 out=$(rerrs)
-printf '%s\n' "$out" | grep -q "action 'moveOrder': relation 'places': unknown operation 'reasign'" || miss "relations: a misspelt operation passed: $out"
-printf '%s\n' "$out" | grep -q "action 'moveOrder': relation 'serves' is not in ontology/relations.yaml" || miss "relations: an unknown relation passed: $out"
+grep -q "action 'moveOrder': relation 'places': unknown operation 'reasign'" <<<"$out" || miss "relations: a misspelt operation passed: $out"
+grep -q "action 'moveOrder': relation 'serves' is not in ontology/relations.yaml" <<<"$out" || miss "relations: an unknown relation passed: $out"
 action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: places\n'
-rerrs | grep -q "action 'moveOrder': relations must be a mapping" || miss "relations: a bare word under relations passed: $(rerrs)"
+rerrs | grep "action 'moveOrder': relations must be a mapping" >/dev/null || miss "relations: a bare word under relations passed: $(rerrs)"
 action '  - name: moveOrder\n    description: Move an order.\n    entity: Order\n    kind: command\n    roles: [manager]\n    relations: { places: reassign }\n'
 { cat "$TMP/relations.base"; printf '  - from: Order\n    name: places\n    to: Customer\n    cardinality: many-to-many\n    lifecycle: { via: Order }\n'; } > "$rel"
-rerrs | grep -q "action 'moveOrder': relation 'places' is the name of 2 relations" || miss "relations: an ambiguous relation name passed: $(rerrs)"
+rerrs | grep "action 'moveOrder': relation 'places' is the name of 2 relations" >/dev/null || miss "relations: an ambiguous relation name passed: $(rerrs)"
 action ''
 relation '    lifecycle: { via: Nobody }\n'
-rerrs | grep -q "Customer -places-> Order: lifecycle.via: 'Nobody' is not one of its ends" || miss "relations: via an entity outside the relation passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: lifecycle.via: 'Nobody' is not one of its ends" >/dev/null || miss "relations: via an entity outside the relation passed: $(rerrs)"
 relation '    lifecycle: { remove: { later: x } }\n'
-rerrs | grep -q "Customer -places-> Order: lifecycle.remove: unknown key" || miss "relations: an unknown key passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: lifecycle.remove: unknown key" >/dev/null || miss "relations: an unknown key passed: $(rerrs)"
 relation '    lifecycle: fixed\n'
-rerrs | grep -q "Customer -places-> Order: lifecycle must be a mapping" || miss "relations: a bare word passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: lifecycle must be a mapping" >/dev/null || miss "relations: a bare word passed: $(rerrs)"
 # own: the starter form (own: [role]) and the scope form are read alike
 cp "$TMP/relations.base" "$rel"
 action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    roles: [staff, manager]\n    own: [staff]\n'
 out=$(rerrs)
-printf '%s\n' "$out" | grep -q "action 'viewOrder': staff may run it only on their own Order, but no relation says what 'own' means" || miss "relations: an own scope with no relation behind it gave: $out"
-printf '%s\n' "$out" | grep -q "mark it own: true" || miss "relations: the own message does not say how to fix it: $out"
+grep -q "action 'viewOrder': staff may run it only on their own Order, but no relation says what 'own' means" <<<"$out" || miss "relations: an own scope with no relation behind it gave: $out"
+grep -q "mark it own: true" <<<"$out" || miss "relations: the own message does not say how to fix it: $out"
 action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    scope: { staff: own, manager: company }\n'
-rerrs | grep -q "action 'viewOrder': staff may run it only on their own Order" || miss "relations: the scope form of own is not read: $(rerrs)"
+rerrs | grep "action 'viewOrder': staff may run it only on their own Order" >/dev/null || miss "relations: the scope form of own is not read: $(rerrs)"
 relation '    own: true\n    lifecycle: { via: Order }\n'
 [ -z "$(rerrs)" ] || miss "relations: an own scope with its relation still fails: $(rerrs)"
 [ -z "$(rerrs_builtin)" ] || miss "relations: an own scope with its relation fails with the built-in YAML reader: $(rerrs_builtin)"
 relation '    own: maybe\n    lifecycle: { via: Order }\n'
-rerrs | grep -q "Customer -places-> Order: own must be true or false" || miss "relations: own: maybe passed: $(rerrs)"
+rerrs | grep "Customer -places-> Order: own must be true or false" >/dev/null || miss "relations: own: maybe passed: $(rerrs)"
 # PyYAML reads yes / no as true / false; the built-in reader keeps them as words. Neither may read "no" as a yes.
 for word in no yes maybe; do
   relation "    own: $word\n    lifecycle: { via: Order }\n"
-  rerrs_builtin | grep -q "Customer -places-> Order: own must be true or false" || miss "relations: own: $word passed with the built-in YAML reader: $(rerrs_builtin)"
+  rerrs_builtin | grep "Customer -places-> Order: own must be true or false" >/dev/null || miss "relations: own: $word passed with the built-in YAML reader: $(rerrs_builtin)"
 done
 relation '    own: no\n    lifecycle: { via: Order }\n'
-rerrs | grep -q "action 'viewOrder': staff may run it only on their own Order" || miss "relations: own: no was read as a yes: $(rerrs)"
+rerrs | grep "action 'viewOrder': staff may run it only on their own Order" >/dev/null || miss "relations: own: no was read as a yes: $(rerrs)"
 # through the entity it lives under: Customer handled through Order, the own relation ends at Order
 relation '    own: true\n    lifecycle: { via: Order }\n'
 action '  - name: viewCustomerPhone\n    description: See the phone of a customer.\n    entity: Customer\n    kind: command\n    roles: [staff]\n    own: [staff]\n'
@@ -1441,12 +1441,12 @@ action '  - name: viewCustomerPhone\n    description: See the phone of a custome
 printf 'relations:\n  - from: Order\n    name: served_at\n    to: Order\n    cardinality: one-to-one\n    own: true\n    lifecycle: { via: Order }\n' > "$rel"
 [ -z "$(rerrs)" ] || miss "relations: own through the entity it lives under fails: $(rerrs)"
 cp "$TMP/customer.base" "$cust"
-rerrs | grep -q "action 'viewCustomerPhone': staff may run it only on their own Customer" || miss "relations: own passed without via or a relation: $(rerrs)"
+rerrs | grep "action 'viewCustomerPhone': staff may run it only on their own Customer" >/dev/null || miss "relations: own passed without via or a relation: $(rerrs)"
 cp "$TMP/relations.base" "$rel"
 action '  - name: viewOrder\n    description: See an order.\n    entity: Order\n    kind: query\n    roles: [manager]\n    own: [staff]\n'
-rerrs | grep -q "action 'viewOrder': own lists role 'staff', which is not in its roles" || miss "relations: own for a role that may not run the action passed: $(rerrs)"
+rerrs | grep "action 'viewOrder': own lists role 'staff', which is not in its roles" >/dev/null || miss "relations: own for a role that may not run the action passed: $(rerrs)"
 action '  - name: viewOrders\n    description: See orders.\n    kind: query\n    roles: [staff]\n    own: [staff]\n'
-rerrs | grep -q "action 'viewOrders': own needs entity" || miss "relations: own without an entity passed: $(rerrs)"
+rerrs | grep "action 'viewOrders': own needs entity" >/dev/null || miss "relations: own without an entity passed: $(rerrs)"
 relation ''; rm "$act"
 [ -z "$(rerrs)" ] || miss "relations: a repo that declares no actions was asked about relations: $(rerrs)"
 grep -q 'attach' "$r/.claude/rules/ontology.md" || miss "relations: the rule file does not name attach, detach, reassign"
@@ -1469,55 +1469,55 @@ setc() { printf '%s\n%b' "$cust_base" "$1" > "$cust"; }
 action() { { cat "$TMP/actions.base"; printf '%b' "$1"; } > "$act"; }
 [ -z "$(aerrs)" ] || miss "attributes: the sample domain fails: $(aerrs)"
 [ -z "$(aerrs_builtin)" ] || miss "attributes: the sample domain fails with the built-in YAML reader: $(aerrs_builtin)"
-awarns | grep -q "Customer: setting name, phone is planned, not built (Sign-up at the counter)" || miss "attributes: postponed properties are not listed together: $(awarns)"
+awarns | grep "Customer: setting name, phone is planned, not built (Sign-up at the counter)" >/dev/null || miss "attributes: postponed properties are not listed together: $(awarns)"
 setc ''
 out=$(aerrs)
-printf '%s\n' "$out" | grep -q "Customer: no create or update action sets id, name, phone, status, joinedAt:" || miss "attributes: properties nobody can set gave: $out"
+grep -q "Customer: no create or update action sets id, name, phone, status, joinedAt:" <<<"$out" || miss "attributes: properties nobody can set gave: $out"
 [ "$(printf '%s\n' "$out" | grep -c "no create or update action sets")" -eq 1 ] || miss "attributes: one entity gave more than one error: $out"
-printf '%s\n' "$out" | grep -q "sets: \[...\]" || miss "attributes: the message does not say how an action answers: $out"
-printf '%s\n' "$out" | grep -q "not_set: system: \[...\]" || miss "attributes: the message does not say how to record the reason: $out"
+grep -q "sets: \[...\]" <<<"$out" || miss "attributes: the message does not say how an action answers: $out"
+grep -q "not_set: system: \[...\]" <<<"$out" || miss "attributes: the message does not say how to record the reason: $out"
 # an explicit sets wins over the input fields, and counts on any kind of action
 action '  - name: blockCustomer\n    description: Stop a customer from ordering.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: [status]\n'
-aerrs | grep -q "Customer: no create or update action sets id, name, phone, joinedAt:" || miss "attributes: sets on a command did not count: $(aerrs)"
+aerrs | grep "Customer: no create or update action sets id, name, phone, joinedAt:" >/dev/null || miss "attributes: sets on a command did not count: $(aerrs)"
 awk '{ print } /^    kind: update$/ { print "    sets: [name]" }' "$TMP/actions.base" > "$act"
 grep -q 'sets: \[name\]' "$act" || miss "attributes: the test did not add sets to the update action"
-aerrs | grep -q "Customer: no create or update action sets id, phone, points, status, joinedAt:" || miss "attributes: an explicit sets did not win over the input fields: $(aerrs)"
+aerrs | grep "Customer: no create or update action sets id, phone, points, status, joinedAt:" >/dev/null || miss "attributes: an explicit sets did not win over the input fields: $(aerrs)"
 action '  - name: blockCustomer\n    description: Stop a customer.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: [state]\n'
-aerrs | grep -q "action 'blockCustomer': sets 'state', which is not a property of Customer" || miss "attributes: an unknown property under sets passed: $(aerrs)"
+aerrs | grep "action 'blockCustomer': sets 'state', which is not a property of Customer" >/dev/null || miss "attributes: an unknown property under sets passed: $(aerrs)"
 action '  - name: blockCustomer\n    description: Stop a customer.\n    entity: Customer\n    kind: command\n    roles: [manager]\n    sets: status\n'
-aerrs | grep -q "action 'blockCustomer': sets must be a list of property names" || miss "attributes: a bare word under sets passed: $(aerrs)"
+aerrs | grep "action 'blockCustomer': sets must be a list of property names" >/dev/null || miss "attributes: a bare word under sets passed: $(aerrs)"
 action '  - name: blockAll\n    description: Stop everyone.\n    kind: command\n    roles: [manager]\n    sets: [status]\n'
-aerrs | grep -q "action 'blockAll': sets needs entity" || miss "attributes: sets without an entity passed: $(aerrs)"
+aerrs | grep "action 'blockAll': sets needs entity" >/dev/null || miss "attributes: sets without an entity passed: $(aerrs)"
 action ''
 setc 'not_set:\n  system: [id, joinedAt]\n  import: [phone]\n  later: { name: Sign-up at the counter }\n  never:\n    status: { reason: Customers are never blocked }\n'
-aerrs | grep -q "not_set.never.status: 'never' needs decided_by" || miss "attributes: a refusal with nobody behind it passed: $(aerrs)"
+aerrs | grep "not_set.never.status: 'never' needs decided_by" >/dev/null || miss "attributes: a refusal with nobody behind it passed: $(aerrs)"
 setc 'not_set:\n  system: [id, joinedAt]\n  import: [phone]\n  later: { name: Sign-up at the counter }\n  never:\n    status: { reason: Customers are never blocked, decided_by: shop owner 2026-01-05 }\n'
 [ -z "$(aerrs)" ] || miss "attributes: recorded reasons still fail: $(aerrs)"
 [ -z "$(aerrs_builtin)" ] || miss "attributes: recorded reasons fail with the built-in YAML reader: $(aerrs_builtin)"
-awarns | grep -q "Customer: setting name is planned, not built (Sign-up at the counter)" || miss "attributes: a postponed property is not listed: $(awarns)"
-awarns | grep -q "Customer: setting.*status" && miss "attributes: a decided refusal is listed as a debt: $(awarns)"
+awarns | grep "Customer: setting name is planned, not built (Sign-up at the counter)" >/dev/null || miss "attributes: a postponed property is not listed: $(awarns)"
+awarns | grep "Customer: setting.*status" >/dev/null && miss "attributes: a decided refusal is listed as a debt: $(awarns)"
 setc 'not_set:\n  system: [id, joinedAt, points]\n  later: { name: x, phone: x, status: x }\n'
-awarns | grep -q "not_set.system: 'points' is out of date: awardPoints now sets it" || miss "attributes: a stale entry is not reported: $(awarns)"
+awarns | grep "not_set.system: 'points' is out of date: awardPoints now sets it" >/dev/null || miss "attributes: a stale entry is not reported: $(awarns)"
 setc 'not_set:\n  system: [id, joinedAt, nickname]\n  later: { name: x, phone: x, status: x }\n'
-aerrs | grep -q "not_set.system: 'nickname' is not a property of Customer" || miss "attributes: an unknown property under not_set passed: $(aerrs)"
+aerrs | grep "not_set.system: 'nickname' is not a property of Customer" >/dev/null || miss "attributes: an unknown property under not_set passed: $(aerrs)"
 setc 'not_set:\n  derived: [id]\n'
-aerrs | grep -q "not_set.derived: unknown key" || miss "attributes: an unknown key passed: $(aerrs)"
+aerrs | grep "not_set.derived: unknown key" >/dev/null || miss "attributes: an unknown key passed: $(aerrs)"
 setc 'not_set: system\n'
-aerrs | grep -q "not_set must be a mapping" || miss "attributes: a bare word passed: $(aerrs)"
+aerrs | grep "not_set must be a mapping" >/dev/null || miss "attributes: a bare word passed: $(aerrs)"
 setc 'not_set:\n  system: id\n  later: [name]\n  never: [status]\n'
 out=$(aerrs)
-printf '%s\n' "$out" | grep -q "not_set.system must be a list of property names" || miss "attributes: system as a bare word passed: $out"
-printf '%s\n' "$out" | grep -q "not_set.later must be a mapping" || miss "attributes: later as a list passed: $out"
-printf '%s\n' "$out" | grep -q "not_set.never must be a mapping" || miss "attributes: never as a list passed: $out"
+grep -q "not_set.system must be a list of property names" <<<"$out" || miss "attributes: system as a bare word passed: $out"
+grep -q "not_set.later must be a mapping" <<<"$out" || miss "attributes: later as a list passed: $out"
+grep -q "not_set.never must be a mapping" <<<"$out" || miss "attributes: never as a list passed: $out"
 setc 'not_set:\n  system: [id, joinedAt]\n  later: { name: x, phone: x }\n  never:\n    status: { decided_by: shop owner 2026-01-05 }\n'
-aerrs | grep -q "not_set.never.status: give reason" || miss "attributes: a refusal without a reason passed: $(aerrs)"
+aerrs | grep "not_set.never.status: give reason" >/dev/null || miss "attributes: a refusal without a reason passed: $(aerrs)"
 # an entity with no create or update action, or handled through its parent, is not asked per property
 cp "$a/ontology/entities/Customer.yaml" "$TMP/customer.any"; printf '%s\n' "$cust_base" | sed '/^lifecycle:/,$d' > "$cust"; printf 'lifecycle: { via: Order }\n' >> "$cust"
-aerrs | grep -q "no create or update action sets" && miss "attributes: an entity handled through its parent was asked: $(aerrs)"
+aerrs | grep "no create or update action sets" >/dev/null && miss "attributes: an entity handled through its parent was asked: $(aerrs)"
 printf '%s\n' "$ord_base" > "$ord"
-aerrs | grep -q "Order: no create or update action sets id, placedOn:" || miss "attributes: the control case did not fail: $(aerrs)"
+aerrs | grep "Order: no create or update action sets id, placedOn:" >/dev/null || miss "attributes: the control case did not fail: $(aerrs)"
 sed 's/^    kind: create$/    kind: command/' "$TMP/actions.base" > "$act"
-aerrs | grep -q "Order: no create or update action sets" && miss "attributes: an entity with no create or update action was asked: $(aerrs)"
+aerrs | grep "Order: no create or update action sets" >/dev/null && miss "attributes: an entity with no create or update action was asked: $(aerrs)"
 cp "$TMP/actions.base" "$act"; rm "$act"
 [ -z "$(aerrs)" ] || miss "attributes: a repo that declares no actions was asked about properties: $(aerrs)"
 grep -q 'not_set' "$a/.claude/rules/ontology.md" || miss "attributes: the rule file does not name not_set"
@@ -1585,10 +1585,10 @@ for agents in (False, True):
     assert dict(fields(y))['allow_rebase_merge'] == 'false'
 " ) || miss "merge method: the plan for merge commits differs from squash in more than the merge settings"
 out=$(dry "$gs" --merge-method rebase || true)
-printf '%s\n' "$out" | grep -q "invalid choice: 'rebase'" || miss "merge method: an unknown method was not refused by name: $out"
-dry "$gs" --merge-method merge --reviewer @b | grep -q 'human approval by @b' || miss "merge method: --reviewer is lost next to --merge-method"
+grep -q "invalid choice: 'rebase'" <<<"$out" || miss "merge method: an unknown method was not refused by name: $out"
+dry "$gs" --merge-method merge --reviewer @b | grep 'human approval by @b' >/dev/null || miss "merge method: --reviewer is lost next to --merge-method"
 [ ! -s "$TMP/gs-calls" ] || miss "merge method: a dry run called gh to change something: $(cat "$TMP/gs-calls")"
-python3 "$gs/tools/github_setup.py" --help | grep -q -- '--merge-method' || miss "merge method: --help does not show the option"
+python3 "$gs/tools/github_setup.py" --help | grep -- '--merge-method' >/dev/null || miss "merge method: --help does not show the option"
 # agents merge low-tier PRs with the method the repository allows, and squash when it cannot tell
 pipeline="$gsa/.github/workflows/pr-pipeline.yml"
 if grep -q -- '--auto --squash' "$pipeline"; then miss "merge method: the PR pipeline always squashes"; fi
@@ -1675,7 +1675,7 @@ governance_ok || miss "people decide: default low with a proof was refused"
 [ "$(cd "$pd" && python3 tools/autonomy.py --files src/app.py | json 'd.get("proof")')" = evidence ] || miss "people decide: the tier result does not name the proof"
 if grep -qE '^\*( |$)' "$pd/.github/CODEOWNERS"; then miss "people decide: with a proof, every path still has an owner"; fi
 grep -q '^/governance/\*\*  @acme$' "$pd/.github/CODEOWNERS" || miss "people decide: with a proof, governance/ lost its owner"
-dry "$pd" | grep -q 'checks check, gate, secret-scan, conventional-title, conventional-commits, evidence' || miss "people decide: github_setup does not require the proof the policy names"
+dry "$pd" | grep 'checks check, gate, secret-scan, conventional-title, conventional-commits, evidence' >/dev/null || miss "people decide: github_setup does not require the proof the policy names"
 # 43d. a looser agent guard is a rule change, wherever it is written; a new action is not
 mkdir -p "$pd/ontology" "$pd/src"
 printf 'actions:\n  - name: wipe\n    agent: forbidden\n  - name: refund\n    agent: confirm\n' > "$pd/ontology/actions.yaml"
@@ -1720,9 +1720,9 @@ grep -q '^proof=evidence$' "$TMP/pd-gate.out" 2>/dev/null || miss "people decide
 # 43f. the pipeline: no second reviewer on proven changes, merge by proof and not by author, no approvals
 review=$(sed -n '/^  review:$/,/^  automerge:$/p' "$pipeline")
 automerge=$(sed -n '/^  automerge:$/,$p' "$pipeline")
-echo "$review" | grep -q "needs.gate.outputs.proof == ''" || miss "people decide: the reviewer agent runs again on a change the proof covers"
-echo "$automerge" | grep -q "needs.gate.outputs.proof != ''" || miss "people decide: a proven change does not merge itself without the reviewer agent"
-echo "$automerge" | grep -q 'draft == false' || miss "people decide: auto-merge may fire on a draft"
+grep -q "needs.gate.outputs.proof == ''" <<<"$review" || miss "people decide: the reviewer agent runs again on a change the proof covers"
+grep -q "needs.gate.outputs.proof != ''" <<<"$automerge" || miss "people decide: a proven change does not merge itself without the reviewer agent"
+grep -q 'draft == false' <<<"$automerge" || miss "people decide: auto-merge may fire on a draft"
 if grep -q 'AGENT_AUTHORS' "$pipeline"; then miss "people decide: auto-merge depends on who the author is"; fi
 if grep -qE 'gh pr review|--approve' "$pipeline"; then miss "people decide: the pipeline approves pull requests"; fi
 # a change that stops being low does not keep the auto-merge an earlier push turned on
@@ -1739,13 +1739,13 @@ chmod +x "$TMP/holdbin/gh"
 hold() { echo "$1" > "$TMP/hold-state"; rm -f "$TMP/hold-calls"
   ( PATH="$TMP/holdbin:$PATH" GH_CALLS="$TMP/hold-calls" HOLD_STATE="$TMP/hold-state" HOLD_CAN_DISABLE="$2" PR=7 \
     bash -e -c "$(steps_of 'Hold a change that is no longer low')" ) >/dev/null 2>&1; }
-grep -A1 'Hold a change that is no longer low' "$pipeline" | grep -q "needs.tier.outputs.tier != 'low'" || miss "people decide: the hold does not run for every tier above low"
+grep -A1 'Hold a change that is no longer low' "$pipeline" | grep "needs.tier.outputs.tier != 'low'" >/dev/null || miss "people decide: the hold does not run for every tier above low"
 gate_job=$(sed -n '/^  gate:$/,/^  review:$/p' "$pipeline")
-echo "$gate_job" | grep -q 'if: always()' || miss "people decide: the required check is skipped, and so counts as passed, when the tier job fails"
-echo "$gate_job" | grep -q "needs.tier.result != 'success'" || miss "people decide: the required check passes without a tier"
-echo "$gate_job" | grep -q 'contents: write' || miss "people decide: the job that turns auto-merge off may not do so"
-if echo "$gate_job" | grep -q 'actions/checkout'; then miss "people decide: the job that may write checks out the pull request"; fi
-sed -n '/^  tier:$/,/^  gate:$/p' "$pipeline" | grep -q 'contents: read' || miss "people decide: the job that reads the pull request may write"
+grep -q 'if: always()' <<<"$gate_job" || miss "people decide: the required check is skipped, and so counts as passed, when the tier job fails"
+grep -q "needs.tier.result != 'success'" <<<"$gate_job" || miss "people decide: the required check passes without a tier"
+grep -q 'contents: write' <<<"$gate_job" || miss "people decide: the job that turns auto-merge off may not do so"
+if grep -q 'actions/checkout' <<<"$gate_job"; then miss "people decide: the job that may write checks out the pull request"; fi
+sed -n '/^  tier:$/,/^  gate:$/p' "$pipeline" | grep 'contents: read' >/dev/null || miss "people decide: the job that reads the pull request may write"
 ( bash -e -c "$(steps_of 'Fail when the tier is unknown')" ) >/dev/null 2>&1 && miss "people decide: the step for an unknown tier does not fail"
 hold off yes && [ ! -e "$TMP/hold-calls" ] || miss "people decide: the gate touches an auto-merge that is off"
 hold on yes && grep -q '^pr merge 7 --disable-auto$' "$TMP/hold-calls" 2>/dev/null || miss "people decide: a change that stopped being low keeps its auto-merge"
@@ -1760,7 +1760,7 @@ printf 'check\ngate\nevidence\n' > "$TMP/required-yes"; printf 'check\ngate\nevi
 proof_required "$TMP/required-yes" || miss "people decide: a required proof is not recognised"
 if proof_required "$TMP/required-no"; then miss "people decide: auto-merge trusts a proof the branch does not require"; fi
 if proof_required "$TMP/required-missing"; then miss "people decide: auto-merge trusts a proof when the rules cannot be read"; fi
-echo "$automerge" | grep -q "needs.gate.result == 'success'" || miss "people decide: auto-merge may run although the gate failed"
+grep -q "needs.gate.result == 'success'" <<<"$automerge" || miss "people decide: auto-merge may run although the gate failed"
 # 43g. generated instructions add no stop of their own; settings ask nothing and keep the silent walls
 for phrase in 'get approval before you start' 'ask in the issue and stop' 'need human review' 'need a human reviewer' 'one approval is required' '(high tier)'; do
   if grep -qiF "$phrase" "$pd/AGENTS.md" "$pd/CONTRIBUTING.md" "$pd/.github/pull_request_template.md" "$pd/ontology/README.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/+AGENTS.md/40-service-api.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/tools/api_compat.py"; then miss "people decide: generated text stops for a person: $phrase"; fi
@@ -1794,13 +1794,13 @@ SH
 chmod +x "$TMP/bpbin/gh"
 bp_verdict() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd" branch_protection '--level team --remote'; }
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":true}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
-bp_verdict | grep -q '^pass$' || miss "people decide: doctor wants an approval count: $(bp_verdict)"
+bp_verdict | grep '^pass$' >/dev/null || miss "people decide: doctor wants an approval count: $(bp_verdict)"
 echo '[{"type":"required_status_checks"}]' > "$TMP/rules.json"
-bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts a branch that needs no pull request: $(bp_verdict)"
+bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch that needs no pull request: $(bp_verdict)"
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":true}}]' > "$TMP/rules.json"
-bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts approvals in place of required checks: $(bp_verdict)"
+bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts approvals in place of required checks: $(bp_verdict)"
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
-bp_verdict | grep -q '^fail' || miss "people decide: doctor accepts a branch where the rules have lost their decider: $(bp_verdict)"
+bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch where the rules have lost their decider: $(bp_verdict)"
 # 43j. a ruleset from an earlier run is brought up to date, so an upgrade reaches the repository
 mkdir -p "$TMP/rsbin"
 cat > "$TMP/rsbin/gh" <<'SH'
@@ -1871,7 +1871,7 @@ scan=$({ grep -A4 'alias: gitleaks-history' "$rw/.pre-commit-config.yaml" || tru
 [ -n "$scan" ] || miss "real walls: no gitleaks hook for CI in .pre-commit-config.yaml"
 case "$scan" in *--staged*) miss "real walls: the CI secret scan reads staged changes only" ;; esac
 case "$scan" in *--log-opts=HEAD*) ;; *) miss "real walls: the CI secret scan reads other branches, so one leak turns every pull request red" ;; esac
-{ grep -A4 'alias: gitleaks-history' "$rw/.pre-commit-config.yaml" || true; } | grep -q 'stages: \[manual\]' || miss "real walls: the CI secret scan also runs on every local commit"
+{ grep -A4 'alias: gitleaks-history' "$rw/.pre-commit-config.yaml" || true; } | grep 'stages: \[manual\]' >/dev/null || miss "real walls: the CI secret scan also runs on every local commit"
 # 44b. the red direction: a token in a commit turns the scan red, also after a later commit deletes it
 rw_save() { git -C "$rw" add -A && git -C "$rw" -c user.name=t -c user.email=t@example.com commit -q -m "$1"; }
 rw_scan() { ( cd "$rw" && $scan >/dev/null 2>&1 ); }
@@ -1897,7 +1897,7 @@ if grep -q 'github.token' "$rel"; then miss "real walls: Release falls back to t
 grep -q "secrets.RELEASE_PLEASE_TOKEN != ''" "$rel" || miss "real walls: Release does not look at whether its key exists"
 grep -q "if: env.HAS_RELEASE_TOKEN == 'true'" "$rel" || miss "real walls: release-please runs without its key"
 grep -q "if: env.HAS_RELEASE_TOKEN != 'true'" "$rel" || miss "real walls: Release without a key says nothing"
-dry "$rw" | grep -q 'RELEASE_PLEASE_TOKEN is missing: releases are off' || miss "real walls: github_setup does not say that releases are off"
+dry "$rw" | grep 'RELEASE_PLEASE_TOKEN is missing: releases are off' >/dev/null || miss "real walls: github_setup does not say that releases are off"
 mkdir -p "$TMP/rkbin"
 cat > "$TMP/rkbin/gh" <<'SH'
 #!/bin/sh
@@ -1910,9 +1910,9 @@ SH
 chmod +x "$TMP/rkbin/gh"
 rk_verdict() { PATH="$TMP/rkbin:$PATH" FAKE_SECRETS="$TMP/secrets" verdict "$rw" release_key '--level team --remote'; }
 : > "$TMP/secrets"
-rk_verdict | grep -q '^fail' || miss "real walls: doctor is content with releases that have no key: $(rk_verdict)"
+rk_verdict | grep '^fail' >/dev/null || miss "real walls: doctor is content with releases that have no key: $(rk_verdict)"
 echo RELEASE_PLEASE_TOKEN > "$TMP/secrets"
-rk_verdict | grep -q '^pass$' || miss "real walls: doctor does not see the release key: $(rk_verdict)"
+rk_verdict | grep '^pass$' >/dev/null || miss "real walls: doctor does not see the release key: $(rk_verdict)"
 # 44d. the commit-format check judges what reaches the default branch: the title when squashing, the commits otherwise
 pt="$rw/.github/workflows/pr-title.yml"
 for job in conventional-title conventional-commits; do
@@ -1949,7 +1949,7 @@ esac
 for a in "$@"; do f=$a; done
 echo "$f" >> "$CC_CALLS"
 # With no hook at commit-msg, pre-commit runs nothing on the message and ends green.
-grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep -q 'commit-msg\|id: conventional-pre-commit$' || exit 0
+grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep 'commit-msg\|id: conventional-pre-commit$' >/dev/null || exit 0
 case "${CC_HOOK:-format}" in
   # pre-commit itself cannot run (its own words)
   broken) echo "An error has occurred: InvalidConfigError: "; echo "=====> .pre-commit-config.yaml is not a file"; exit 1 ;;
@@ -1972,10 +1972,10 @@ cc true 'fix: two' >/dev/null || miss "real walls: the commit check rejects a br
 [ "$(grep -c '/message$' "$TMP/cc-calls")" = 2 ] || miss "real walls: the commit check did not judge both commits"
 # rule-check: commit-format
 if cc true 'changed stuff' >/dev/null; then miss "real walls: the commit check accepts a commit that is not conventional"; fi
-{ cc true 'changed stuff' || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name the commit it rejects"
+{ cc true 'changed stuff' || true; } | grep '::error::Commit bbb' >/dev/null || miss "real walls: the commit check does not name the commit it rejects"
 cc false 'changed stuff' >/dev/null || miss "real walls: the commit check judges commits in a repository that squashes"
 [ ! -s "$TMP/cc-calls" ] || miss "real walls: the commit check ran the hook in a repository that squashes"
-{ cc unreadable 'changed stuff' || true; } | grep -q '::warning::' || miss "real walls: the commit check is silent when it cannot read how the repository merges"
+{ cc unreadable 'changed stuff' || true; } | grep '::warning::' >/dev/null || miss "real walls: the commit check is silent when it cannot read how the repository merges"
 # a repository that replaced the hook with one of its own (another id) is still judged, by that hook;
 # one with no commit-msg hook at all is red and says so: a green check that judges nothing is no wall
 mkdir -p "$TMP/cc-own" "$TMP/cc-block" "$TMP/cc-bare" "$TMP/cc-none"
@@ -2010,20 +2010,20 @@ long_title=$(printf '%0100d' 0)
 if CC_HOOK=maxlen cc true "$long_title" >/dev/null; then miss "real walls: the commit check accepts a commit the length-only hook refuses"; fi
 # pre-commit that cannot run is said to be that: the commits are not blamed
 if CC_HOOK=broken cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit cannot run"; fi
-{ CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run"
-if { CC_HOOK=broken cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits when pre-commit cannot run"; fi
+{ CC_HOOK=broken cc true 'fix: two' || true; } | grep '::error::pre-commit could not run' >/dev/null || miss "real walls: the commit check does not say that pre-commit could not run"
+if { CC_HOOK=broken cc true 'fix: two' || true; } | grep '::error::Commit ' >/dev/null; then miss "real walls: the commit check blames the commits when pre-commit cannot run"; fi
 for how in unfetched flaky; do
   if CC_HOOK=$how cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green when pre-commit ends with an unexpected error ($how)"; fi
-  { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::pre-commit could not run' || miss "real walls: the commit check does not say that pre-commit could not run ($how)"
-  if { CC_HOOK=$how cc true 'fix: two' || true; } | grep -q '::error::Commit '; then miss "real walls: the commit check blames the commits for an unexpected error of pre-commit ($how)"; fi
+  { CC_HOOK=$how cc true 'fix: two' || true; } | grep '::error::pre-commit could not run' >/dev/null || miss "real walls: the commit check does not say that pre-commit could not run ($how)"
+  if { CC_HOOK=$how cc true 'fix: two' || true; } | grep '::error::Commit ' >/dev/null; then miss "real walls: the commit check blames the commits for an unexpected error of pre-commit ($how)"; fi
 done
 # what the hook said about a refused commit is in the log, for whoever has to fix the message
-{ cc true 'changed stuff' || true; } | grep -q 'stand-in: refused' || miss "real walls: the commit check hides what the hook said about the commit it refuses"
+{ cc true 'changed stuff' || true; } | grep 'stand-in: refused' >/dev/null || miss "real walls: the commit check hides what the hook said about the commit it refuses"
 # hooks print the message back: a refused commit that holds pre-commit's error words is still a refused commit
 for words in 'An error has occurred in login' 'An unexpected error has occurred: the page is blank'; do
   if cc true "$words" >/dev/null; then miss "real walls: the commit check accepts a bad commit whose message holds pre-commit's error words ($words)"; fi
-  { cc true "$words" || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name a refused commit whose message holds pre-commit's error words ($words)"
-  if { cc true "$words" || true; } | grep -q '::error::pre-commit could not run'; then miss "real walls: the commit check reads a refused commit as pre-commit failing, from words in its message ($words)"; fi
+  { cc true "$words" || true; } | grep '::error::Commit bbb' >/dev/null || miss "real walls: the commit check does not name a refused commit whose message holds pre-commit's error words ($words)"
+  if { cc true "$words" || true; } | grep '::error::pre-commit could not run' >/dev/null; then miss "real walls: the commit check reads a refused commit as pre-commit failing, from words in its message ($words)"; fi
 done
 # what a hook prints may hold the commit message, and its author wrote that: the job runs from the
 # default branch (pull_request_target), so no line of it may reach the runner as a workflow command.
@@ -2063,7 +2063,7 @@ forged=$(printf 'changed stuff\n\n::error file=README.md::forged by the author\n
 [ "$(cc_fenced "$TMP/cc-forged-cr" 'forged after a return' | head -1)" = ok ] \
   || miss "real walls: a carriage return in a commit title starts a workflow command ($(cc_fenced "$TMP/cc-forged-cr" 'forged after a return' | head -1))"
 # a percent sign in the title is escaped, so the runner does not turn `%0A` into a line break
-{ cc true 'changed %0A::warning::forged by percent' || true; } | grep -q '^::error::Commit bbb .*changed %250A::warning::forged by percent$' \
+{ cc true 'changed %0A::warning::forged by percent' || true; } | grep '^::error::Commit bbb .*changed %250A::warning::forged by percent$' >/dev/null \
   || miss "real walls: a percent sign in a commit title is handed to the runner unescaped"
 # no token, no fence: what the hook printed is then not shown at all, and the job is red
 cc_od=$(command -v od)
@@ -2072,13 +2072,13 @@ if CC_NO_OD=1 cc true "$forged" > "$TMP/cc-forged-no-od" 2>&1; then miss "real w
 if grep -q 'forged by the author' "$TMP/cc-forged-no-od"; then miss "real walls: without a fence, what the hook printed is shown all the same"; fi
 grep -q '^::error::.*could not be shown safely' "$TMP/cc-forged-no-od" || miss "real walls: the commit check does not say why it shows nothing of the hook"
 # the hooks run with no token of the repository left in the checkout
-grep -A3 'uses: actions/checkout' "$pt" | grep -q 'persist-credentials: false' || miss "real walls: the commit check leaves the checkout's token where the hooks run"
+grep -A3 'uses: actions/checkout' "$pt" | grep 'persist-credentials: false' >/dev/null || miss "real walls: the commit check leaves the checkout's token where the hooks run"
 # the same when pre-commit could not run: what it printed is shown, and read as text only
 { CC_HOOK=brokenforged cc true 'fix: two' || true; } > "$TMP/cc-forged-3"
 [ "$(cc_fenced "$TMP/cc-forged-3" 'forged by a hook' | head -1)" = ok ] \
   || miss "real walls: a line pre-commit printed when it could not run reaches the runner as a workflow command ($(cc_fenced "$TMP/cc-forged-3" 'forged by a hook' | head -1))"
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
-{ CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
+{ CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -i '::error::.*no hook.*commit-msg' >/dev/null || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then
   miss "real walls: the github skill still asks a person to edit pr-title.yml by hand"
 fi
@@ -2098,10 +2098,10 @@ PY
 }
 rw_governance_ok() { ( cd "$rw" && python3 tools/autonomy.py --write-codeowners >/dev/null && python3 tools/autonomy.py --check-codeowners >/dev/null 2>&1 ); }
 grep -q '^required_checks: \[\]$' "$rw_policy" || miss "real walls: the sample policy has no required_checks to fill in"
-dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional-commits$' || miss "real walls: the secret scan is not a required check: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep 'checks check, secret-scan, conventional-title, conventional-commits$' >/dev/null || miss "real walls: the secret scan is not a required check: $(dry "$rw" | grep 'ruleset on')"
 rw_checks '[e2e, e2e-db]' 2>/dev/null || true
 rw_governance_ok || miss "real walls: a policy that names its own checks was refused"
-dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional-commits, e2e, e2e-db$' || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep 'checks check, secret-scan, conventional-title, conventional-commits, e2e, e2e-db$' >/dev/null || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
 # `gate` is the setup's own only with agent workflows, which this repository has not: section 51a.
 for reserved in check secret-scan; do
   rw_checks "[$reserved]" 2>/dev/null || true
@@ -2117,15 +2117,15 @@ printf 'check\ne2e\n' > "$TMP/rw-checks"
 rw_checks '[]' 2>/dev/null || true
 out=$(rw_apply || true)
 [ "$(rw_put)" = 0 ] || miss "real walls: an upgrade dropped the required check e2e that the policy does not name"
-echo "$out" | grep -q 'e2e' || miss "real walls: the refusal does not say which required check would go"
-echo "$out" | grep -q -- '--prune' || miss "real walls: the refusal does not say how to drop the check on purpose"
+grep -q 'e2e' <<<"$out" || miss "real walls: the refusal does not say which required check would go"
+grep -q -- '--prune' <<<"$out" || miss "real walls: the refusal does not say how to drop the check on purpose"
 rw_apply --prune >/dev/null || true
 [ "$(rw_put)" = 1 ] || miss "real walls: --prune does not update the ruleset"
 rw_checks '[e2e]' 2>/dev/null || true
 rw_apply >/dev/null || true
 [ "$(rw_put)" = 1 ] || miss "real walls: a ruleset whose extra check is named in the policy was not updated"
 printf 'check\ne2e\n' > "$TMP/rw-checks"; rw_checks '[]' 2>/dev/null || true
-{ rw_apply --prune || true; } | grep -q 'dropping the required check(s) e2e' || miss "real walls: --prune does not say which required check it drops"
+{ rw_apply --prune || true; } | grep 'dropping the required check(s) e2e' >/dev/null || miss "real walls: --prune does not say which required check it drops"
 cp "$TMP/rw-policy.orig" "$rw_policy"
 # 44g. what GitHub would not say is not taken for "none": no second ruleset, no "missing" secret
 mkdir -p "$TMP/nrbin"
@@ -2139,9 +2139,9 @@ SH
 chmod +x "$TMP/nrbin/gh"
 nr() { rm -f "$TMP/nr-calls"; ( cd "$rw" && PATH="$TMP/nrbin:$PATH" GH_CALLS="$TMP/nr-calls" python3 -B tools/github_setup.py "$@" </dev/null ) 2>&1 || true; }
 out=$(nr)
-echo "$out" | grep -q 'could not be listed' || miss "real walls: github_setup is silent when it cannot list the secrets"
-if echo "$out" | grep -q 'is missing'; then miss "real walls: github_setup calls a secret missing when it could not list the secrets"; fi
-echo "$out" | grep -q 'rulesets could not be read' || miss "real walls: the dry run is silent when it cannot read the rulesets"
+grep -q 'could not be listed' <<<"$out" || miss "real walls: github_setup is silent when it cannot list the secrets"
+if grep -q 'is missing' <<<"$out"; then miss "real walls: github_setup calls a secret missing when it could not list the secrets"; fi
+grep -q 'rulesets could not be read' <<<"$out" || miss "real walls: the dry run is silent when it cannot read the rulesets"
 nr --apply >/dev/null
 if grep -q -- '-X POST repos/acme/sample/rulesets' "$TMP/nr-calls" 2>/dev/null; then miss "real walls: github_setup made a ruleset without knowing whether one exists"; fi
 # 44h. a required check must be one that a job reports
@@ -2149,8 +2149,8 @@ rw_checks '[e2e, ""]' 2>/dev/null || true
 if rw_governance_ok; then miss "real walls: an empty name was accepted under required_checks"; fi
 cp "$TMP/rw-policy.orig" "$rw_policy"
 mv "$rw/.github/workflows/security.yml" "$TMP/security.yml.kept"
-dry "$rw" | grep -q 'checks check, conventional-title, conventional-commits$' || miss "real walls: secret-scan is required in a repository where no job has that name: $(dry "$rw" | grep 'ruleset on')"
-dry "$rw" | grep -q 'secret-scan is not a required check' || miss "real walls: github_setup does not say that secret-scan is not required"
+dry "$rw" | grep 'checks check, conventional-title, conventional-commits$' >/dev/null || miss "real walls: secret-scan is required in a repository where no job has that name: $(dry "$rw" | grep 'ruleset on')"
+dry "$rw" | grep 'secret-scan is not a required check' >/dev/null || miss "real walls: github_setup does not say that secret-scan is not required"
 mv "$TMP/security.yml.kept" "$rw/.github/workflows/security.yml"
 # 44i. CodeQL says it is off where code scanning is not enabled, and ends green; any other answer
 #      runs it. A private repository needs GitHub Advanced Security, and a check that is red
@@ -2193,9 +2193,9 @@ cs_run() {
 for preset in ts-node python claude-plugin; do
   sec="$ROOT/plugins/repo-setup/presets/$preset/team/dot.github/workflows/security.yml"
   job=$(sed -n '/^  codeql:/,$p' "$sec")
-  echo "$job" | grep -q 'actions: read' || miss "real walls: the $preset CodeQL job may not read its own run, which a private repository needs"
+  grep -q 'actions: read' <<<"$job" || miss "real walls: the $preset CodeQL job may not read its own run, which a private repository needs"
   for uses in actions/checkout github/codeql-action/init github/codeql-action/analyze; do
-    echo "$job" | grep -A1 "uses: $uses" | grep -q "if: steps.scanning.outputs.on != 'false'" \
+    grep -A1 "uses: $uses" <<<"$job" | grep "if: steps.scanning.outputs.on != 'false'" >/dev/null \
       || miss "real walls: the $preset CodeQL job runs $uses where code scanning is off"
   done
   step=$(cs_step "$sec" 2>/dev/null || true)
@@ -2219,11 +2219,11 @@ cut = text.index("\n  conventional-commits:")
 open(sys.argv[2], "w", encoding="utf-8").write(text[:cut] + "\n")
 PY
 out=$(GS_BASE="$gs_base" dry "$rw")
-echo "$out" | grep -q 'checks check, secret-scan, conventional-title$' || miss "real walls: a commit-format check the default branch does not define yet is required: $(echo "$out" | grep 'ruleset on')"
-echo "$out" | grep -q 'conventional-commits is not a required check yet' || miss "real walls: github_setup does not say that conventional-commits waits for the default branch"
+grep -q 'checks check, secret-scan, conventional-title$' <<<"$out" || miss "real walls: a commit-format check the default branch does not define yet is required: $(echo "$out" | grep 'ruleset on')"
+grep -q 'conventional-commits is not a required check yet' <<<"$out" || miss "real walls: github_setup does not say that conventional-commits waits for the default branch"
 out=$(GS_BASE_DOWN=1 dry "$rw" || true)
-echo "$out" | grep -q 'checks check, secret-scan$' || miss "real walls: a commit-format check is required although the default branch could not be read: $(echo "$out" | grep 'ruleset on')"
-echo "$out" | grep -q 'could not be read' || miss "real walls: github_setup is silent when it cannot read the workflows of the default branch"
+grep -q 'checks check, secret-scan$' <<<"$out" || miss "real walls: a commit-format check is required although the default branch could not be read: $(echo "$out" | grep 'ruleset on')"
+grep -q 'could not be read' <<<"$out" || miss "real walls: github_setup is silent when it cannot read the workflows of the default branch"
 # 44k. a default branch that cannot be read is no reason to drop a wall the ruleset has, and the
 #      command says it failed
 printf 'check\nsecret-scan\nconventional-title\nconventional-commits\n' > "$TMP/rw-checks"
@@ -2300,6 +2300,12 @@ stale=$(cd "$ROOT" && git grep -l -E "$old_names" -- . ':!tests/run.sh' || true)
 #      guard after the substitution, or a reader that reads to the end.
 early=$(cd "$ROOT" && grep -nE '^[[:space:]]*(local[[:space:]]+)?[A-Za-z_][A-Za-z_0-9]*=\$\(.*\|[[:space:]]*(head|grep[^|)]*-(q|m)|sed[^|)]*q)\b' tests/*.sh | grep -vE '\|\|' || true)
 [ -z "$early" ] || miss "own rules: an assignment pipes into a reader that stops early, so a run can end with no FAIL line: $early"
+# The same race, red instead of silent: grep -q at the end of a pipe exits at its match while the writer may still
+# write; the writer then gets SIGPIPE (141 under pipefail), and a line that is there reads as missing.
+# Seen on macOS, where a pipe starts with a small buffer: 49f at f02085f. grep without -q reads to the
+# end (grep ... >/dev/null), and a here-string (`grep -q ... <<<"$x"`) has no pipe at all.
+early=$(cd "$ROOT" && grep -nE '\|[[:space:]]*grep([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*[qm]' tests/*.sh || true)
+[ -z "$early" ] || miss "own rules: a pipe ends in grep -q or -m, which can stop the writer and read as a miss: $(printf '%s\n' "$early" | wc -l | tr -d ' ') places, first $(printf '%s\n' "$early" | sed -n 1p)"
 echo "ok  own rules (or misses reported above)"
 
 # 46. parallel work does not queue (docs/three-repo-overview-design.md, RS2a and RS10): the one file
@@ -2593,13 +2599,13 @@ if command -v jq >/dev/null 2>&1; then
     'Last required check green to merged | median 10.0 h, longest 14.0 h (2 pull requests)' \
     'Pushes after it was last ready (new heads CI ran on) | 3, median 1.5, most 2 (2 pull requests)' \
     'Merges of the default branch after it was last ready | 2, median 1.0, most 1 (2 pull requests)'; do
-    echo "$page" | grep -qF -- "$line" || miss "flow: the report does not carry the line: $line"
+    grep -qF -- "$line" <<<"$page" || miss "flow: the report does not carry the line: $line"
   done
-  FLOW_NO_RUNS=1 fl_metrics "$fl" | grep -q 'not read' || miss "flow: the report shows numbers for workflow runs it could not read"
-  FLOW_NO_RULES=1 fl_metrics "$fl" | grep -q 'Opened to ready for review | not read' || miss "flow: the report shows times of pull requests it could not read"
+  FLOW_NO_RUNS=1 fl_metrics "$fl" | grep 'not read' >/dev/null || miss "flow: the report shows numbers for workflow runs it could not read"
+  FLOW_NO_RULES=1 fl_metrics "$fl" | grep 'Opened to ready for review | not read' >/dev/null || miss "flow: the report shows times of pull requests it could not read"
   page=$(fl_metrics "$fl" --split "${fl_day}T15:00:00Z")
   for line in "## Before ${fl_day}T15:00:00+00:00" "## From ${fl_day}T15:00:00+00:00"; do
-    echo "$page" | grep -qF -- "$line" || miss "flow: the split report does not carry the heading: $line"
+    grep -qF -- "$line" <<<"$page" || miss "flow: the split report does not carry the heading: $line"
   done
   # 46l. the measure reads no file of the feature loop: its gate marks are its own to measure
   grep -n '_acceptance' "$fl"/tools/sdlc_*.py && miss "flow: the measure reads _acceptance/, the feature loop's files"
@@ -2689,7 +2695,7 @@ lg_git add -A && lg_git commit -q -m "chore: base"
 # 48d. one-file: the line goes to the top of the list; fragments: exactly one new file
 today=$(date +%Y-%m-%d)
 ( cd "$lg" && make log m="x — #1" >/dev/null 2>&1 ) || miss "log: make log failed in the one-file shape"
-sed -n '/^- /p' "$lg/wiki/log.md" | head -1 | grep -qxF -- "- $today — x — #1" \
+sed -n '/^- /p' "$lg/wiki/log.md" | head -1 | grep -xF -- "- $today — x — #1" >/dev/null \
   || miss "log: make log in the one-file shape did not put '- <today> — x — #1' at the top of the list"
 [ -z "$(ls "$lg/wiki/log" 2>/dev/null)" ] || miss "log: make log in the one-file shape wrote a fragment"
 lg_git checkout -q -- wiki/log.md && lg_git rm -q --cached wiki/log.md && rm -f "$lg/wiki/log.md"
@@ -2707,7 +2713,7 @@ lg_tool draw >/dev/null || miss "log: draw failed on three fragments"
 want=$(printf '%s\n' 'Head of the log' '' '- 2026-02-03 — third — with a | pipe and a dash' '- 2026-02-02 — second' '- 2026-02-01 — first')
 got=$(tail -n +2 "$lg/wiki/log.md")
 [ "$got" = "$want" ] || miss "log: the drawn log is not the head and three lines, newest first ($got)"
-head -1 "$lg/wiki/log.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from wiki/log/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' \
+head -1 "$lg/wiki/log.md" | grep -E '^<!-- Drawn by tools/ledgers.py from wiki/log/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' >/dev/null \
   || miss "log: wiki/log.md does not open with the stamp line"
 [ "$(grep -c '^- ' "$lg/wiki/log.md")" = 3 ] || miss "log: a dash or a pipe in an entry split it into more than one line"
 cp "$lg/wiki/log.md" "$TMP/log.once"; lg_tool draw >/dev/null
@@ -2739,7 +2745,7 @@ cmp -s "$TMP/log.edit" "$lg/wiki/log.md" || miss "log: draw changed a hand-edite
 nc="$TMP/nocommit"; mkdir -p "$nc" && git -C "$nc" init -q -b main
 python3 "$S/apply.py" --target "$nc" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
 ( cd "$nc" && make derived >/dev/null 2>&1 ) || miss "log: make derived is red in a new repository with no commit yet"
-head -1 "$nc/wiki/log.md" | grep -q '^<!-- Drawn by' || miss "log: make derived did not draw wiki/log.md in a new repository with no commit yet"
+head -1 "$nc/wiki/log.md" | grep '^<!-- Drawn by' >/dev/null || miss "log: make derived did not draw wiki/log.md in a new repository with no commit yet"
 rm -f "$nc/wiki/log.md" "$nc/wiki/index.md" "$nc/ontology/glossary.md"
 onefile_ledgers "$nc"   # a hand-kept wiki/log.md that git does not know
 cp "$nc/wiki/log.md" "$TMP/nc.log"
@@ -2785,7 +2791,7 @@ gl_tool add-term Customer --definition "A person who has bought." --not-confused
 [ "$(gl_git status --porcelain | grep -vc -e ' ontology/glossary.md$' -e '^?? ontology/glossary/')" = 0 ] || miss "glossary: add-term touched more than the fragment folder ($(gl_git status --porcelain | tr '\n' ';'))"
 grep -qx 'term: Order' "$gl/ontology/glossary/Order.md" || miss "glossary: the fragment has no term: line"
 gl_tool draw >/dev/null || miss "glossary: draw failed on two fragments"
-head -1 "$gl/ontology/glossary.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from ontology/glossary/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' || miss "glossary: ontology/glossary.md does not open with the stamp line"
+head -1 "$gl/ontology/glossary.md" | grep -E '^<!-- Drawn by tools/ledgers.py from ontology/glossary/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' >/dev/null || miss "glossary: ontology/glossary.md does not open with the stamp line"
 grep -qxF '| Term (code name) | Definition | Not to be confused with | Display name |' "$gl/ontology/glossary.md" || miss "glossary: the header row is not the four columns"
 rows=$(grep -E '^\| `' "$gl/ontology/glossary.md")
 [ "$rows" = "$(printf '%s\n' '| `Customer` | A person who has bought. | `Visitor` | Customer |' '| `Order` | A confirmed \| purchase. |  | Customer order |')" ] || miss "glossary: the rows are not sorted by term with the pipe escaped ($rows)"
@@ -2841,7 +2847,7 @@ printf -- '---\ntype: note\ntitle: Odd page\n---\n# Odd\n' > "$ix/wiki/odd.md"
 printf 'noise\n' > "$ix/wiki/.DS_Store"; printf -- '---\ntype: entity\ntitle: Hidden\n---\n' > "$ix/wiki/entities/.hidden.md"
 printf -- '---\ntype: index\ntitle: Mine\n---\n\n# Mine\n\nHand-written head.\n' > "$ix/wiki/index.head.md"
 ix_tool draw >/dev/null || miss "index: draw failed on the pages"
-head -1 "$ix/wiki/index.md" | grep -qE '^<!-- Drawn by tools/ledgers.py from wiki/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' || miss "index: wiki/index.md does not open with the stamp line"
+head -1 "$ix/wiki/index.md" | grep -E '^<!-- Drawn by tools/ledgers.py from wiki/\. Edit the source, not this file\. sha256:[0-9a-f]{64} -->$' >/dev/null || miss "index: wiki/index.md does not open with the stamp line"
 want=$(printf '%s\n' '---' 'type: index' 'title: Mine' '---' '' '# Mine' '' 'Hand-written head.' '' \
   '## Entities' '' '- [Basket](entities/basket.md)' '- [Customer](entities/customer.md) — who buys; VIP rules' '' \
   '## Decisions' '' '- [Record decisions in the wiki](decisions/0001-record-decisions-in-the-wiki.md)' '' \
@@ -2854,7 +2860,7 @@ cp "$ix/wiki/index.md" "$TMP/ix.once"; ix_tool draw >/dev/null
 cmp -s "$TMP/ix.once" "$ix/wiki/index.md" || miss "index: drawing a second time changed a byte"
 # with no head file the built-in head is used, and it carries no placeholder
 rm -f "$ix/wiki/index.head.md"; ix_tool draw >/dev/null || miss "index: draw failed without a head file"
-sed -n '2,4p' "$ix/wiki/index.md" | grep -qx 'title: Wiki' || miss "index: the built-in head does not carry title: Wiki"
+sed -n '2,4p' "$ix/wiki/index.md" | grep -x 'title: Wiki' >/dev/null || miss "index: the built-in head does not carry title: Wiki"
 if grep -q '{{' "$ix/wiki/index.md"; then miss "index: the built-in head has a placeholder"; fi
 # wiki_lint: the drawn index is not a page, and nothing is unlinked in the fragments shape
 ix_tool check >/dev/null || miss "index: check fails on good pages ($(ix_tool check 2>&1))"
@@ -2953,7 +2959,7 @@ gn_git rm -q --cached "$gn_out"; rm -f "$gn/$gn_out"
 [ "$(cd "$gn" && python3 tools/ledgers.py shape gen --gen-out $gn_out)" = fragments ] || miss "gen: shape gen is not fragments for an absent $gn_out"
 gn_make "$gn" derived >/dev/null || miss "gen: make derived fails in the fragments shape"
 [ -f "$gn/$gn_out" ] || miss "gen: make derived did not draw $gn_out"
-head -1 "$gn/$gn_out" | grep -q '^// Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}$' || miss "gen: the first line of the drawn $gn_out is not the generator header plus a sha256 stamp ($(head -1 "$gn/$gn_out"))"
+head -1 "$gn/$gn_out" | grep '^// Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}$' >/dev/null || miss "gen: the first line of the drawn $gn_out is not the generator header plus a sha256 stamp ($(head -1 "$gn/$gn_out"))"
 gn_check_stamp "$gn/$gn_out" ts
 ( cd "$gn" && python3 tools/ontology_codegen.py --lang ts --out "$TMP/gn.direct.ts" >/dev/null )
 [ "$(tail -n +2 "$gn/$gn_out")" = "$(tail -n +2 "$TMP/gn.direct.ts")" ] || miss "gen: the body of the drawn $gn_out differs from what ontology_codegen.py writes"
@@ -2995,7 +3001,7 @@ python3 "$S/apply.py" --target "$gq" --preset python --level starter --var proje
 gq_out=src/gq/ontology_types.py
 gq_make() { ( cd "$gq" && make PYTHON=python3 "$@" 2>&1 ); }
 gq_make derived >/dev/null || miss "gen: python: make derived fails in the fragments shape"
-head -1 "$gq/$gq_out" | grep -q '^"""Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}"""$' || miss "gen: python: the first line is not the docstring with the stamp before the closing quotes ($(head -1 "$gq/$gq_out"))"
+head -1 "$gq/$gq_out" | grep '^"""Generated from ontology/ by tools/ontology_codegen.py\. Do not edit: run `make gen`\. sha256:[0-9a-f]\{64\}"""$' >/dev/null || miss "gen: python: the first line is not the docstring with the stamp before the closing quotes ($(head -1 "$gq/$gq_out"))"
 python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$gq/$gq_out" || miss "gen: python: the drawn file is not valid python"
 gn_check_stamp "$gq/$gq_out" python
 cp "$gq/$gq_out" "$TMP/gq.drawn"; gq_make derived >/dev/null; cmp -s "$TMP/gq.drawn" "$gq/$gq_out" || miss "gen: python: a second make derived changed the file"
@@ -3090,7 +3096,7 @@ sp_tool check >/dev/null 2>&1 || miss "split: ledgers.py check is red after the 
 for page in entities/warehouse.md entities/bin.md entities/stock-move.md flows/receiving.md decisions/0001-record-decisions-in-the-wiki.md; do
   grep -qF "]($page)" "$sp/wiki/index.md" || miss "split: the drawn index lost the link to $page"
 done
-head -1 "$sp/$sp_gen" | grep -q ' sha256:[0-9a-f]\{64\}$' || miss "split: the generated file is not drawn stamped after split gen"
+head -1 "$sp/$sp_gen" | grep ' sha256:[0-9a-f]\{64\}$' >/dev/null || miss "split: the generated file is not drawn stamped after split gen"
 [ "$(tail -n +2 "$sp/$sp_gen")" = "$(tail -n +2 "$TMP/split.old.gen")" ] || miss "split: the drawn generated code differs from the committed one"
 rc=0; out=$(sp_tool split log 2>&1) || rc=$?
 [ "$rc" = 0 ] && case "$out" in *"already split"*) true ;; *) false ;; esac || miss "split: a second split log exits $rc or does not say it is already split ($out)"
@@ -3341,11 +3347,11 @@ PY
 ) || miss "split manifest: split log left wiki/log.head.md in .repo-setup.json, or lost another key"
 cp "$mf/wiki/log.head.md" "$TMP/mf.head"
 mf_out=$(python3 "$S/apply.py" --target "$mf" --json)
-printf '%s' "$mf_out" | json '"wiki/log.head.md" in d["kept"] and not [k for k in ("created","updated","merged","edited","marked","conflict") if "wiki/log.head.md" in d[k]]' | grep -q True || miss "split manifest: apply.py does not report the split wiki/log.head.md as kept ($(printf '%s' "$mf_out" | json 'd["kept"]'))"
+printf '%s' "$mf_out" | json '"wiki/log.head.md" in d["kept"] and not [k for k in ("created","updated","merged","edited","marked","conflict") if "wiki/log.head.md" in d[k]]' | grep True >/dev/null || miss "split manifest: apply.py does not report the split wiki/log.head.md as kept ($(printf '%s' "$mf_out" | json 'd["kept"]'))"
 cmp -s "$TMP/mf.head" "$mf/wiki/log.head.md" || miss "split manifest: apply.py changed a split wiki/log.head.md"
 mf_text=$(python3 "$S/apply.py" --target "$mf" 2>&1)
 case "$mf_text" in *"by hand"*) miss "split manifest: apply.py asks for a merge by hand of a split head file ($mf_text)" ;; esac
-printf '%s' "$mf_out" | json 'd["notes"]' | grep -q 'head' && miss "split manifest: apply.py notes something about a split head file"
+printf '%s' "$mf_out" | json 'd["notes"]' | grep 'head' >/dev/null && miss "split manifest: apply.py notes something about a split head file"
 # a dry run leaves the manifest as it was
 mf2="$TMP/manifest2"; mkdir -p "$mf2" && git -C "$mf2" init -q -b main
 python3 "$S/apply.py" --target "$mf2" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
@@ -3368,7 +3374,7 @@ PY
 git -C "$od" add -f -A; git -C "$od" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
 cp "$od/wiki/log.md" "$TMP/od.log"; cp "$od/wiki/index.md" "$TMP/od.index"; cp "$od/ontology/glossary.md" "$TMP/od.gl"
 od_out=$(python3 "$S/apply.py" --target "$od" --json)
-printf '%s' "$od_out" | json 'sorted(set(d["dropped"]) & {"wiki/log.md","wiki/index.md","ontology/glossary.md"})' | grep -qF "['ontology/glossary.md', 'wiki/index.md', 'wiki/log.md']" || miss "old repo: apply.py does not report the three one-file ledgers as dropped ($(printf '%s' "$od_out" | json 'd["dropped"]'))"
+printf '%s' "$od_out" | json 'sorted(set(d["dropped"]) & {"wiki/log.md","wiki/index.md","ontology/glossary.md"})' | grep -F "['ontology/glossary.md', 'wiki/index.md', 'wiki/log.md']" >/dev/null || miss "old repo: apply.py does not report the three one-file ledgers as dropped ($(printf '%s' "$od_out" | json 'd["dropped"]'))"
 cmp -s "$TMP/od.log" "$od/wiki/log.md" && cmp -s "$TMP/od.index" "$od/wiki/index.md" && cmp -s "$TMP/od.gl" "$od/ontology/glossary.md" || miss "old repo: an upgrade changed a hand-kept ledger"
 for od_l in log index glossary; do
   [ "$(cd "$od" && python3 tools/ledgers.py shape $od_l)" = one-file ] || miss "old repo: shape $od_l is not one-file after the upgrade (the new .gitignore lines must not matter to a tracked file)"
@@ -3403,7 +3409,7 @@ for gi_p in ts-node python; do
   printf 'my-team-file.txt\n' >> "$gr/.gitignore"
   gi_out=$(python3 "$S/apply.py" --target "$gr" --base-from "$gi" --json) && gi_rc=0 || gi_rc=$?
   [ "$gi_rc" = 0 ] || miss "gitignore upgrade ($gi_p): apply.py exits $gi_rc for a .gitignore with a team line at its end"
-  printf '%s' "$gi_out" | json '".gitignore" not in d["marked"] and ".gitignore" not in d["conflict"] and (".gitignore" in d["merged"] or ".gitignore" in d["updated"])' | grep -q True || miss "gitignore upgrade ($gi_p): .gitignore is not merged cleanly ($(printf '%s' "$gi_out" | json '[k for k in ("marked","conflict","merged","updated","edited") if ".gitignore" in d[k]]'))"
+  printf '%s' "$gi_out" | json '".gitignore" not in d["marked"] and ".gitignore" not in d["conflict"] and (".gitignore" in d["merged"] or ".gitignore" in d["updated"])' | grep True >/dev/null || miss "gitignore upgrade ($gi_p): .gitignore is not merged cleanly ($(printf '%s' "$gi_out" | json '[k for k in ("marked","conflict","merged","updated","edited") if ".gitignore" in d[k]]'))"
   grep -q '<<<<<<<' "$gr/.gitignore" && miss "gitignore upgrade ($gi_p): conflict markers in .gitignore"
   grep -qxF 'my-team-file.txt' "$gr/.gitignore" && grep -qxF 'wiki/log.md' "$gr/.gitignore" || miss "gitignore upgrade ($gi_p): the upgraded .gitignore lost the team line or lacks the new block"
 done
@@ -3440,9 +3446,9 @@ done
 ( cd "$ou" && python3 tools/ledgers.py check >/dev/null 2>&1 && make derived PYTHON=python3 >/dev/null 2>&1 && make derived-untracked PYTHON=python3 >/dev/null 2>&1 && python3 tools/wiki_lint.py >/dev/null 2>&1 ) || miss "one-file upgrade: check, derived, derived-untracked or wiki_lint is red"
 ( cd "$ou" && make log m=x PYTHON=python3 >/dev/null 2>&1 ) && grep -qF -- '— x' "$ou/wiki/log.md" || miss "one-file upgrade: make log m=x does not write into wiki/log.md"
 ou_json=$(python3 "$S/doctor.py" --target "$ou" --level starter --json)
-printf '%s' "$ou_json" | json '[n["ledger"] for n in d["ledgers_split"]]' | grep -qF "['log', 'index', 'glossary', 'gen']" || miss "doctor: ledgers_split does not list the four ledgers ($(printf '%s' "$ou_json" | json 'd.get("ledgers_split")'))"
-printf '%s' "$ou_json" | json '[n["command"] for n in d["ledgers_split"]]' | grep -qF "make split L=glossary" || miss "doctor: ledgers_split does not carry the split command"
-python3 "$S/doctor.py" --target "$ou" --level starter | grep -qF 'Ledgers still kept as one file (not scored):' || miss "doctor text: no ledgers notice for a one-file repository"
+printf '%s' "$ou_json" | json '[n["ledger"] for n in d["ledgers_split"]]' | grep -F "['log', 'index', 'glossary', 'gen']" >/dev/null || miss "doctor: ledgers_split does not list the four ledgers ($(printf '%s' "$ou_json" | json 'd.get("ledgers_split")'))"
+printf '%s' "$ou_json" | json '[n["command"] for n in d["ledgers_split"]]' | grep -F "make split L=glossary" >/dev/null || miss "doctor: ledgers_split does not carry the split command"
+python3 "$S/doctor.py" --target "$ou" --level starter | grep -F 'Ledgers still kept as one file (not scored):' >/dev/null || miss "doctor text: no ledgers notice for a one-file repository"
 fr="$TMP/oldshape-fresh"; mkdir -p "$fr" && git -C "$fr" init -q -b main
 python3 "$S/apply.py" --target "$fr" --preset ts-node --level starter --var project_name=P --var description=x --var owner=acme >/dev/null
 git -C "$fr" add -A; git -C "$fr" -c user.name=t -c user.email=t@example.com commit -q -m "chore: base"
@@ -3506,7 +3512,7 @@ rm -f "$he/$he_gen"; he_make derived >/dev/null || miss "hand edit: make derived
 python3 "$ROOT/tests/apply_fixture.py" coffee "$he" >/dev/null
 rc=0; out=$(he_make derived) || rc=$?
 [ "$rc" = 0 ] || miss "unstamped: make derived is red for an unstamped $he_gen the generator wrote ($out)"
-head -1 "$he/$he_gen" | grep -q ' sha256:[0-9a-f]\{64\}$' || miss "unstamped: an unstamped $he_gen the generator wrote is not drawn over, stamped"
+head -1 "$he/$he_gen" | grep ' sha256:[0-9a-f]\{64\}$' >/dev/null || miss "unstamped: an unstamped $he_gen the generator wrote is not drawn over, stamped"
 grep -q 'isVIPCustomer' "$he/$he_gen" || miss "unstamped: the drawn $he_gen does not follow ontology/"
 tail -n +2 "$he/wiki/index.md" > "$TMP/he.ix"; cp "$TMP/he.ix" "$he/wiki/index.md"
 printf -- '---\ntype: entity\ntitle: Basket\n---\n# Basket\n' > "$he/wiki/entities/basket.md"
