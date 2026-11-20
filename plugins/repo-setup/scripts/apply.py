@@ -24,6 +24,9 @@ Safety rules:
     is left as it is ("base_unread"). Either ends the run with exit code 1.
   * A file the repository had before repo-setup wrote it is never overwritten: it is reported as
     "conflict" (or "kept" for files the repository owns) and left untouched (--diff shows why).
+    Where that file is one that joins checks to `make check` (an mk/ file that sets
+    CHECK_TARGETS, HEAVY_TARGETS or DERIVED_TARGETS) and no file of the repository joins them,
+    the checks never run: the run names them and ends with exit code 1 (make_wiring.py).
   * A file the plugin wrote and the repository deleted is not created again ("removed").
   * Running again is safe: identical files are reported as "unchanged".
   * A manifest (.repo-setup.json) records preset, level, vars and file hashes so a
@@ -74,6 +77,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import blueprint  # noqa: E402
+import make_wiring  # noqa: E402
 import rule_kinds  # noqa: E402
 import upgrade_base  # noqa: E402
 import upgrade_merge  # noqa: E402
@@ -878,7 +882,18 @@ def main(argv: list[str] | None = None) -> int:
     results["dropped"] = sorted(k for k in prev_hashes if k not in given)
     files = {k: v for k, v in {**prev_hashes, **new_hashes}.items() if k not in results["dropped"]}
     versions = {k: new_versions.get(k, prev_versions.get(k, prev_version)) for k in files}
-    exit_code = 1 if results["marked"] or results["base_unread"] else 0
+    # The repository's own file where a layer joins its checks to `make check`: they never run.
+    unjoined = {
+        rel.as_posix(): make_wiring.left_out(rel.as_posix(), item["content"], target)
+        for rel, item in plan.items()
+        if rel.as_posix() in results["conflict"]
+    }
+    for key, targets in unjoined.items():
+        if targets:
+            said = f"not in make check: {', '.join(targets)}"
+            reasons[key] = f"{reasons[key]}; {said}" if key in reasons else said
+            notes.append(make_wiring.advice(key, targets))
+    exit_code = 1 if results["marked"] or results["base_unread"] or any(unjoined.values()) else 0
 
     if not args.dry_run:
         prev_level = previous.get("level", "starter")

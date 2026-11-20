@@ -39,7 +39,9 @@ Explain the plan in plain words:
 - **skipped**: preset files not added because the repo already has an equivalent
   (e.g. its own `.eslintrc`) or because they are sample code;
 - **merged**: `.gitignore` / `.gitattributes` get only the missing lines;
-- **conflict / kept**: existing files left exactly as they are.
+- **conflict / kept**: existing files left exactly as they are. A conflict on an `mk/` file
+  that joins checks to `make check` leaves those checks out: the run names them and ends
+  with exit code 1. Give the repository's file another name in `mk/` and run again.
 Ask for the go-ahead, then run without `--dry-run`.
 
 ## 4. Reconcile what the preset could not add mechanically

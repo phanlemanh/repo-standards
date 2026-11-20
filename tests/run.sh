@@ -2016,7 +2016,8 @@ dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional
 rw_checks '[e2e, e2e-db]' 2>/dev/null || true
 rw_governance_ok || miss "real walls: a policy that names its own checks was refused"
 dry "$rw" | grep -q 'checks check, secret-scan, conventional-title, conventional-commits, e2e, e2e-db$' || miss "real walls: github_setup does not require the checks the policy names: $(dry "$rw" | grep 'ruleset on')"
-for reserved in check gate secret-scan; do
+# `gate` is the setup's own only with agent workflows, which this repository has not: section 51a.
+for reserved in check secret-scan; do
   rw_checks "[$reserved]" 2>/dev/null || true
   if rw_governance_ok; then miss "real walls: the setup's own check '$reserved' was accepted under required_checks"; fi
 done
@@ -3444,6 +3445,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/rule_kinds.sh
 . "$ROOT/tests/rule_kinds.sh"
+
+# shellcheck source=tests/seams.sh
+. "$ROOT/tests/seams.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+Both found by reading the seams with design-assembly and delivery-loop on a repository that has
+all three (`onehub-inventory`), then by running the setup.
+
+### Fixed: `gate` is the setup's own check name only where the agent pipeline reports it
+`governance/autonomy.yaml` refused `gate` under `required_checks` ("is one of the setup's own
+checks and is required already") and as `proof.check`, in every repository. Without agent
+workflows nothing of the setup reports under that name and nothing required it, so the sentence
+was untrue, and a repository whose feature loop reports its proof as `gate` could neither require
+that check nor name it as the proof.
+
+- `tools/autonomy.py` now takes `gate` as the setup's own only where
+  `.github/workflows/pr-pipeline.yml` exists (`own_checks`). Elsewhere the name is the
+  repository's: it may stand under `required_checks` or as `proof.check`, and
+  `tools/github_setup.py` requires it.
+- `check` and `secret-scan` stay the setup's own everywhere, as the comment in the policy file
+  already said.
+
+**What breaks on upgrade**: nothing. A repository with agent workflows gets the same answers as
+before.
+
+**Known gap**: a repository with agent workflows and another job called `gate` still has two jobs
+reporting under one name. Give the other job a name of its own.
+
+### Fixed: a conflict on a file that joins checks to `make check` no longer ends the run well
+A repository that had its own `mk/design.mk` and added the `design` capability got exit code 0:
+the file was reported as `conflict` and left alone, the rest of the layer was written, and
+`design-guards` and `ui-floor` never joined `make check`, which went on printing "passed" and "no
+heavy checks". The install commands printed next named `make ui-patch`, a target that did not
+exist.
+
+- Where the repository's own file sits at the path of an `mk/` template that puts targets in
+  `CHECK_TARGETS`, `HEAVY_TARGETS` or `DERIVED_TARGETS`, and no file of the repository joins
+  those targets, the run now ends with exit code 1, also with `--dry-run`. The file is still left
+  as it is. `mk/upgrade.mk`, which puts itself first in the list, counts too.
+- A repository whose own file joins the same targets itself loses nothing, and its run ends well.
+- The run names the targets left out, next to the file (`skip_reasons` in `--json`) and in a note
+  that says the way out: give the repository's file another name in `mk/`, since every
+  `mk/*.mk` is read, then run again.
+- A conflict on any other file is what it was: reported, left alone, exit code 0.
+
+**What breaks on upgrade**: a repository that keeps a file of its own at such a path (for example
+an `mk/derived.mk` or an `mk/design.mk` it wrote itself) and does not join the setup's targets
+there now gets exit code 1 from `apply.py` until the file has another name. Its `make check` does
+not change by itself.
+
+**Known gap**: only files under `mk/` are read this way. A `Makefile` of the repository's own
+where the setup's goes is still a plain conflict, with exit code 0.
+
 ## 0.10.1 — 2026-11-20
 
 ### Fixed: a file written by a build between two releases finds its base on upgrade
