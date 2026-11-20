@@ -25,7 +25,10 @@ question: [docs/three-repo-boundaries.md](docs/three-repo-boundaries.md).
 
 - `bash tests/run.sh`: fast tests, no network. Run it before saying a change is done.
 - `bash tests/e2e.sh`: real installs and `make check` per combination. Needs network.
-- Behaviour changes go under `## Unreleased` in `CHANGELOG.md`, with what breaks on upgrade.
+- Behaviour changes go under `## Unreleased` in `CHANGELOG.md`, with what breaks on upgrade. Add
+  the entry as new lines right under that heading, and do not reword one another pull request
+  wrote: `CHANGELOG.md` merges by union (`merge=union` in `.gitattributes`), which keeps the
+  lines of both sides.
 - Docs in `docs/` are written in Vietnamese. Code, templates and the READMEs are in English.
 - File, folder and branch names are English, also for a document written in Vietnamese. It is
   the rule every repository this plugin sets up gets (`AGENTS.md`, "Language"). No check can
