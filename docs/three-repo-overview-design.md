@@ -195,18 +195,18 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 và đo ở kho thử (2026-11-18), mục 48 bộ kiểm |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Phát hành ở 0.9.0 và đo ở kho thử (2026-11-18), mục 49 bộ kiểm |
 | RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
-| RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Chưa thiết kế; DA3 đã nêu đường dẫn (2026-11-17), không còn chờ |
+| RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Không dựng: `owner-calls` của design-assembly giữ, GitHub bắt buộc qua `check`; chủ kho chọn hướng A ngày 2026-11-21 (PR 55), mục 51c bộ kiểm |
 | RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
-| RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Làm cùng RS9                         |
+| RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Đã gộp (PR 51): luật 8 đến 10, mục 43k bộ kiểm                         |
 | RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Phát hành ở 0.10.0 và chạy ở kho thử (2026-11-19), mục 50 bộ kiểm: 13 luật máy giữ, 62 lời |
 | RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Đã dựng và chạy ở kho thử (2026-11-17), mục 47 bộ kiểm |
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
-| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đã dựng (2026-11-16), mục 46 bộ kiểm |
+| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đủ các dòng của mục 2 và tách theo mốc (`--split`), đã gộp (PR 50), mục 46 bộ kiểm; ngưỡng còn mở (mục 10, điều 1) |
 
 Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md); RS8,
 [đường nâng cấp](superpowers/specs/2026-11-17-upgrade-path-design.md); RS2b,
 [mỗi tệp một người ghi](superpowers/specs/2026-11-17-ledger-fragments-design.md) (kế hoạch:
-[ledger-fragments](superpowers/plans/2026-11-17-ledger-fragments.md)); RS3,
+[ledger-fragments](superpowers/plans/2026-11-17-ledger-fragments.md)); RS5a, [tường cho biên thiết kế](superpowers/specs/2026-11-20-design-boundary-wall-design.md); RS3,
 [CI xếp tầng](superpowers/specs/2026-11-17-tiered-ci-design.md) (kế hoạch:
 [tiered-ci](superpowers/plans/2026-11-17-tiered-ci.md)).
 

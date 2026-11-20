@@ -1,0 +1,4 @@
+# Every pull request that changes behaviour adds an entry right under "## Unreleased". A union merge
+# keeps the lines of both sides, so two such pull requests do not conflict. Add entries as new lines;
+# do not reword an entry another pull request wrote (a union merge would keep both wordings).
+CHANGELOG.md merge=union
