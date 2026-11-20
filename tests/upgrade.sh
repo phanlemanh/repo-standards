@@ -109,7 +109,7 @@ PY2
 for f in "$evil/evil-rs8" "$TMP/evil-rs8" "$evil/abs-rs8"; do
   [ ! -e "$f" ] || miss "upgrade: an archive entry was written outside the work folder: $f"
 done
-if find "$evil/work" -type l | grep -q .; then miss "upgrade: an archive's link was extracted"; fi
+if find "$evil/work" -type l | grep . >/dev/null; then miss "upgrade: an archive's link was extracted"; fi
 cut=$(python3 - "$S" "$evil/cut" <<'PY2' 2>&1 || true
 import sys
 from pathlib import Path
@@ -147,7 +147,7 @@ except um.MergeUnavailable:
 PY2
 )
 for case in apart meet nobase binary; do
-  echo "$merge" | grep -qx "$case True" || miss "upgrade: three_way case '$case' is wrong ($(echo "$merge" | tail -1))"
+  grep -qx "$case True" <<<"$merge" || miss "upgrade: three_way case '$case' is wrong ($(echo "$merge" | tail -1))"
 done
 
 # up_apply <apply.py> <repo> [args...]: the --json result; the exit code goes to <repo>.rc
@@ -222,7 +222,7 @@ in_group "$up" removed README.md || miss "upgrade: a deleted README.md is not re
 [ ! -e "$up/README.md" ] || miss "upgrade: a file the repository deleted was created again"
 [ "$(manifest_get "$up" 'm["file_versions"][".editorconfig"]')" = "$NOW" ] || miss "upgrade: a merged file does not record the version it now follows"
 [ "$(manifest_get "$up" 'm["file_versions"]["README.md"]')" = 0.0.1 ] || miss "upgrade: a removed file does not keep its version"
-manifest_get "$up" 'm["vars"]["today"]' | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || miss "upgrade: the manifest does not record today"
+manifest_get "$up" 'm["vars"]["today"]' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' >/dev/null || miss "upgrade: the manifest does not record today"
 # resolve: keep this repository's side
 python3 - "$up/CLAUDE.md" <<'PY2'
 import sys, pathlib
@@ -284,8 +284,8 @@ subst 's|^- Procedures live in `.claude/skills/`; use them:$|- Our procedures ar
 up_apply "$S/apply.py" "$up4" --base-from "$arch" >/dev/null
 mkdir -p "$up4/docs"; printf 'How a conflict looks:\n<<<<<<< this repository\n' > "$up4/docs/x.md"
 wall=$(cd "$up4" && make upgrade 2>&1) && miss "upgrade: make upgrade is green while CLAUDE.md holds markers"
-echo "$wall" | grep -q 'CLAUDE.md:' || miss "upgrade: make upgrade does not name the marked file ($wall)"
-echo "$wall" | grep -q 'docs/x.md' && miss "upgrade: make upgrade reports a file that is not the setup's"
+grep -q 'CLAUDE.md:' <<<"$wall" || miss "upgrade: make upgrade does not name the marked file ($wall)"
+grep -q 'docs/x.md' <<<"$wall" && miss "upgrade: make upgrade reports a file that is not the setup's"
 python3 - "$up4/CLAUDE.md" <<'PY2'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1])
@@ -296,7 +296,7 @@ for preset in python ts-node claude-plugin; do
   d="$TMP/$preset-starter"
   [ -d "$d" ] || continue
   dry=$(cd "$d" && make -n check 2>&1 || true)
-  echo "$dry" | grep -q 'upgrade_markers.py' || miss "upgrade: make check of $preset does not run the marker check ($(echo "$dry" | tail -2 | tr '\n' ' '))"
+  grep -q 'upgrade_markers.py' <<<"$dry" || miss "upgrade: make check of $preset does not run the marker check ($(echo "$dry" | tail -2 | tr '\n' ' '))"
 done
 
 # 47j. doctor says which files drift from the plugin, and fails while an upgrade is unfinished
@@ -324,7 +324,7 @@ manifest_set "$up5" 'm["file_versions"][".gitignore"] = "0.0.1"'
 doc "$up5"
 failed "$up5" setup_in_sync || miss "upgrade: doctor passes setup_in_sync with a file behind the release"
 [ "$(drift "$up5" 'd["upgrade"]["behind"]' 2>&1)" = "[['.gitignore', '0.0.1']]" ] || miss "upgrade: doctor does not say which release a file is behind at ($(drift "$up5" 'd["upgrade"]["behind"]' 2>&1 | tail -1))"
-python3 "$S/doctor.py" --target "$up5" 2>/dev/null | grep -qF "0.0.1 → $NOW" || miss "upgrade: doctor's text does not show the versions of a file behind"
+python3 "$S/doctor.py" --target "$up5" 2>/dev/null | grep -F "0.0.1 → $NOW" >/dev/null || miss "upgrade: doctor's text does not show the versions of a file behind"
 rm "$up5/mk/upgrade.mk"
 doc "$up5"
 failed "$up5" upgrade_wall || miss "upgrade: doctor passes upgrade_wall without the marker check in make check"
@@ -403,7 +403,7 @@ if [ -d "$TMP/l-python" ]; then
   printf '<<<<<<< this repository\nours\n=======\ntheirs\n>>>>>>> repo-setup 9.9.9\n' >> "$up10/AGENTS.md"
   h=$(shasum "$up10/AGENTS.md")
   fmt=$(cd "$up10" && make format 2>&1) && miss "upgrade: make format runs while AGENTS.md holds markers"
-  echo "$fmt" | grep -q 'conflict marker' || miss "upgrade: make format does not stop on the markers ($(echo "$fmt" | tail -1))"
+  grep -q 'conflict marker' <<<"$fmt" || miss "upgrade: make format does not stop on the markers ($(echo "$fmt" | tail -1))"
   [ "$(shasum "$up10/AGENTS.md")" = "$h" ] || miss "upgrade: make format changed a file that holds markers"
   python3 - "$up10/AGENTS.md" <<'PY2'
 import sys, pathlib
@@ -496,7 +496,7 @@ print(case, ok)
 PY
 }
 for c in clean crlf same-key hand-formatted no-base not-asked; do
-  pj_case "$c" | grep -qx "$c True" || miss "package.json upgrade: key merge case '$c' is wrong ($(pj_case "$c" 2>&1 | tail -1))"
+  pj_case "$c" | grep -x "$c True" >/dev/null || miss "package.json upgrade: key merge case '$c' is wrong ($(pj_case "$c" 2>&1 | tail -1))"
 done
 
 # 47n. found on design-ci-probe (main before 0.10.0 -> the 0.10.0 tag): a build between two

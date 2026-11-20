@@ -162,31 +162,31 @@ for ci_p in ts-node python claude-plugin; do
   ci_y="$ROOT/plugins/repo-setup/presets/$ci_p/starter/dot.github/workflows/ci.yml"
   ci_chk=$(ci_block "$ci_y" check); ci_hv=$(ci_block "$ci_y" heavy); ci_qk=$(ci_block "$ci_y" quick)
   [ -n "$ci_qk" ] && [ -n "$ci_hv" ] && [ -n "$ci_chk" ] || miss "ci.yml ($ci_p): jobs quick, heavy and check are not all there"
-  printf '%s\n' "$ci_chk" | grep -qx '    if: always()' || miss "ci.yml ($ci_p): check does not run always()"
-  printf '%s\n' "$ci_chk" | grep -qx '    needs: \[quick, heavy\]' || miss "ci.yml ($ci_p): check does not wait for both quick and heavy"
-  printf '%s\n' "$ci_chk" | grep -qxF '          NEEDS_JSON: ${{ toJSON(needs) }}' || miss "ci.yml ($ci_p): check does not hand the results to ci_verdict.py through NEEDS_JSON"
-  printf '%s\n' "$ci_chk" | grep -qx '        run: python3 tools/ci_verdict.py' || miss "ci.yml ($ci_p): check does not run ci_verdict.py"
+  grep -qx '    if: always()' <<<"$ci_chk" || miss "ci.yml ($ci_p): check does not run always()"
+  grep -qx '    needs: \[quick, heavy\]' <<<"$ci_chk" || miss "ci.yml ($ci_p): check does not wait for both quick and heavy"
+  grep -qxF '          NEEDS_JSON: ${{ toJSON(needs) }}' <<<"$ci_chk" || miss "ci.yml ($ci_p): check does not hand the results to ci_verdict.py through NEEDS_JSON"
+  grep -qx '        run: python3 tools/ci_verdict.py' <<<"$ci_chk" || miss "ci.yml ($ci_p): check does not run ci_verdict.py"
   if grep -q 'run:.*toJSON' "$ci_y"; then miss "ci.yml ($ci_p): toJSON(needs) is written into a command"; fi
-  printf '%s\n' "$ci_hv" | grep -qx '    needs: quick' || miss "ci.yml ($ci_p): heavy does not wait for quick"
-  printf '%s\n' "$ci_hv" | grep -qxF "    if: github.event_name != 'pull_request' || !github.event.pull_request.draft" \
+  grep -qx '    needs: quick' <<<"$ci_hv" || miss "ci.yml ($ci_p): heavy does not wait for quick"
+  grep -qxF "    if: github.event_name != 'pull_request' || !github.event.pull_request.draft" <<<"$ci_hv" \
     || miss "ci.yml ($ci_p): heavy also runs on a draft pull request"
-  printf '%s\n' "$ci_hv" | grep -q 'run: make check-heavy$' || miss "ci.yml ($ci_p): heavy does not run make check-heavy"
-  printf '%s\n' "$ci_qk" | grep -q 'run: make check-quick$' || miss "ci.yml ($ci_p): quick does not run make check-quick"
-  if printf '%s\n' "$ci_qk" | grep -q 'make check-heavy\|run: make check$'; then miss "ci.yml ($ci_p): quick runs the heavy tier"; fi
+  grep -q 'run: make check-heavy$' <<<"$ci_hv" || miss "ci.yml ($ci_p): heavy does not run make check-heavy"
+  grep -q 'run: make check-quick$' <<<"$ci_qk" || miss "ci.yml ($ci_p): quick does not run make check-quick"
+  if grep -q 'make check-heavy\|run: make check$' <<<"$ci_qk"; then miss "ci.yml ($ci_p): quick runs the heavy tier"; fi
   # the run on the main branch reuses no key: the only restore step is for pull requests
   ci_rs=$(ci_step "$ci_y" heavy 'actions/cache/restore@')
   [ -n "$ci_rs" ] || miss "ci.yml ($ci_p): heavy has no restore step"
-  printf '%s' "$ci_rs" | grep -qxF "        if: github.event_name == 'pull_request'" || miss "ci.yml ($ci_p): the restore step also runs on the main branch"
+  grep -qxF "        if: github.event_name == 'pull_request'" <<<"$ci_rs" || miss "ci.yml ($ci_p): the restore step also runs on the main branch"
   [ "$(grep -c 'actions/cache/restore@' "$ci_y")" = 1 ] || miss "ci.yml ($ci_p): more than one restore step"
   ci_ky=$(ci_step "$ci_y" heavy 'id: key')
-  printf '%s' "$ci_ky" | grep -q 'heavy-ok-' && printf '%s' "$ci_ky" | grep -q 'python3 tools/ci_inputs.py key' \
+  grep -q 'heavy-ok-' <<<"$ci_ky" && grep -q 'python3 tools/ci_inputs.py key' <<<"$ci_ky" \
     || miss "ci.yml ($ci_p): heavy does not make its key heavy-ok-<input key>"
-  printf '%s' "$(ci_step "$ci_y" heavy 'actions/cache/save@')" | grep -qF 'key: ${{ steps.key.outputs.key }}' \
+  grep -qF 'key: ${{ steps.key.outputs.key }}' <<<"$(ci_step "$ci_y" heavy 'actions/cache/save@')" \
     || miss "ci.yml ($ci_p): heavy does not save under the input key"
   # a red heavy run is never recorded: the checks, the record and the save each run only on no
   # earlier green run (one if:, as the step's first key or a later one, with no always()), and the
   # record and the save come after the checks, so a failed make check-heavy stops both
-  printf '%s' "$ci_rs" | grep -qx '        id: earlier' || miss "ci.yml ($ci_p): the restore step is not id: earlier"
+  grep -qx '        id: earlier' <<<"$ci_rs" || miss "ci.yml ($ci_p): the restore step is not id: earlier"
   ci_new="^(      - |        )if: steps\.earlier\.outputs\.cache-hit != 'true'\$"
   for ci_s in 'run: make check-heavy' 'Record the green run' 'actions/cache/save@'; do
     ci_st=$(ci_step "$ci_y" heavy "$ci_s")
@@ -350,13 +350,13 @@ JS
   # make: ui-floor goes through ui_select, UI_FULL=1 forces the full run; the CI heavy step gives
   # the base commit, and its checkout holds it
   ui_m=$( (cd "$ci_e" && make -n ui-floor 2>&1) || true); ui_mf=$( (cd "$ci_e" && make -n ui-floor UI_FULL=1 2>&1) || true)
-  printf '%s\n' "$ui_m" | grep -qx 'node tools/ui_select.mjs --run' || miss "ui-floor: does not run node tools/ui_select.mjs --run ($ui_m)"
-  printf '%s\n' "$ui_mf" | grep -qx 'node tools/ui_select.mjs --run --full' || miss "ui-floor: UI_FULL=1 does not pass --full ($ui_mf)"
+  grep -qx 'node tools/ui_select.mjs --run' <<<"$ui_m" || miss "ui-floor: does not run node tools/ui_select.mjs --run ($ui_m)"
+  grep -qx 'node tools/ui_select.mjs --run --full' <<<"$ui_mf" || miss "ui-floor: UI_FULL=1 does not pass --full ($ui_mf)"
   cmp -s "$ui_sel" "$ci_e/tools/ui_select.mjs" || miss "ui-floor: apply does not install tools/ui_select.mjs"
   ui_y="$ROOT/plugins/repo-setup/presets/ts-node/starter/dot.github/workflows/ci.yml"
-  printf '%s' "$(ci_step "$ui_y" heavy 'run: make check-heavy')" | grep -qxF '          UI_BASE: ${{ github.event.pull_request.base.sha }}' \
+  grep -qxF '          UI_BASE: ${{ github.event.pull_request.base.sha }}' <<<"$(ci_step "$ui_y" heavy 'run: make check-heavy')" \
     || miss "ci.yml (ts-node): the heavy step does not give UI_BASE the pull request's base"
-  printf '%s' "$(ci_step "$ui_y" heavy 'actions/checkout@')" | grep -qx '          fetch-depth: 2' \
+  grep -qx '          fetch-depth: 2' <<<"$(ci_step "$ui_y" heavy 'actions/checkout@')" \
     || miss "ci.yml (ts-node): the heavy checkout does not hold the base commit (fetch-depth: 2)"
 fi
 
@@ -475,29 +475,29 @@ tk_y="$ROOT/.github/workflows/test.yml"
 tk_chk=$(ci_block "$tk_y" check); tk_e2e=$(ci_block "$tk_y" e2e)
 [ -n "$tk_chk" ] && [ -n "$tk_e2e" ] && [ -n "$(ci_block "$tk_y" offline)" ] && [ -n "$(ci_block "$tk_y" validate)" ] \
   || miss "test.yml: jobs offline, validate, e2e and check are not all there"
-printf '%s\n' "$tk_chk" | grep -qx '    if: always()' || miss "test.yml: check does not run always()"
-printf '%s\n' "$tk_chk" | grep -qx '    needs: \[offline, validate, e2e\]' || miss "test.yml: check does not wait for offline, validate and e2e"
-printf '%s\n' "$tk_chk" | grep -qxF '          NEEDS_JSON: ${{ toJSON(needs) }}' || miss "test.yml: check does not hand the results to ci_verdict.py through NEEDS_JSON"
-printf '%s\n' "$tk_chk" | grep -qx '        run: python3 plugins/repo-setup/presets/_core/starter/tools/ci_verdict.py' \
+grep -qx '    if: always()' <<<"$tk_chk" || miss "test.yml: check does not run always()"
+grep -qx '    needs: \[offline, validate, e2e\]' <<<"$tk_chk" || miss "test.yml: check does not wait for offline, validate and e2e"
+grep -qxF '          NEEDS_JSON: ${{ toJSON(needs) }}' <<<"$tk_chk" || miss "test.yml: check does not hand the results to ci_verdict.py through NEEDS_JSON"
+grep -qx '        run: python3 plugins/repo-setup/presets/_core/starter/tools/ci_verdict.py' <<<"$tk_chk" \
   || miss "test.yml: check does not run the plugin's ci_verdict.py"
 if grep -q 'run:.*toJSON' "$tk_y"; then miss "test.yml: toJSON(needs) is written into a command"; fi
-printf '%s\n' "$tk_e2e" | grep -qx '    needs: \[offline, validate\]' || miss "test.yml: e2e does not wait for offline and validate"
-printf '%s\n' "$tk_e2e" | grep -qxF "    if: github.event_name != 'pull_request' || !github.event.pull_request.draft" \
+grep -qx '    needs: \[offline, validate\]' <<<"$tk_e2e" || miss "test.yml: e2e does not wait for offline and validate"
+grep -qxF "    if: github.event_name != 'pull_request' || !github.event.pull_request.draft" <<<"$tk_e2e" \
   || miss "test.yml: e2e also runs on a draft pull request"
 # an expression is only ever a value of if:, env: or with:, never pasted into a script
-if printf '%s\n' "$tk_e2e" | grep -F '${{' | grep -qvE '^ +(if|[A-Za-z_-]+): .*\$\{\{.*\}\}'"'"'?$'; then
+if grep -F '${{' <<<"$tk_e2e" | grep -vE '^ +(if|[A-Za-z_-]+): .*\$\{\{.*\}\}'"'"'?$'; then
   miss "test.yml: e2e pastes an expression into a script"
 fi
 tk_rs=$(ci_step "$tk_y" e2e 'actions/cache/restore@')
-printf '%s' "$tk_rs" | grep -qxF "        if: github.event_name == 'pull_request'" || miss "test.yml: the restore step also runs on the main branch"
+grep -qxF "        if: github.event_name == 'pull_request'" <<<"$tk_rs" || miss "test.yml: the restore step also runs on the main branch"
 [ "$(grep -c 'actions/cache/restore@' "$tk_y")" = 1 ] || miss "test.yml: not exactly one restore step"
 tk_ky=$(ci_step "$tk_y" e2e 'id: key')
-printf '%s' "$tk_ky" | grep -q 'heavy-ok-' && printf '%s' "$tk_ky" | grep -q 'python3 plugins/repo-setup/presets/_core/starter/tools/ci_inputs.py key' \
+grep -q 'heavy-ok-' <<<"$tk_ky" && grep -q 'python3 plugins/repo-setup/presets/_core/starter/tools/ci_inputs.py key' <<<"$tk_ky" \
   || miss "test.yml: e2e does not make its key heavy-ok-<input key> with the plugin's ci_inputs.py"
 # the condition, as the step's first key (- if:) or a later one
 tk_ran="^(      - |        )if: steps\.pick\.outputs\.run == 'true'\$"
 tk_sv=$(ci_step "$tk_y" e2e 'actions/cache/save@')
-printf '%s' "$tk_sv" | grep -qF 'key: ${{ steps.key.outputs.key }}' || miss "test.yml: e2e does not save under the input key"
+grep -qF 'key: ${{ steps.key.outputs.key }}' <<<"$tk_sv" || miss "test.yml: e2e does not save under the input key"
 for tk_s in 'actions/cache/save@' 'bash tests/e2e.sh' 'Record the green run'; do
   # a here-string, not a pipe: grep -q may stop reading early, and under pipefail the writer's SIGPIPE turns it red
   grep -qE "$tk_ran" <<<"$(ci_step "$tk_y" e2e "$tk_s")" || miss "test.yml: the step '$tk_s' does not wait for a selection that runs e2e.sh"
@@ -505,11 +505,11 @@ done
 tk_l_run=$(grep -n 'bash tests/e2e.sh' "$tk_y" | head -1 | cut -d: -f1) || true
 tk_l_save=$(grep -n 'actions/cache/save@' "$tk_y" | head -1 | cut -d: -f1) || true
 [ -n "$tk_l_run" ] && [ -n "$tk_l_save" ] && [ "$tk_l_save" -gt "$tk_l_run" ] || miss "test.yml: the key is saved before e2e.sh runs"
-printf '%s' "$(ci_step "$tk_y" e2e 'actions/checkout@')" | grep -qx '          fetch-depth: 0' \
+grep -qx '          fetch-depth: 0' <<<"$(ci_step "$tk_y" e2e 'actions/checkout@')" \
   || miss "test.yml: the e2e checkout does not hold the pull request's base (fetch-depth: 0)"
 grep -qx '    types: \[opened, synchronize, reopened, ready_for_review\]' "$tk_y" || miss "test.yml: pull_request lacks ready_for_review"
 grep -qxF '  HEAVY_NOT_INPUTS: "docs/** *.md"' "$tk_y" || miss "test.yml: HEAVY_NOT_INPUTS is not \"docs/** *.md\""
-printf '%s\n' "$(ci_block "$tk_y" offline)" | grep -qx '      - run: bash tests/run.sh' || miss "test.yml: offline no longer runs tests/run.sh"
+grep -qx '      - run: bash tests/run.sh' <<<"$(ci_block "$tk_y" offline)" || miss "test.yml: offline no longer runs tests/run.sh"
 # the shell of a step: the lines under its `run: |`
 ci_run() { ci_step "$1" "$2" "$3" | awk 'on { sub(/^          /, ""); print } /^        run: \|$/ { on = 1 }'; }
 tk_pick=$(ci_run "$tk_y" e2e 'id: pick'); tk_go=$(ci_run "$tk_y" e2e 'bash tests/e2e.sh')
