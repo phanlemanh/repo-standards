@@ -392,7 +392,10 @@ for preset in python ts-node claude-plugin; do
   d="$TMP/l-$preset"; mkdir -p "$d"; git -C "$d" init -q -b main
   python3 "$S/apply.py" --target "$d" --preset "$preset" --level starter \
     --var project_name=Up --var description=x --var owner=acme >/dev/null
-  first=$(cd "$d" && make -n check 2>/dev/null | head -1)
+  # The whole plan first, then its first line: `| head -1` could close the pipe while make still
+  # writes, and the run would end here with no FAIL line (45b).
+  plan=$(cd "$d" && make -n check 2>"$d.err") || miss "upgrade: make -n check of $preset fails: $(cat "$d.err")"
+  first=${plan%%$'\n'*}
   case "$first" in *upgrade_markers.py*) ;; *) miss "upgrade: make check of $preset runs '$first' before the marker check" ;; esac
 done
 if [ -d "$TMP/l-python" ]; then

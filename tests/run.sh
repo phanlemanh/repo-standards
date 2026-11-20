@@ -2218,6 +2218,14 @@ stale=$(cd "$ROOT" && git ls-files | grep -E "$old_names" || true)
 [ -z "$stale" ] || miss "own rules: a document still has a Vietnamese file name: $stale"
 stale=$(cd "$ROOT" && git grep -l -E "$old_names" -- . ':!tests/run.sh' || true)
 [ -z "$stale" ] || miss "own rules: a file still points at a renamed document: $(echo $stale)"
+# 45b. the fast tests never stop without saying why. Under `set -euo pipefail` an assignment from a
+#      pipe into a reader that can stop early (head, grep -q, grep -m, sed ...q) fails when the
+#      writer is still writing: it gets SIGPIPE, or a write error where SIGPIPE is ignored, and the
+#      run ends on the spot with no FAIL line. It is a race, so it is red only now and then: the
+#      macOS job at bc31175 ended that way, right after "ok  derived". Such an assignment needs a
+#      guard after the substitution, or a reader that reads to the end.
+early=$(cd "$ROOT" && grep -nE '^[[:space:]]*(local[[:space:]]+)?[A-Za-z_][A-Za-z_0-9]*=\$\(.*\|[[:space:]]*(head|grep[^|)]*-(q|m)|sed[^|)]*q)\b' tests/*.sh | grep -vE '\|\|' || true)
+[ -z "$early" ] || miss "own rules: an assignment pipes into a reader that stops early, so a run can end with no FAIL line: $early"
 echo "ok  own rules (or misses reported above)"
 
 # 46. parallel work does not queue (docs/three-repo-overview-design.md, RS2a and RS10): the one file
