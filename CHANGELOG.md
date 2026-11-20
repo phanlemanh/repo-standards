@@ -31,7 +31,9 @@ by hand once, in the trace of decision to merge on `onehub-inventory`. It now pr
 `ci.red_steps`, `ci.red_across_branches`, `pulls`), and with `--split` its top level becomes
 `{split, before, after}`. Late red can go down on a repository with drafts: that is the
 correction, not a change of the repository. The tool asks GitHub more (one timeline and one list
-of check runs per merged pull request, the rules of the default branch), so a run takes longer.
+of check runs per merged pull request, the rules of the default branch), so a run takes longer:
+on `onehub-inventory` one 11-day run makes about 2,200 API calls (1,729 workflow runs, each with
+its jobs), close to half of GitHub's 5,000 an hour. Run one at a time.
 Four new files land in `tools/`; a repository that copied `sdlc_metrics.py` alone must take them
 too.
 
