@@ -2290,6 +2290,43 @@ done
 for doc in docs/setup-principles.md docs/three-repo-boundaries.md docs/three-repo-overview-design.md docs/superpowers/specs/2026-11-16-real-walls-design.md; do
   [ -f "$ROOT/$doc" ] || miss "own rules: $doc is missing"
 done
+# 45e. CHANGELOG.md is written by every pull request that changes behaviour, each adding an entry right
+#      under "## Unreleased": two of them merge without a conflict and both entries stay (merge=union in
+#      .gitattributes, the rule this setup gives wiki/log.md; the owner, 2026-11-21). The red direction
+#      first: without the rule the same merge conflicts, so the check proves something.
+cl="$TMP/changelog-union"; rm -rf "$cl"; mkdir -p "$cl" && git -C "$cl" init -q -b main
+cl_git() { git -C "$cl" -c user.name=t -c user.email=t@example.com "$@"; }
+cp "$ROOT/CHANGELOG.md" "$cl/"; [ -f "$ROOT/.gitattributes" ] && cp "$ROOT/.gitattributes" "$cl/"
+cl_git add -A && cl_git commit -q -m base
+cl_entry() { python3 - "$cl/CHANGELOG.md" "$1" <<'PY'
+import sys
+path, name = sys.argv[1:]
+text = open(path, encoding="utf-8").read()
+head = "## Unreleased\n\n"
+entry = f"### Changed: {name}\nWhat {name} does.\n\n**What breaks on upgrade**: nothing.\n\n"
+text = text.replace(head, head + entry, 1) if head in text else text.replace("# Changelog\n", "# Changelog\n\n" + head + entry, 1)
+open(path, "w", encoding="utf-8").write(text)
+PY
+}
+cl_git checkout -q -b one && cl_entry "entry one" && cl_git commit -qam one
+cl_git checkout -q -b two main && cl_entry "entry two" && cl_git commit -qam two
+if grep -q '^CHANGELOG.md  *merge=union' "$cl/.gitattributes" 2>/dev/null; then
+  cl_git checkout -q -b plain two && printf '' > "$cl/.gitattributes" && cl_git commit -qam plain
+  if cl_git merge -q --no-edit one >/dev/null 2>&1; then miss "own rules: two changelog entries merge cleanly even without the rule, so the check proves nothing"; fi
+  cl_git merge --abort >/dev/null 2>&1 || true
+  cl_git checkout -q two
+  if cl_git merge -q --no-edit one >/dev/null 2>&1; then
+    for e in "entry one" "entry two"; do
+      [ "$(grep -c "^### Changed: $e$" "$cl/CHANGELOG.md")" = 1 ] || miss "own rules: the merged CHANGELOG.md does not hold the entry '$e' exactly once"
+    done
+  else
+    miss "own rules: two pull requests that each add a changelog entry conflict"
+    cl_git merge --abort >/dev/null 2>&1 || true
+  fi
+else
+  miss "own rules: .gitattributes does not merge CHANGELOG.md by union, so every two pull requests that change behaviour conflict"
+fi
+grep -q 'merge=union' "$ROOT/CLAUDE.md" || miss "own rules: CLAUDE.md does not say that CHANGELOG.md merges by union and how to add an entry"
 old_names='nguyen-tac-setup\.md|ranh-gioi-ba-kho\.md|thiet-ke-tong-quan-ba-kho\.md|tuong-that-design\.md'
 stale=$(cd "$ROOT" && git ls-files | grep -E "$old_names" || true)
 [ -z "$stale" ] || miss "own rules: a document still has a Vietnamese file name: $stale"
