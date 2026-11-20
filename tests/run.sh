@@ -3375,8 +3375,11 @@ ol="$TMP/oldshape-noledgers"; cp -R "$ou" "$ol"; rm -f "$ol/tools/ledgers.py"
 #      before the ledger tools. Skipped without ruff on the PATH or in uv's cache (it never goes to the network).
 if command -v ruff >/dev/null 2>&1; then ruff_cmd="ruff"; elif command -v uvx >/dev/null 2>&1 && uvx --offline ruff --version >/dev/null 2>&1; then ruff_cmd="uvx --offline ruff"; else ruff_cmd=""; fi
 if [ -n "$ruff_cmd" ]; then
-  ( cd "$TMP/newrepo-python" && $ruff_cmd check . >/dev/null 2>&1 ) || miss "python repo: ruff check is red on the vendored tools ($(cd "$TMP/newrepo-python" && $ruff_cmd check . --output-format concise 2>&1 | head -3))"
-  ( cd "$TMP/newrepo-python" && $ruff_cmd format --check . >/dev/null 2>&1 ) || miss "python repo: ruff format --check is red on the vendored tools"
+  # starter and team: the team level brings tools of its own (sdlc_*.py, autonomy.py, github_setup.py)
+  for ruff_repo in "$TMP/newrepo-python" "$TMP/python-team"; do
+    ( cd "$ruff_repo" && $ruff_cmd check . >/dev/null 2>&1 ) || miss "python repo ${ruff_repo##*/}: ruff check is red on the vendored tools ($(cd "$ruff_repo" && $ruff_cmd check . --output-format concise 2>&1 | head -3))"
+    ( cd "$ruff_repo" && $ruff_cmd format --check . >/dev/null 2>&1 ) || miss "python repo ${ruff_repo##*/}: ruff format --check is red on the vendored tools"
+  done
 fi
 # 48zj. a hand edit of a drawn file: once every line it added is in a source, make derived draws again; a line in
 #       no source is refused with the lines and the way back; an edit that only removes lines is drawn over

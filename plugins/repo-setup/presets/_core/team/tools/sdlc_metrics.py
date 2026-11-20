@@ -34,7 +34,6 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from repo_ontology import find_repo_root
-
 from sdlc_gh import PR_LIMIT, each, first_line, gh_json, gh_rows, git, parse_time, read_or_say
 from sdlc_jobs import ci_numbers, mark_waiting
 from sdlc_pulls import merges_of_default_in, pr_commits, pull_times

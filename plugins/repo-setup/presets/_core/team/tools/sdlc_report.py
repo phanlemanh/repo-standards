@@ -61,7 +61,8 @@ def ci_rows(ci: dict[str, Any]) -> list[tuple[str, str]]:
             f"{red} of {passed}" if passed else f"n/a (no `{GATE_JOB}` job passed)",
         ),
         (
-            "Not late red: a draft's summary job, red as it only says the heavy tier has not run yet",
+            "Not late red: a draft's summary job, red as it only says"
+            " the heavy tier has not run yet",
             str(ci["waiting_red"]),
         ),
         ("Red on the default branch, per workflow", default or "no finished run"),
