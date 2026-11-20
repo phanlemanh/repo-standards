@@ -1,7 +1,8 @@
 # Nguyên tắc của setup: người quyết, máy kiểm
 
-Ngày: 2026-11-16. Trạng thái: chủ kho nêu tiêu chí và cho sửa cùng ngày. Trang này nói thứ
-repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md).
+Ngày: 2026-11-16. Trạng thái: chủ kho nêu tiêu chí và cho sửa cùng ngày. Luật 8 đến 10 thêm ngày
+2026-11-20, lấy từ nguyên tắc 1, 2 và 5 của [thiết kế tổng quan ba kho](three-repo-overview-design.md),
+mục 4 (gói RS6). Trang này nói thứ repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md).
 
 ## Ý định
 
@@ -20,7 +21,7 @@ kéo người vào để tăng độ tin cậy.
 - Kiểm: đọc lại để bắt lỗi. Máy làm rẻ hơn và kỹ hơn. Thay bằng máy. Chưa thay được thì ghi nó
   vào mục «Chỗ còn hở», không coi nó là thiết kế.
 
-## Bảy luật
+## Mười luật
 
 1. **Setup không dùng người làm người kiểm.** Độ tin cậy do máy tạo ra: check bắt buộc, luật nạp
    từ nhánh gốc, bằng chứng kiểm lại trước khi gộp.
@@ -37,6 +38,18 @@ kéo người vào để tăng độ tin cậy.
    agent review.
 7. **Mỗi lớp trả lời một câu.** Máy được làm gì trong phiên: Claude Code. Việc đã đúng chưa: vòng
    làm việc. Cái gì vào nhánh chính: GitHub. Không lớp nào trả lời lại câu của lớp khác.
+8. **Một phép kiểm, một chỗ.** Mỗi câu hỏi có đúng một chỗ trả lời. Phần của setup: tầng nhẹ trả lời
+   «luật chơi có bị lách không» ở mọi lần đẩy; tầng nặng trả lời «có làm vỡ phần còn lại trên máy
+   sạch không» khi PR rời bản nháp, và chỉ chạy lại khi đầu vào của nó đổi; một ô tổng `check` đứng
+   cho cả hai, nên tầng bị bỏ qua không thành xanh. Câu «hàng có đúng hợp đồng của nó không» là của
+   vòng làm việc, ở Máy: setup không trả lời lại.
+9. **Mỗi tệp một người ghi.** Một vòng chỉ ghi vào chỗ của riêng nó: sổ chung thành mảnh, mỗi mục một
+   tệp. Tệp tổng hợp là vật dẫn xuất: máy vẽ lại từ các mảnh, PR không mang nó. Sổ còn ở dạng một
+   tệp thì gộp kiểu hợp, để hai nhánh cùng thêm một dòng không xung đột.
+10. **Bậc thang thay người.** Mỗi việc đang dặn bằng lời rơi vào bậc cao nhất có thể: bỏ bằng cấu trúc,
+    rồi luật trong mã, rồi uỷ quyền có biên, sau cùng mới là người quyết. Luật nào chưa có máy giữ
+    thì ghi rõ là giữ bằng lời, không giả là đã có tường. Bậc uỷ quyền có biên chưa có trong setup
+    (RS5b, chờ vòng làm việc đọc được).
 
 ## Người xuất hiện ở đâu
 
@@ -63,8 +76,13 @@ Ngoài bảng này, mỗi lần người bị gọi là một lỗi của setup.
 | 5 | `governance/autonomy.yaml.tmpl`: danh sách `high`; hai luật `*_raise_to`, so từng action với chính nó | 43a, 43d |
 | 6 | `pr-pipeline.yml`: việc `review` bỏ qua khi chính sách có `proof.check` | 43f |
 | 7 | Tự gộp theo hạng và check, không theo tên tác giả; chỉ tự gộp nhờ bằng chứng khi nhánh thật sự đòi check đó; pipeline không approve | 43f |
+| 8 | `ci.yml` của mỗi preset: job `quick`, `heavy`, `check`; `tools/ci_inputs.py` (khoá đầu vào của tầng nặng), `tools/ci_verdict.py` (ô tổng) | 49a, 49d, 49e, 49f |
+| 9 | `tools/ledgers.py` và `mk/derived.mk`: sổ thành mảnh, tệp vẽ ra không vào git; `.gitattributes`: `wiki/log.md merge=union` | 46a, 48c, 48f |
+| 10 | `plugins/repo-setup/rule-checks.toml` và `scripts/rule_kinds.py`: mỗi luật của `AGENTS.md` sinh ra nêu máy giữ nó hoặc ghi «giữ bằng lời» | 50m, 50n |
 
-Đường dẫn tính từ `plugins/repo-setup/presets/_core/` và `capabilities/github-agents/`.
+Đường dẫn tính từ `plugins/repo-setup/presets/_core/` và `capabilities/github-agents/`, trừ khi ghi
+từ gốc kho. Mục 43k của bộ kiểm đỏ khi một luật không có hàng ở bảng này, hay một hàng nêu một mục
+bộ kiểm không có.
 
 ## Hỏi trước khi gộp một thay đổi vào kho này
 
