@@ -2275,12 +2275,18 @@ fl_git merge -q --no-edit main >/dev/null 2>&1 || true
 echo 'export const grid = "three and main";' > "$fl/src/grid.ts" && fl_git add -A && fl_git commit -q --no-edit
 fl_git checkout -q main
 mkdir -p "$TMP/flbin" "$TMP/flowgh"
+# Every answer falls on the first day of the window the tool asks for (seven days back).
+fl_day=$(python3 -c "import datetime as d; print((d.datetime.now(d.UTC) - d.timedelta(days=7)).date())")
 # The answers have the shape GitHub gives: the fake gh below runs the tool's own --jq program on them.
-python3 - "$fl" "$TMP/flowgh" <<'PY'
+python3 - "$fl" "$TMP/flowgh" "$fl_day" <<'PY'
 import json, pathlib, subprocess, sys
 
-repo, out = sys.argv[1], pathlib.Path(sys.argv[2])
-DAY = "2026-01-02T00:"
+repo, out, day = sys.argv[1], pathlib.Path(sys.argv[2]), sys.argv[3]
+DAY = f"{day}T00:"
+
+
+def at(hour: int, minute: int = 0) -> str:
+    return f"{day}T{hour:02d}:{minute:02d}:00Z"
 
 
 def listed(branch: str) -> list[dict]:
@@ -2291,29 +2297,38 @@ def listed(branch: str) -> list[dict]:
 
 
 def commit(sha: str, parents: list[str]) -> dict:
-    return {"sha": sha, "commit": {"message": "x"}, "parents": [{"sha": p, "url": "u"} for p in parents]}
+    # A merge is made two hours into the day, after both pull requests were last ready.
+    date = at(2) if len(parents) == 2 else at(0, 5)
+    return {"sha": sha, "commit": {"message": "x", "committer": {"date": date}},
+            "parents": [{"sha": p, "url": "u"} for p in parents]}
 
 
-def pull(number: int, base: str = "main", merged: str | None = None) -> dict:
+def pull(number: int, base: str = "main", merged: str | None = None, head: str = "") -> dict:
     return {"number": number, "title": f"feat: {number}", "author": {"login": "dev"}, "labels": [], "reviews": [],
-            "createdAt": "2026-01-01T00:00:00Z", "mergedAt": merged, "closedAt": merged, "baseRefName": base}
+            "createdAt": at(0), "mergedAt": merged, "closedAt": merged, "baseRefName": base,
+            "headRefName": head, "headRefOid": str(number) * 40}
 
 
-def job(name: str, conclusion: str, start: int, end: int) -> dict:
-    return {"id": 1, "name": name, "conclusion": conclusion, "status": "completed",
-            "started_at": f"{DAY}{start:02d}:00Z", "completed_at": f"{DAY}{end:02d}:00Z"}
+def failed_at(step: str) -> list[dict]:
+    return [{"name": "Set up job", "conclusion": "success", "number": 1},
+            {"name": step, "conclusion": "failure", "number": 2}]
 
 
-def run(number: int, name: str, event: str, branch: str, conclusion: str) -> dict:
+def job(name: str, conclusion: str, start: int, end: int, steps: list | None = None, attempt: int = 1) -> dict:
+    return {"id": 1, "name": name, "conclusion": conclusion, "status": "completed", "run_attempt": attempt,
+            "started_at": f"{DAY}{start:02d}:00Z", "completed_at": f"{DAY}{end:02d}:00Z", "steps": steps or []}
+
+
+def run(number: int, name: str, event: str, branch: str, conclusion: str, created: str) -> dict:
     return {"id": number, "name": name, "event": event, "head_branch": branch, "status": "completed",
-            "head_sha": f"{number:040x}", "conclusion": conclusion, "run_attempt": 1}
+            "head_sha": f"{number:040x}", "conclusion": conclusion, "run_attempt": 1, "created_at": created}
 
 
 def save(name: str, *pages: object) -> None:
     (out / name).write_text("".join(json.dumps(page) + "\n" for page in pages))
 
 
-save("merged.json", [pull(2, merged="2026-01-01T10:00:00Z"), pull(3, merged="2026-01-01T20:00:00Z")])
+save("merged.json", [pull(2, merged=at(10), head="two"), pull(3, merged=at(20), head="three")])
 save("closed.json", [pull(6)])
 # Pull request 5 goes into branch two: the branch it merges is not the default one.
 save("open.json", [pull(4), pull(5, base="two")])
@@ -2323,30 +2338,63 @@ save("pr3.json", listed("three"))
 save("pr4.json", [commit("a" * 40, ["b" * 40, "c" * 40])])
 save("pr5.json", [commit("d" * 40, ["e" * 40, "f" * 40])])
 save("pr6.json", [commit("9" * 40, ["8" * 40])])
+# Pull request 2 was ready, went back to draft and was ready again at 00:30: the last time counts.
+save("timeline-2.json", [{"event": "labeled", "created_at": at(0, 1)},
+                         {"event": "ready_for_review", "created_at": at(0, 15)},
+                         {"event": "convert_to_draft", "created_at": at(0, 20)},
+                         {"event": "ready_for_review", "created_at": at(0, 30)}])
+# Pull request 3 was opened ready for review.
+save("timeline-3.json", [])
+save("rules.json", [{"type": "pull_request", "parameters": {}},
+                    {"type": "required_status_checks",
+                     "parameters": {"required_status_checks": [{"context": "check"}, {"context": "gate"}]}}])
+# The last required check turns green at 04:00 on pull request 2 (gate was red first) and at 06:00 on
+# pull request 3; e2e is not required, and a green after the merge does not count.
+save("checks-" + "2" * 40 + ".json", {"total_count": 4, "check_runs": [
+    {"name": "gate", "conclusion": "failure", "completed_at": at(2)},
+    {"name": "check", "conclusion": "success", "completed_at": at(3)},
+    {"name": "gate", "conclusion": "success", "completed_at": at(4)},
+    {"name": "e2e", "conclusion": "success", "completed_at": at(9)}]})
+save("checks-" + "3" * 40 + ".json", {"total_count": 3, "check_runs": [
+    {"name": "check", "conclusion": "success", "completed_at": at(5)},
+    {"name": "gate", "conclusion": "success", "completed_at": at(6)},
+    {"name": "gate", "conclusion": "success", "completed_at": at(21)}]})
 runs = [
-    run(1, "CI", "pull_request", "two", "failure"),
-    run(2, "CI", "pull_request", "three", "success"),
-    run(5, "CI", "pull_request", "five", "success"),
-    run(3, "CI", "push", "main", "success"),
-    run(6, "CI", "push", "main", "success"),
-    run(4, "Release", "push", "main", "failure"),
+    run(1, "CI", "pull_request", "two", "failure", at(1)),
+    run(2, "CI", "pull_request", "three", "success", at(1)),
+    run(5, "CI", "pull_request", "five", "success", at(1)),
+    run(7, "CI", "pull_request", "seven", "failure", at(1)),
+    # Branch two was pushed before it was last ready, branch three twice after.
+    run(8, "CI", "pull_request", "two", "failure", at(0, 10)),
+    run(9, "CI", "pull_request", "three", "success", at(2)),
+    run(3, "CI", "push", "main", "success", at(11)),
+    run(6, "CI", "push", "main", "success", at(21)),
+    run(4, "Release", "push", "main", "failure", at(11)),
 ]
 # Two pages, as GitHub pages a long list.
-save("runs.json", {"total_count": 6, "workflow_runs": runs[:3]}, {"total_count": 6, "workflow_runs": runs[3:]})
+save("runs.json", {"total_count": 9, "workflow_runs": runs[:4]}, {"total_count": 9, "workflow_runs": runs[4:]})
 # A list GitHub cut short: it says nine runs and hands over one.
 save("runs-short.json", {"total_count": 9, "workflow_runs": runs[:1]})
 save("runs-none.json", {"total_count": 0, "workflow_runs": []})
 jobs = {
     # gate passed and a heavier job ended red afterwards on the same head: a late red.
-    1: [job("gate", "success", 0, 2), job("check", "success", 0, 3), job("e2e-db", "failure", 0, 30)],
+    1: [job("gate", "success", 0, 2), job("check", "success", 0, 3),
+        job("e2e-db", "failure", 0, 30, failed_at("Run make e2e-db"))],
     # red first, then run again: gate passed only after the red had ended. Not a late red.
     2: [job("check", "failure", 0, 3), job("gate", "failure", 0, 1),
-        job("check", "success", 10, 13), job("gate", "success", 10, 12)],
+        job("check", "success", 10, 13, attempt=2), job("gate", "success", 10, 12, attempt=2)],
     # a late red that a second attempt turned green: it still counts.
-    5: [job("gate", "success", 0, 2), job("e2e", "failure", 0, 10),
-        job("gate", "success", 20, 22), job("e2e", "success", 20, 30)],
-    # the default branch: red on the first attempt, green on the second.
-    3: [job("check", "failure", 0, 5), job("check", "success", 10, 15)],
+    5: [job("gate", "success", 0, 2), job("e2e", "failure", 0, 10, failed_at("Run make e2e")),
+        job("gate", "success", 20, 22, attempt=2), job("e2e", "success", 20, 30, attempt=2)],
+    # a draft: the heavy tier is skipped, so the summary job is red after gate passed. It says
+    # "not run yet", not "failed": no late red.
+    7: [job("gate", "success", 0, 1), job("quick", "success", 0, 3), job("heavy", "skipped", 3, 3),
+        job("check", "failure", 3, 4, failed_at("Every tier is green"))],
+    # the same step red on two branches (five above, and two here)
+    8: [job("e2e", "failure", 0, 6, failed_at("Run make e2e"))],
+    9: [job("quick", "success", 0, 2)],
+    # the default branch: red on the first attempt (at a step that runs no checks), green on the second.
+    3: [job("check", "failure", 0, 5, failed_at("Run npm ci")), job("check", "success", 10, 15, attempt=2)],
     6: [job("check", "success", 0, 4)],
     4: [job("release-please", "failure", 0, 1)],
 }
@@ -2362,14 +2410,19 @@ rows() {
   file="$FLOW_GH/$1"; shift
   case "$all" in *--paginate*per_page=100*) ;; *) echo "not every page is asked for: $all" >&2; exit 1 ;; esac
   while [ "$#" -gt 1 ] && [ "$1" != --jq ]; do shift; done
-  jq -c "$2" "$file"
+  jq -c -r "$2" "$file"   # gh --jq prints a string as it is, without quotes
 }
 case "$all" in
-  "pr list --state merged"*baseRefName*) cat "$FLOW_GH/merged.json" ;;
+  "pr list --state merged"*baseRefName*headRefOid*) cat "$FLOW_GH/merged.json" ;;
   "pr list --state closed"*baseRefName*) cat "$FLOW_GH/closed.json" ;;
   "pr list --state open"*baseRefName*) cat "$FLOW_GH/open.json" ;;
   "repo view"*) echo '{"nameWithOwner":"acme/p","defaultBranchRef":{"name":"main"}}' ;;
   *deployments*) echo '[]' ;;
+  *"/rules/branches/main"*)
+    [ -z "${FLOW_NO_RULES:-}" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+    rows rules.json "$@" ;;
+  *"/issues/"*"/timeline"*) rows "timeline-$(echo "$all" | sed 's|.*/issues/\([0-9]*\)/timeline.*|\1|').json" "$@" ;;
+  *"/commits/"*"/check-runs"*filter=all*) rows "checks-$(echo "$all" | sed 's|.*/commits/\([0-9a-f]*\)/check-runs.*|\1|').json" "$@" ;;
   *"/pulls/"*"/commits"*) rows "pr$(echo "$all" | sed 's|.*/pulls/\([0-9]*\)/commits.*|\1|').json" "$@" ;;
   *"/actions/runs/"*"/jobs"*filter=all*) rows "jobs-$(echo "$all" | sed 's|.*/actions/runs/\([0-9]*\)/jobs.*|\1|').json" "$@" ;;
   *"/actions/runs "*"created="*)
@@ -2380,9 +2433,8 @@ case "$all" in
 esac
 SH
 chmod +x "$TMP/flbin/gh"
-fl_day=$(python3 -c "import datetime as d; print((d.datetime.now(d.UTC) - d.timedelta(days=7)).date())")
 fl_metrics() { ( cd "$1" && PATH="$TMP/flbin:$PATH" FLOW_GH="$TMP/flowgh" FLOW_DAY="$fl_day" python3 tools/sdlc_metrics.py --days 7 "${@:2}" 2>/dev/null || true ); }
-fl_is() { [ "$(echo "$flow" | json "$1" 2>/dev/null || true)" = "$2" ] || miss "flow: $3"; }
+fl_is() { [ "$(echo "$flow" | json "$1" 2>/dev/null || true)" = "$2" ] || miss "flow: $3 (got: $(echo "$flow" | json "$1" 2>&1 | tail -1))"; }
 if command -v jq >/dev/null 2>&1; then
   flow=$(fl_metrics "$fl" --json)
   fl_is 'd["lead_time_median_h"]' 15.0 "the median time from open to merge changed"
@@ -2399,27 +2451,78 @@ if command -v jq >/dev/null 2>&1; then
   shallow=$(fl_metrics "$TMP/flow-shallow" --json | json 'd["back_merges"].get("unread", "")' 2>/dev/null || true)
   case "$shallow" in *shallow*) ;; *) miss "flow: a shallow clone replays merges on a history it does not have" ;; esac
   # 46d. machine minutes per merged pull request, late red, and red on the default branch
-  fl_is 'd["ci"]["runs"]' 6 "the workflow runs of every page and of every day of the window are not counted once each"
-  fl_is 'd["ci"]["machine_minutes"]' 83.0 "machine minutes are not the sum of the job durations of every attempt"
-  fl_is 'd["ci"]["machine_minutes_per_merged_pr"]' 41.5 "machine minutes are not set against the merged pull requests"
-  fl_is 'd["ci"]["late_red"]' "[2, 3]" "late red is not: a job that ended red after gate passed on that head, also when a second attempt turned it green, and not when the red came first"
+  fl_is 'd["ci"]["runs"]' 9 "the workflow runs of every page and of every day of the window are not counted once each"
+  fl_is 'd["ci"]["machine_minutes"]' 96.0 "machine minutes are not the sum of the job durations of every attempt"
+  fl_is 'd["ci"]["machine_minutes_per_merged_pr"]' 48.0 "machine minutes are not set against the merged pull requests"
+  fl_is 'd["ci"]["late_red"]' "[2, 4]" "late red is not: a job that ended red after gate passed on that head, also when a second attempt turned it green, and not when the red came first, and not a summary job that only says the heavy tier has not run yet"
   fl_is 'd["ci"]["default_branch"]' "{'CI': [1, 2], 'Release': [1, 1]}" "red on the default branch is not counted per workflow, or a run made green by a second attempt is not counted as red"
+  # 46g. a summary job that is red only because the heavy tier of a draft has not run yet is counted
+  #      apart: it says "not its turn", not "failed"
+  fl_is 'd["ci"]["waiting_red"]' 1 "a summary job red beside a skipped tier is not counted apart from late red"
+  # 46h. one row per job: runs, green, red, cancelled, median minutes, machine hours, red at a step
+  #      that runs checks (a make step); and where in the job each red ended
+  fl_is 'd["ci"]["jobs"]["e2e"]' "{'runs': 3, 'green': 1, 'red': 2, 'cancelled': 0, 'median_minutes': 10.0, 'machine_hours': 0.43, 'red_at_check_step': 2}" "the row of a job is not its attempts, outcomes, median, machine hours and reds at a check step"
+  fl_is 'd["ci"]["jobs"]["check"]' "{'runs': 7, 'green': 4, 'red': 3, 'cancelled': 0, 'median_minutes': 3.0, 'machine_hours': 0.4, 'red_at_check_step': 0}" "a red at the summary step, at an install step or with no step read is taken for a red at a check step"
+  fl_is 'd["ci"]["jobs"]["heavy"]["median_minutes"]' None "a job that only ever skipped gets a median of zero"
+  fl_is 'd["ci"]["red_steps"]' "{'checks': 3, 'summary': 1, 'other': 1, 'not_read': 3}" "red jobs are not split by the step they ended at"
+  # 46i. the same step red on two or more branches: a sign of a red that is not the pull request's
+  fl_is 'd["ci"]["red_across_branches"]' "[{'job': 'e2e', 'step': 'Run make e2e', 'branches': ['five', 'two']}]" "a step red on two branches is not named, or a step red on one branch is"
+  # 46j. how a merged pull request spent its time, from GitHub and git only
+  fl_is 'd["pulls"]["required_checks"]' "['check', 'gate']" "the required checks are not read from the rules of the default branch"
+  fl_is 'd["pulls"]["to_ready"]' "{'n': 2, 'median_h': 0.25, 'max_h': 0.5}" "opened to ready for review is not measured to the last time it was ready"
+  fl_is 'd["pulls"]["to_green"]' "{'n': 2, 'median_h': 4.75, 'max_h': 6.0}" "ready to the last required check green is not measured on the last head, before the merge"
+  fl_is 'd["pulls"]["to_merged"]' "{'n': 2, 'median_h': 10.0, 'max_h': 14.0}" "last required check green to merged is not measured"
+  fl_is 'd["pulls"]["pushes_after_ready"]' "{'n': 2, 'total': 3, 'median': 1.5, 'max': 2}" "pushes after the pull request was last ready are not the new heads CI ran on"
+  fl_is 'd["pulls"]["merges_after_ready"]' "{'n': 2, 'total': 2, 'median': 1.0, 'max': 1}" "merges of the default branch after the pull request was last ready are not counted"
   flow=$(FLOW_NO_RUNS=1 fl_metrics "$fl" --json)
   fl_is 'bool(d["ci"]["unread"])' True "workflow runs that could not be read are reported as zero runs"
   fl_is 'd["back_merges"]["conflicting"]' 1 "one part that cannot be read hides the parts that can"
+  fl_is 'bool(d["pulls"]["pushes_after_ready"]["unread"])' True "pushes are counted as zero when the workflow runs cannot be read"
+  fl_is 'd["pulls"]["to_green"]["n"]' 2 "the time of a pull request is not read when only the workflow runs cannot be"
+  flow=$(FLOW_NO_RULES=1 fl_metrics "$fl" --json)
+  fl_is 'bool(d["pulls"]["unread"])' True "the time of a pull request is reported without the required checks"
   flow=$(FLOW_RUNS=runs-short fl_metrics "$fl" --json)
   fl_is '"1 of 9" in d["ci"]["unread"]' True "a list of workflow runs that GitHub cut short is reported as the whole list"
+  # 46k. the window split at a moment: each pull request on the side of its merge, each run on the
+  #      side it was created, so a number can be read before and after a package
+  flow=$(fl_metrics "$fl" --json --split "${fl_day}T15:00:00Z")
+  fl_is 'd["split"]["at"]' "${fl_day}T15:00:00+00:00" "the moment of the split is not the one asked for"
+  fl_is '[d["before"]["merged"], d["after"]["merged"]]' "[1, 1]" "the merged pull requests are not split by the time they merged"
+  fl_is '[d["before"]["lead_time_median_h"], d["after"]["lead_time_median_h"]]' "[10.0, 20.0]" "the time from open to merge is not split"
+  fl_is '[d["before"]["ci"]["runs"], d["after"]["ci"]["runs"]]' "[8, 1]" "the workflow runs are not split by the time they were created"
+  fl_is '[d["before"]["back_merges"]["found"], d["after"]["back_merges"]["found"]]' "[1, 2]" "merges of main are not split with their pull request"
+  fl_git tag -a -m v1 split-tag main
+  flow=$(fl_metrics "$fl" --json --split split-tag)
+  fl_is '[d["split"]["by"], d["before"]["ci"]["runs"], d["after"]["ci"]["runs"]]' "['split-tag', 9, 0]" "a tag does not split the window at the time of its commit"
+  rc=0; err=$( cd "$fl" && PATH="$TMP/flbin:$PATH" FLOW_GH="$TMP/flowgh" FLOW_DAY="$fl_day" python3 tools/sdlc_metrics.py --days 7 --split no-such-tag 2>&1 >/dev/null ) || rc=$?
+  [ "$rc" = 2 ] && case "$err" in *no-such-tag*) true ;; *) false ;; esac || miss "flow: a split that is neither a date nor a tag does not stop with exit 2 and its name (rc $rc: $err)"
   # 46e. the page a person reads carries the same lines
   page=$(fl_metrics "$fl")
   for line in 'longest 20.0 h' 'Merges of the default branch into a pull request branch | 3 on 4' \
     'conflict when replayed | 1 of 2' 'could not be replayed | 1 (git fetch' '`src/grid.ts` 1' \
-    'per merged pull request (every run in the window) | 41.5' \
-    'Late red (a job ended red on a head after `gate` passed) | 2 of 3' 'CI 1 of 2, Release 1 of 1'; do
+    'per merged pull request (every run in the window) | 48.0' \
+    'Late red (a job ended red on a head after `gate` passed) | 2 of 4' 'CI 1 of 2, Release 1 of 1' \
+    'only says the heavy tier has not run yet | 1' \
+    '| `e2e` | 3 | 1 | 2 | 0 | 10.0 | 0.43 | 2 |' '| `heavy` | 1 | 0 | 0 | 0 | n/a | 0.0 | 0 |' \
+    'Red jobs: 8; at a step that runs checks (a `make` step) 3, at the summary step 1, at another step 1, step not read 3' \
+    '`e2e` at `Run make e2e` | 2 branches: five, two' 'Test names are not read' \
+    'Opened to ready for review | median 0.25 h, longest 0.5 h (2 pull requests)' \
+    'Ready to the last required check green | median 4.75 h, longest 6.0 h (2 pull requests)' \
+    'Last required check green to merged | median 10.0 h, longest 14.0 h (2 pull requests)' \
+    'Pushes after it was last ready (new heads CI ran on) | 3, median 1.5, most 2 (2 pull requests)' \
+    'Merges of the default branch after it was last ready | 2, median 1.0, most 1 (2 pull requests)'; do
     echo "$page" | grep -qF -- "$line" || miss "flow: the report does not carry the line: $line"
   done
   FLOW_NO_RUNS=1 fl_metrics "$fl" | grep -q 'not read' || miss "flow: the report shows numbers for workflow runs it could not read"
+  FLOW_NO_RULES=1 fl_metrics "$fl" | grep -q 'Opened to ready for review | not read' || miss "flow: the report shows times of pull requests it could not read"
+  page=$(fl_metrics "$fl" --split "${fl_day}T15:00:00Z")
+  for line in "## Before ${fl_day}T15:00:00+00:00" "## From ${fl_day}T15:00:00+00:00"; do
+    echo "$page" | grep -qF -- "$line" || miss "flow: the split report does not carry the heading: $line"
+  done
+  # 46l. the measure reads no file of the feature loop: its gate marks are its own to measure
+  grep -n '_acceptance' "$fl"/tools/sdlc_*.py && miss "flow: the measure reads _acceptance/, the feature loop's files"
 else
-  echo "skip  flow 46b-46e: jq is not installed, the measure was not run"
+  echo "skip  flow 46b-46l: jq is not installed, the measure was not run"
 fi
 # 46f. a list of pull requests that stops at the limit of the query is said to be partial
 partial=$(cd "$fl" && python3 -c "
