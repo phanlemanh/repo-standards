@@ -14,17 +14,20 @@ It detects agent workflows from `.github/workflows/pr-pipeline.yml`.
 
 ## 2. Teamwork (always)
 First find out how this repository merges pull requests: read `CONTRIBUTING.md` and ask when it
-is not clear. The script allows one merge method and turns the others off:
-- squash (the default, no option): one commit per pull request on the default branch.
-- `--merge-method merge`: the branch's commits stay and a merge commit is added. Use it when the
+is not clear. The script allows one merge method and turns the others off. The choice is stored
+as `merge_method` in `governance/autonomy.yaml`:
+- `merge_method: squash` (what a new repository gets): one commit per pull request on the default
+  branch.
+- `merge_method: merge`: the branch's commits stay and a merge commit is added. Use it when the
   repository's process reads commits from the branch after the merge, for example a commit that
   must still exist on the default branch.
 
-The choice is not stored. Pass the option on every run, the dry run and `--apply`: a run without
-it sets the repository back to squash only.
+Changing `merge_method` is a change to `governance/`, so a person makes it, in a pull request of
+its own. A policy from before the key has no `merge_method`: then a run leaves the merge settings
+as they are, and `--merge-method merge` (or `squash`) sets them for that run only; suggest storing
+the choice. Where the policy names one, an option that differs is refused.
 
-Run `python3 tools/github_setup.py` (with `--merge-method merge` when that is the repository's
-way) and explain in plain words what it will do: the merge method, environments `staging` and
+Run `python3 tools/github_setup.py` and explain in plain words what it will do: the merge method, environments `staging` and
 `production` (production needs a human reviewer), and a ruleset on the default branch (PR
 required, required checks `check`, `secret-scan`, `conventional-title` and `conventional-commits`,
 a code owner only where `.github/CODEOWNERS` names one, and no other approval). Checks of the

@@ -54,6 +54,8 @@ OWN_CHECKS = ("check", "gate", "secret-scan")
 # reports under the name, so it is free: for example for the gate of a feature loop.
 AGENT_WORKFLOW = ".github/workflows/pr-pipeline.yml"
 AGENT_CHECK = "gate"
+# The one way pull requests merge (merge_method), set on GitHub by tools/github_setup.py.
+MERGE_METHODS = ("squash", "merge")
 
 
 def glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -153,6 +155,20 @@ def policy_problems(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -
                 "already. Name only the checks this repository adds."
             )
     return problems
+
+
+def merge_method(policy: dict[str, Any]) -> str:
+    """The stored merge method, or "" when the policy names none (a policy from before the key)."""
+    value = policy.get("merge_method")
+    return "" if value is None else str(value).strip()
+
+
+def merge_method_problems(policy: dict[str, Any]) -> list[str]:
+    """A merge_method that is neither squash nor merge. Apart from policy_problems: it says how
+    pull requests merge, not who decides, so it never changes a tier."""
+    if "merge_method" not in policy or merge_method(policy) in MERGE_METHODS:
+        return []
+    return [f"merge_method: {merge_method(policy)} is not one of {', '.join(MERGE_METHODS)}"]
 
 
 def default_tier(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> str:
@@ -366,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         block = render_codeowners(policy, own)
         current = codeowners.read_text(encoding="utf-8") if codeowners.exists() else ""
         if args.check_codeowners:
-            problems = policy_problems(policy, own)
+            problems = policy_problems(policy, own) + merge_method_problems(policy)
             if problems:
                 print("governance/autonomy.yaml: " + "\n".join(problems), file=sys.stderr)
                 return 1

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Changed: the merge method is stored in `governance/autonomy.yaml`
+`tools/github_setup.py` set squash unless `--merge-method merge` was passed, and nothing stored the
+choice: one run that forgot the option set a repository back to squash only, which a feature loop
+that needs merge commits (delivery-loop) cannot work with.
+
+- `governance/autonomy.yaml` has `merge_method: squash` (or `merge`). `github_setup.py` sets that
+  one method. An option that differs from it is refused with exit code 2, saying where the choice
+  is made.
+- A policy without the key (a repository from an earlier release): a run without the option
+  leaves the merge settings as they are and says so; `--merge-method` still sets them for that
+  run.
+- A value that is neither `squash` nor `merge` turns `make check` red (`autonomy.py
+  --check-codeowners` names it), and `github_setup.py` stops before any change. It never changes
+  a tier.
+
+**What breaks on upgrade**: the upgrade adds `merge_method: squash` to `governance/autonomy.yaml`.
+A repository that merges with merge commits must set `merge_method: merge` in the same pull
+request, or the next `github_setup.py --apply` sets it to squash. After that, a script that
+passes `--merge-method merge` against a policy that says `squash` stops with exit code 2.
+
 ### Changed: the flow measure tells where the time and the red go (RS10)
 `tools/sdlc_metrics.py` printed about half the lines of the plan's measure; the rest were counted
 by hand once, in the trace of decision to merge on `onehub-inventory`. It now prints them.
