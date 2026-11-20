@@ -155,6 +155,20 @@ def _split_tail(data: bytes, heading: bytes, newline: bytes) -> tuple[bytes, byt
     return data, b""
 
 
+def _appended(ours: bytes, old: bytes) -> tuple[bytes, bytes] | None:
+    """(the repository's text up to the template's last line, the lines it added after that line),
+    or None when nothing comes after it, or the template's last line is not there as it was."""
+    old_lines, our_lines = old.splitlines(keepends=True), ours.splitlines(keepends=True)
+    if not old_lines:
+        return None
+    last = old_lines[-1].rstrip(b"\r\n")
+    for at in range(len(our_lines) - 1, -1, -1):
+        if our_lines[at].rstrip(b"\r\n") == last:
+            extra = b"".join(our_lines[at + 1 :])
+            return (b"".join(our_lines[: at + 1]), extra) if extra.strip() else None
+    return None
+
+
 def merge_with_tail(
     current: bytes, base: bytes, new: bytes, heading: bytes, base_label: str, new_label: str
 ) -> tuple[bytes, bool] | None:
@@ -162,21 +176,27 @@ def merge_with_tail(
     writes, from the line `heading` to the end: what comes before the section, then the section.
 
     The section's place is last, so text the repository added at the end of its file stays before
-    it and the two no longer meet. Returns (content, True when the part before the section needed
-    no conflict markers), or None when this is no better than the merge of the whole file: the
-    template has no such section, the section itself meets what the repository did to it, or git
-    cannot merge."""
+    it and the two no longer meet. Lines the repository added after the template's last line are
+    put back after the merged text, so a change of that last line does not meet them either; the
+    rest is merged three ways as before, and marked where the two sides meet. A template without
+    the section (an adopted repository) is one part. Returns (content, True when no conflict
+    markers were needed), or None when the section itself meets what the repository did to it,
+    or git cannot merge."""
     newline = b"\r\n" if _is_crlf(current) else b"\n"
     (ours, our_tail), (old, old_tail), (theirs, their_tail) = (
         _split_tail(data, heading, newline) for data in (current, base, new)
     )
-    if not their_tail:
-        return None
     try:
         tail, tail_clean = three_way(our_tail, old_tail, their_tail, base_label, new_label)
         if not tail_clean:
             return None
-        body, body_clean = three_way(ours, old, theirs, base_label, new_label)
+        # git merge-file marks two edits that touch: the template changing its last line and the
+        # repository adding lines right after it. Those lines are set aside and put back after.
+        parts = _appended(ours, old)
+        core, extra = parts if parts else (ours, b"")
+        body, body_clean = three_way(core, old, theirs, base_label, new_label)
+        if extra:
+            body = body.rstrip(b"\r\n") + newline + extra
     except MergeUnavailable:
         return None
     if not tail:

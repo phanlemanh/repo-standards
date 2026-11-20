@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Fixed: a team repository without the agent pipeline is not told that a gate raises the tier
+The rule "Never delete or weaken a test to get green, and never loosen an `agent:` setting" in
+`AGENTS.md` (from `55-autonomy.md`) went on "The gate sees both and raises the tier." Every team
+repository got it, but only the agent pipeline runs that gate: elsewhere no gate sees anything.
+
+- The rule keeps its first sentence. What catches a miss is said in "What holds these rules",
+  which names the gate only where `.github/workflows/pr-pipeline.yml` is. A repository with the
+  pipeline is still told so, there and in its own fragment.
+- That rule is the last line of the rules in a team repository, right where a repository adds
+  rules of its own. `git merge-file` marks two edits that touch, so the upgrade would have left
+  conflict markers in such a repository. The merge of `AGENTS.md` now sets aside the lines a
+  repository added after the template's last line, merges the rest three ways as before, and puts
+  them back after it. A repository that also reworded the template's last line is still marked
+  there.
+- This also closes a gap 0.10.0 listed: rules kept right before the section, upgraded from
+  starter to team, were marked because nothing said whether the team's rules or the
+  repository's come first. Now the team's come first, then the repository's, then the section.
+
+**What breaks on upgrade**: nothing. `AGENTS.md` loses one sentence, and a repository with rules
+of its own at the end gets them after the template's text, as before.
+
 ### Changed: the flow measure tells where the time and the red go (RS10)
 `tools/sdlc_metrics.py` printed about half the lines of the plan's measure; the rest were counted
 by hand once, in the trace of decision to merge on `onehub-inventory`. It now prints them.
