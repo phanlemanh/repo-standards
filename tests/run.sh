@@ -1921,6 +1921,8 @@ grep -v '^default_install_hook_types' .pre-commit-config.yaml | grep -q 'commit-
 case "${CC_HOOK:-format}" in
   # pre-commit itself cannot run (its own words)
   broken) echo "An error has occurred: InvalidConfigError: "; echo "=====> .pre-commit-config.yaml is not a file"; exit 1 ;;
+  # the same, with a line in its output that reads like a workflow command
+  brokenforged) echo "::warning::forged by a hook"; echo "An error has occurred: InvalidConfigError: "; exit 1 ;;
   # a hook whose only rule is the length of the first line
   maxlen) [ "$(head -1 "$f" | wc -c)" -le 73 ]; exit $? ;;
   # a hook repository pre-commit cannot fetch: its other wording, and exit code 3
@@ -1991,6 +1993,58 @@ for words in 'An error has occurred in login' 'An unexpected error has occurred:
   { cc true "$words" || true; } | grep -q '::error::Commit bbb' || miss "real walls: the commit check does not name a refused commit whose message holds pre-commit's error words ($words)"
   if { cc true "$words" || true; } | grep -q '::error::pre-commit could not run'; then miss "real walls: the commit check reads a refused commit as pre-commit failing, from words in its message ($words)"; fi
 done
+# what a hook prints may hold the commit message, and its author wrote that: the job runs from the
+# default branch (pull_request_target), so no line of it may reach the runner as a workflow command.
+# cc_fenced <output file> <text>: every line holding the text is inside a ::stop-commands:: fence
+# that is closed again, and the job's own verdict is outside one.
+cc_fenced() { python3 - "$1" "$2" <<'PY_FENCE'
+import re, sys
+lines, text = open(sys.argv[1], encoding="utf-8").read().splitlines(), sys.argv[2]
+fence, inside, outside, verdict, tokens = None, 0, 0, 0, []
+for line in lines:
+    if fence is None:
+        opened = re.fullmatch(r"::stop-commands::([0-9a-f]{32,})", line)
+        if opened:
+            fence = opened.group(1); tokens.append(fence)
+        elif line.startswith("::error::Commit bbb") or line.startswith("::error::pre-commit could not run"):
+            verdict += 1  # the job's own line: it may quote the title, after its own words
+        elif text in line and line.startswith("::"):
+            outside += 1
+    elif line == f"::{fence}::":
+        fence = None
+    elif text in line:
+        inside += 1
+print("ok" if fence is None and inside and not outside and verdict == 1 and len(set(tokens)) == len(tokens)
+      else f"inside={inside} outside={outside} verdict={verdict} open={fence is not None} tokens={len(tokens)}")
+print(" ".join(tokens))
+PY_FENCE
+}
+forged=$(printf 'changed stuff\n\n::error file=README.md::forged by the author\n::add-mask::changed')
+{ cc true "$forged" || true; } > "$TMP/cc-forged-1"; { cc true "$forged" || true; } > "$TMP/cc-forged-2"
+[ "$(cc_fenced "$TMP/cc-forged-1" 'forged by the author' | head -1)" = ok ] \
+  || miss "real walls: a line of a refused commit's message reaches the runner as a workflow command ($(cc_fenced "$TMP/cc-forged-1" 'forged by the author' | head -1))"
+[ "$(cc_fenced "$TMP/cc-forged-1" 'forged' | tail -1)" != "$(cc_fenced "$TMP/cc-forged-2" 'forged' | tail -1)" ] \
+  || miss "real walls: the fence around what a hook printed has the same token on every run"
+# the first line of a refused message is quoted in the job's own error line: a carriage return in
+# it must not start a line of its own
+{ cc true "$(printf 'changed\r::warning::forged after a return')" || true; } > "$TMP/cc-forged-cr"
+[ "$(cc_fenced "$TMP/cc-forged-cr" 'forged after a return' | head -1)" = ok ] \
+  || miss "real walls: a carriage return in a commit title starts a workflow command ($(cc_fenced "$TMP/cc-forged-cr" 'forged after a return' | head -1))"
+# a percent sign in the title is escaped, so the runner does not turn `%0A` into a line break
+{ cc true 'changed %0A::warning::forged by percent' || true; } | grep -q '^::error::Commit bbb .*changed %250A::warning::forged by percent$' \
+  || miss "real walls: a percent sign in a commit title is handed to the runner unescaped"
+# no token, no fence: what the hook printed is then not shown at all, and the job is red
+cc_od=$(command -v od)
+printf '#!/bin/sh\n[ -z "${CC_NO_OD:-}" ] || exit 1\nexec %s "$@"\n' "$cc_od" > "$TMP/ccbin/od"; chmod +x "$TMP/ccbin/od"
+if CC_NO_OD=1 cc true "$forged" > "$TMP/cc-forged-no-od" 2>&1; then miss "real walls: the commit check is green when it cannot fence what a hook printed"; fi
+if grep -q 'forged by the author' "$TMP/cc-forged-no-od"; then miss "real walls: without a fence, what the hook printed is shown all the same"; fi
+grep -q '^::error::.*could not be shown safely' "$TMP/cc-forged-no-od" || miss "real walls: the commit check does not say why it shows nothing of the hook"
+# the hooks run with no token of the repository left in the checkout
+grep -A3 'uses: actions/checkout' "$pt" | grep -q 'persist-credentials: false' || miss "real walls: the commit check leaves the checkout's token where the hooks run"
+# the same when pre-commit could not run: what it printed is shown, and read as text only
+{ CC_HOOK=brokenforged cc true 'fix: two' || true; } > "$TMP/cc-forged-3"
+[ "$(cc_fenced "$TMP/cc-forged-3" 'forged by a hook' | head -1)" = ok ] \
+  || miss "real walls: a line pre-commit printed when it could not run reaches the runner as a workflow command ($(cc_fenced "$TMP/cc-forged-3" 'forged by a hook' | head -1))"
 if CC_REPO="$TMP/cc-none" cc true 'fix: two' >/dev/null; then miss "real walls: the commit check is green in a repository with no commit-msg hook"; fi
 { CC_REPO="$TMP/cc-none" cc true 'fix: two' || true; } | grep -qi '::error::.*no hook.*commit-msg' || miss "real walls: the commit check does not say that no hook judges the commits"
 if grep -q 'pr-title.yml' "$ROOT/plugins/repo-setup/skills/github/SKILL.md"; then

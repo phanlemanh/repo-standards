@@ -40,7 +40,10 @@ jobs:
       pull-requests: read
     steps:
       # The base branch: the hook that judges the commits comes from it, not from the pull request.
+      # The hooks run in this checkout, so no token of the repository is left in it.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Check every commit the branch would add
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,10 +78,28 @@ jobs:
             fi
             return "$code"
           }
+          # What a hook printed is shown as text only. It may hold the commit message, which the
+          # author of the pull request wrote, and this job runs from the base branch: a line of it
+          # that starts with `::` must not reach the runner as a workflow command. The runner
+          # reads no command until the token comes back, and the token is new on every call.
+          # Without a token there is no fence: then nothing of it is shown, and the job is red.
+          show_hook_output() {
+            fence=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n') || fence=
+            if [ "${#fence}" -ne 32 ]; then
+              echo "::error::What the commit-msg hooks printed could not be shown safely (no random token on this runner). Run the hooks on the commits locally to read it."
+              exit 1
+            fi
+            echo "::stop-commands::$fence"
+            cat "$RUNNER_TEMP/hook-out"
+            printf '\n::%s::\n' "$fence"
+          }
+          # Text the job quotes in its own lines: no control character (a carriage return would
+          # start a line of its own), and `%` escaped, as the runner asks for a command's text.
+          quoted() { tr -d '\000-\037' | sed 's/%/%25/g'; }
           # An error of pre-commit is not a refusal: the commits are not blamed for it.
           could_not_run() {
-            cat "$RUNNER_TEMP/hook-out"
-            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -E -A1 "$own_error" "$RUNNER_TEMP/hook-out" | tr '\n' ' ')"
+            show_hook_output
+            echo "::error::pre-commit could not run in this repository, so the commits were not judged: $(grep -E -A1 "$own_error" "$RUNNER_TEMP/hook-out" | tr '\n' ' ' | quoted)"
             exit 1
           }
           # First, do the hooks judge anything? Two messages no rule should accept, one a single
@@ -108,8 +129,8 @@ jobs:
             answer=0; judge "$RUNNER_TEMP/message" || answer=$?
             case "$answer" in
               0) ;;
-              1) cat "$RUNNER_TEMP/hook-out"
-                 echo "::error::Commit $sha does not pass this repository's commit-msg hooks: $(head -1 "$RUNNER_TEMP/message")"; failed=1 ;;
+              1) show_hook_output
+                 echo "::error::Commit $sha does not pass this repository's commit-msg hooks: $(head -1 "$RUNNER_TEMP/message" | quoted)"; failed=1 ;;
               *) could_not_run ;;
             esac
           done < "$RUNNER_TEMP/shas"
