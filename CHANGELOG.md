@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+### Changed: the flow measure tells where the time and the red go (RS10)
+`tools/sdlc_metrics.py` printed about half the lines of the plan's measure; the rest were counted
+by hand once, in the trace of decision to merge on `onehub-inventory`. It now prints them.
+
+- **Late red no longer counts a draft.** Since the tiered CI (0.9.0) the summary job `check` is
+  red while a pull request is a draft, because the heavy tier is skipped. Such a red (red at the
+  step `Every tier is green`, beside a skipped job and no other red) was counted as late red. It
+  is now counted apart, on a line of its own, and late red counts only reds that say something
+  failed.
+- **One row per CI job:** runs, green, red, cancelled, median minutes, machine hours, and how many
+  reds ended at a step that runs checks (a `make` step), as against the summary step, another
+  step, or a step not read.
+- **The steps red on two or more branches**, as a sign of a red that is not one pull request's.
+  Gate jobs and the summary step are left out. Test names are not read: that needs the log and
+  the format of a test runner, and the page says so.
+- **How a merged pull request spent its time,** from GitHub and git only: opened to last ready
+  for review, ready to the last required check green on its last head (the checks the rules of
+  the default branch require), green to merged; and the pushes (new heads CI ran on) and merges
+  of the default branch after it was last ready. No file of the feature loop is read.
+- **`--split DATE|TAG`** reports the window before and from a moment: a date, an ISO time, or a
+  tag or commit of the clone. A pull request is on the side of its merge, an open one on the
+  later side, a run on the side it was created.
+- The tool is split into `sdlc_gh.py`, `sdlc_jobs.py`, `sdlc_pulls.py` and `sdlc_report.py`
+  beside it, so no file nears the size limit.
+
+**What breaks on upgrade**: the JSON of `--json` gains keys (`ci.jobs`, `ci.waiting_red`,
+`ci.red_steps`, `ci.red_across_branches`, `pulls`), and with `--split` its top level becomes
+`{split, before, after}`. Late red can go down on a repository with drafts: that is the
+correction, not a change of the repository. The tool asks GitHub more (one timeline and one list
+of check runs per merged pull request, the rules of the default branch), so a run takes longer:
+on `onehub-inventory` one 11-day run makes about 2,200 API calls (1,729 workflow runs, each with
+its jobs), close to half of GitHub's 5,000 an hour. Run one at a time.
+Four new files land in `tools/`; a repository that copied `sdlc_metrics.py` alone must take them
+too.
+
+**Known gaps**: a pull request last ready before the window has its pushes left out, and the page
+says how many. A repository whose rules require no check gets no times to and from green, with
+that reason. A pull request with more than 250 commits loses merges, as before.
+
 ## 0.10.2 — 2026-11-20
 
 Three fixes at the seams with design-assembly and delivery-loop. The first two were found by
