@@ -2218,6 +2218,11 @@ stale=$(cd "$ROOT" && git ls-files | grep -E "$old_names" || true)
 [ -z "$stale" ] || miss "own rules: a document still has a Vietnamese file name: $stale"
 stale=$(cd "$ROOT" && git grep -l -E "$old_names" -- . ':!tests/run.sh' || true)
 [ -z "$stale" ] || miss "own rules: a file still points at a renamed document: $(echo $stale)"
+# 45c. the plugin's own scripts keep the size limit every repository is given: 800 lines a file
+for script in "$ROOT"/plugins/repo-setup/scripts/*.py; do
+  n=$(wc -l < "$script" | tr -d ' ')
+  [ "$n" -le 800 ] || miss "own rules: ${script#"$ROOT"/} has $n lines, more than 800"
+done
 echo "ok  own rules (or misses reported above)"
 
 # 46. parallel work does not queue (docs/three-repo-overview-design.md, RS2a and RS10): the one file
