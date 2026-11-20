@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.10.2 — 2026-11-20
 
-Both found by reading the seams with design-assembly and delivery-loop on a repository that has
-all three (`onehub-inventory`), then by running the setup.
+Three fixes at the seams with design-assembly and delivery-loop. The first two were found by
+reading each seam on both sides, on a repository that has all three tools (`onehub-inventory`),
+then by running the setup; the third by that repository's acceptance round.
 
 ### Fixed: `gate` is the setup's own check name only where the agent pipeline reports it
 `governance/autonomy.yaml` refused `gate` under `required_checks` ("is one of the setup's own
@@ -73,6 +74,45 @@ change through the three-way merge.
 than that and does not say when a branch has more. `pipx run pre-commit` and the two actions are
 named by a moving version, not a pinned one. The words of a refused commit's title still appear
 in the job's error line, as text.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI:
+  on `main` at `c1dbe05` (the two seam fixes merged) all five checks green, `e2e` in 23 minutes;
+  on the head of the pull request with the third fix, `ad0761a`, all five green, `e2e` in 22
+  minutes. The merge of that pull request, `a6491c7`, has the same tree; its run on `main` was
+  still going when this was written.
+- The upgrade case of the end-to-end suite now starts from 0.10.1: read in the log of the run on
+  `main` at `c1dbe05`, the first one after that tag (`upgrade-python-from-repo-setup-v0.10.1`).
+  This closes what 0.10.1 listed as not yet run.
+- The probe repository is on the tag 0.10.1 (phanlemanh/design-ci-probe#21): exit code 0, only
+  the manifest changed, all eight checks green. With the tag 0.10.0 the same run marked the whole
+  of `AGENTS.md`.
+- `onehub-inventory` upgraded from 0.9.0 to the tag 0.10.1 on a pull request
+  (phanlemanh/onehub-inventory#93, not merged when this was written): one file updated, one
+  merged, none marked; its light tier passes on a machine (2466 tests); the acceptance round of
+  that repository judged the change with nine measures, all passed.
+- The two seam fixes, each by a real run of the setup: a team repository without agent workflows
+  that names `gate`, and a repository with its own `mk/design.mk` that adds the `design`
+  capability. The fence around hook output, by running the job's own shell with stand-ins for
+  `gh` and `pipx` and reading the output line by line as the runner does.
+- Independent reviews of the three fixes found nothing critical or high. Their medium and low
+  points are answered in the fixes, each with a test that failed first.
+- Not yet run: the fenced job on a real runner (`stop-commands` and `persist-credentials: false`
+  are read from GitHub's documentation); either seam fix on `onehub-inventory`, where both cases
+  were seen; the join with design-assembly's real `affected.mjs`, which this side tests with a
+  stand-in.
+
+### Known gaps
+- The gaps of the three fixes are listed with them above.
+- The gaps 0.10.0 and 0.10.1 list are still open.
+- How pull requests are merged is not stored: a run of `tools/github_setup.py` without
+  `--merge-method merge` sets a repository back to squash only, and a feature loop that needs
+  merge commits then breaks. The choice is kept by word.
+- The names and shapes other tools rely on (the lists `CHECK_TARGETS`, `HEAVY_TARGETS` and
+  `DERIVED_TARGETS`, the job names, the JSON of `affected.mjs`, the strings design-assembly
+  recognises this setup's design checks by) are written down nowhere and pinned by no test.
+- `plugins/repo-setup/scripts/apply.py` is 976 lines, over the 800-line limit for one file.
 
 ## 0.10.1 — 2026-11-20
 
