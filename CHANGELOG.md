@@ -21,6 +21,22 @@ that needs merge commits (delivery-loop) cannot work with.
 A repository that merges with merge commits must set `merge_method: merge` in the same pull
 request, or the next `github_setup.py --apply` sets it to squash. After that, a script that
 passes `--merge-method merge` against a policy that says `squash` stops with exit code 2.
+### Added: the flow measure says which numbers are over their threshold
+The owner chose a line in the report, and nothing more (2026-11-21): no exit code, no workflow, no
+target in `make check`.
+
+- `tools/sdlc_metrics.py` prints a "Thresholds" section, and `--json` a `thresholds` list:
+  late red (more than 20% of the heads where the gate passed), red on the default branch per
+  workflow (more than 1 in 20 finished runs), and the file in conflict most often (in more than
+  half of the conflicting merges of the default branch). Each line says over, within, too few to
+  tell (fewer than 20 cases), or not read, with the reason.
+- The values are starting values the machine suggested on 2026-11-16; nothing derived them from
+  data. They are named constants in the new `tools/sdlc_limits.py`, with the minimum sample.
+- A number over its threshold never changes the exit code. Nothing runs the tool by itself: the
+  page says how to run it and write it out (`--write`).
+
+**What breaks on upgrade**: nothing. The JSON of `--json` gains the key `thresholds`, one more file
+lands in `tools/`, and the page gains a section.
 
 ### Fixed: a team repository without the agent pipeline is not told that a gate raises the tier
 The rule "Never delete or weaken a test to get green, and never loosen an `agent:` setting" in
