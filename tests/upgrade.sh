@@ -576,4 +576,68 @@ PY2
 )
 [ "$up_dev" = ok ] || miss "upgrade: versions between tags: $up_dev"
 
+# 47p. found on design-ci-probe and onehub-inventory (-> 0.10.3): the upgrade wrote
+#      `merge_method: squash` into the policy of a repository that merges with merge commits, and
+#      both had to change the line by hand. A repository that exists gets the method it uses: a
+#      value its policy already names stays as it is; where the key is new, the last commits of the
+#      branch decide (a merge commit among them: merge). Two stand-in releases: one from before
+#      the key, one that wrote `squash` as a fixed word, as 0.10.3 did.
+mm_policy="presets/_core/team/governance/autonomy.yaml.tmpl"
+mm_release() { # <dir> <nokey|literal>: a release whose policy template is of that kind
+  mkdir -p "$1"; cp -R "$old" "$1/repo-setup-v0.0.1"
+  python3 - "$1/repo-setup-v0.0.1/$mm_policy" "$2" <<'PY2'
+import re, sys
+path, kind = sys.argv[1:]
+text = open(path, encoding="utf-8").read()
+block = re.compile(r"# How pull requests merge:.*?\nmerge_method: [^\n]*\n\n", re.S)
+assert len(block.findall(text)) == 1, "the template has no merge_method block to change"
+if kind == "nokey":
+    text = block.sub("", text)
+else:
+    text = re.sub(r"^merge_method: .*$", "merge_method: squash", text, flags=re.M)
+open(path, "w", encoding="utf-8").write(text)
+PY2
+}
+mm_git() { git -C "$1" -c user.name=t -c user.email=t@example.com "${@:2}"; }
+mm_repo() { # <dir> <release dir> <merges|linear>: a team repository of that release, with that history
+  mkdir -p "$1"; git -C "$1" init -q -b main
+  python3 "$2/repo-setup-v0.0.1/scripts/apply.py" --target "$1" --preset python --level team \
+    --var project_name=Up --var description=x --var owner=acme >/dev/null
+  # a manifest of a release from before this change holds no merge_method
+  manifest_set "$1" 'm["vars"].pop("merge_method", None)'
+  mm_git "$1" add -A && mm_git "$1" commit -q -m "set up"
+  if [ "$3" = merges ]; then
+    mm_git "$1" checkout -q -b side && echo two > "$1/two.txt" && mm_git "$1" add -A && mm_git "$1" commit -q -m two
+    mm_git "$1" checkout -q main && mm_git "$1" merge -q --no-ff --no-edit side
+  else
+    echo two > "$1/two.txt" && mm_git "$1" add -A && mm_git "$1" commit -q -m two
+  fi
+}
+mm_line() { grep '^merge_method:' "$1/governance/autonomy.yaml" || true; }
+mm_nokey="$TMP/arch-mm-nokey"; mm_release "$mm_nokey" nokey
+mm_literal="$TMP/arch-mm-literal"; mm_release "$mm_literal" literal
+# the key is new, the history has a merge commit: merge
+mm1="$TMP/up-mm1"; mm_repo "$mm1" "$mm_nokey" merges
+[ -z "$(mm_line "$mm1")" ] || miss "upgrade: the stand-in release from before the key still writes merge_method"
+up_apply "$S/apply.py" "$mm1" --base-from "$mm_nokey" >/dev/null
+[ "$(cat "$mm1.rc")" = 0 ] || miss "upgrade: the merge method of a repository with merge commits ends the run with $(cat "$mm1.rc")"
+[ "$(mm_line "$mm1")" = "merge_method: merge" ] || miss "upgrade: a repository that merges with merge commits gets '$(mm_line "$mm1")', not merge"
+in_group "$mm1" marked governance/autonomy.yaml && miss "upgrade: the policy of a repository with merge commits is marked"
+[ "$(manifest_get "$mm1" 'm["vars"].get("merge_method")')" = merge ] || miss "upgrade: the manifest does not keep the merge method that was chosen"
+# the key is new, the history is one line of commits: squash
+mm2="$TMP/up-mm2"; mm_repo "$mm2" "$mm_nokey" linear
+up_apply "$S/apply.py" "$mm2" --base-from "$mm_nokey" >/dev/null
+[ "$(mm_line "$mm2")" = "merge_method: squash" ] || miss "upgrade: a repository with no merge commit gets '$(mm_line "$mm2")', not squash"
+# the policy names merge already (changed by hand after 0.10.3): it stays, and nothing is marked
+mm3="$TMP/up-mm3"; mm_repo "$mm3" "$mm_literal" linear
+subst 's/^merge_method: squash$/merge_method: merge/' "$mm3/governance/autonomy.yaml"
+up_apply "$S/apply.py" "$mm3" --base-from "$mm_literal" >/dev/null
+[ "$(cat "$mm3.rc")" = 0 ] || miss "upgrade: a policy that already names merge ends the run with $(cat "$mm3.rc")"
+[ "$(mm_line "$mm3")" = "merge_method: merge" ] || miss "upgrade: a merge method the policy names was changed to '$(mm_line "$mm3")'"
+in_group "$mm3" marked governance/autonomy.yaml && miss "upgrade: a policy that already names merge is marked"
+# the policy names squash and the history has merge commits: a value that is stored is never changed
+mm4="$TMP/up-mm4"; mm_repo "$mm4" "$mm_literal" merges
+up_apply "$S/apply.py" "$mm4" --base-from "$mm_literal" >/dev/null
+[ "$(mm_line "$mm4")" = "merge_method: squash" ] || miss "upgrade: a stored merge method was changed to '$(mm_line "$mm4")' because of the history"
+
 echo "ok  upgrade path (or misses reported above)"

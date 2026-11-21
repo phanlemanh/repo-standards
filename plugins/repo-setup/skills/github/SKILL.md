@@ -22,6 +22,13 @@ as `merge_method` in `governance/autonomy.yaml`:
   repository's process reads commits from the branch after the merge, for example a commit that
   must still exist on the default branch.
 
+A repository that had commits before the setup first wrote the key got the method its last merges
+showed: `merge` when one of the last 20 commits of the branch was a merge commit, else `squash`.
+That is a reading of the history, not a decision: check the value against what the team wants
+before a run with `--apply`. An upgrade does not change a value the policy names, and refuses a
+`--var merge_method` that says otherwise. In a shallow clone that shows no merge commit the setup
+cannot read the history: it stops and asks for `--var merge_method=squash` or `merge`.
+
 Changing `merge_method` is a change to `governance/`, so a person makes it, in a pull request of
 its own. A policy from before the key has no `merge_method`: then a run leaves the merge settings
 as they are, and `--merge-method merge` (or `squash`) sets them for that run only; suggest storing

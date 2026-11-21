@@ -52,3 +52,7 @@ existing = [".github/SECURITY.md", "docs/SECURITY.md"]
 [vars]
 # Extra Dockerfile lines contributed by an archetype (deploy/container uses it).
 docker_extra_copy = ""
+# The merge method of governance/autonomy.yaml when nothing chose one: a manifest written before
+# the key was a variable holds none, and the policy it rendered said squash. apply.py sets the
+# variable for a team repository from its policy, then its history (scripts/merge_choice.py).
+merge_method = "squash"
