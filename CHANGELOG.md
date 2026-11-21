@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Fixed: the policy file says what the agent pipeline does only where there is one
+`governance/autonomy.yaml` carries a comment on the proof: once a check is named, "the PR pipeline
+stops running its own reviewer agent". Every team repository got that line as a fact, also one
+with no agent workflows, where no such pipeline runs. It is the same slip 0.10.3 took out of
+`AGENTS.md`. Found on `onehub-inventory` while it took 0.10.3.
+
+- The line now states its condition: "with agent workflows, the PR pipeline stops running its own
+  reviewer agent".
+- A check holds it: in a team repository without agent workflows, no line of the policy names the
+  pipeline or its reviewer agent without those words.
+- The `github` skill said the same thing as a fact, and still said a proof may never be named
+  `gate`, which 0.10.2 allowed where no agent workflows report under that name. Both sentences
+  now state the condition. No check holds the wording of a skill.
+
+**What breaks on upgrade**: nothing. One comment of `governance/autonomy.yaml` changes; a
+repository that edited the lines around it gets the usual three-way merge.
+
 ## 0.10.3 — 2026-11-21
 
 ### Changed: the merge method is stored in `governance/autonomy.yaml`

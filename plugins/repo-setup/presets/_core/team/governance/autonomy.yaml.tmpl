@@ -19,7 +19,8 @@ default: medium
 #   - `python3 tools/github_setup.py --apply` requires that check on the default branch;
 #   - `default` above may become `low`, and only the rules of the game keep an owner
 #     (`make codeowners`);
-#   - the PR pipeline stops running its own reviewer agent: one verdict, paid for once.
+#   - with agent workflows, the PR pipeline stops running its own reviewer agent: one verdict,
+#     paid for once.
 # `default: low` without a proof is refused: a person leaves only when a machine takes the place.
 proof:
   check: ""
