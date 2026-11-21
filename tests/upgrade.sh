@@ -540,4 +540,40 @@ in_group "$up_n2" merged AGENTS.md || miss "upgrade: starter to team from a buil
 grep -qxF 'A note of this repository.' "$up_n2/AGENTS.md" || miss "upgrade: the merge lost the repository's note in AGENTS.md"
 grep -q '^<<<<<<< ' "$up_n2/AGENTS.md" && miss "upgrade: AGENTS.md holds conflict markers after starter to team"
 
+# 47o. a build between two tags carries a version of its own, X.Y.Z.devN (the owner, 2026-11-21): it
+#      sorts after the release before it and before the release it leads to, it is never fetched as
+#      a release (no tag has it), and a file it wrote is "behind" once a later release ran
+up_dev=$(python3 - "$S" <<'PY2' 2>&1 || true
+import sys
+sys.path.insert(0, sys.argv[1])
+import upgrade_base as u, upgrade_report as r
+order = ["0.9.9", "0.10.2", "0.10.3.dev0", "0.10.3.dev1", "0.10.3", "0.11.0.dev0", "0.11.0"]
+keys = [u.version_key(v) for v in order]
+problems = []
+if None in keys:
+    problems.append(f"no key for {order[keys.index(None)]}")
+elif keys != sorted(keys) or len(set(keys)) != len(keys):
+    problems.append(f"the order is not {order}")
+for wrong in ("0.10.3dev0", "0.10.3.dev", "0.10.3-dev.0", "v0.10.3"):
+    if u.version_key(wrong) is not None:
+        problems.append(f"{wrong} is taken for a version")
+if u.is_release("0.10.3.dev0") or not u.is_release("0.10.3"):
+    problems.append("is_release does not tell a release from a build between tags")
+finder = u.BaseFinder(lambda root: {}, None, "0.11.0", None, None)
+finder._released = ["0.11.0", "0.10.3", "0.10.2", "0.9.9"]
+tried = [v for _, v, _ in finder._candidates("0.10.3.dev0")]
+if tried != ["0.10.2", "0.9.9"]:
+    problems.append(f"a base recorded at 0.10.3.dev0 is looked for in {tried}, not in 0.10.2 and below")
+import tempfile, pathlib, json, hashlib
+with tempfile.TemporaryDirectory() as d:
+    (pathlib.Path(d) / "a.txt").write_text("x")
+    setup = {"version": "0.11.0", "files": {"a.txt": hashlib.sha256(b"x").hexdigest()},
+             "file_versions": {"a.txt": "0.10.3.dev0"}}
+    if r.report(pathlib.Path(d), setup).behind != [("a.txt", "0.10.3.dev0")]:
+        problems.append("a file written at 0.10.3.dev0 is not behind 0.11.0")
+print("\n".join(problems) or "ok")
+PY2
+)
+[ "$up_dev" = ok ] || miss "upgrade: versions between tags: $up_dev"
+
 echo "ok  upgrade path (or misses reported above)"
