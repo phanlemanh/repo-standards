@@ -1651,6 +1651,67 @@ case "$out" in *"merge_method: rebase is not one of squash, merge"*) ;; *) miss 
 rc=0; out=$(dry "$gsb") || rc=$?
 [ "$rc" = 1 ] || miss "merge method: github_setup goes on with merge_method: rebase (exit $rc)"
 case "$out" in *"merge_method: rebase"*) ;; *) miss "merge method: github_setup does not say which merge_method it refused: $out" ;; esac
+# 42c. the method a repository gets when the setup first writes the key is the one it uses (the
+#      owner, 2026-11-21): the last commits of the branch decide, a merge commit among them means
+#      merge. A repository with no commit gets squash (42b). --var merge_method=... wins. The upgrade
+#      cases, where a policy already names a value, are in tests/upgrade.sh (47p).
+mc_git() { git -C "$1" -c user.name=t -c user.email=t@example.com "${@:2}"; }
+mc_repo() { # <dir> <merges|linear>: a repository with that history, before the setup comes
+  rm -rf "$1"; mkdir -p "$1"; git -C "$1" init -q -b main
+  echo one > "$1/one.txt" && mc_git "$1" add -A && mc_git "$1" commit -q -m one
+  if [ "$2" = merges ]; then
+    mc_git "$1" checkout -q -b side && echo two > "$1/two.txt" && mc_git "$1" add -A && mc_git "$1" commit -q -m two
+    mc_git "$1" checkout -q main && mc_git "$1" merge -q --no-ff --no-edit side
+  else
+    echo two > "$1/two.txt" && mc_git "$1" add -A && mc_git "$1" commit -q -m two
+  fi
+}
+mc_apply() { python3 "$S/apply.py" --target "$1" --preset python --level "${MC_LEVEL:-team}" --var project_name=M --var description=x --var owner=acme "${@:2}"; }
+mc_line() { grep '^merge_method:' "$1/governance/autonomy.yaml" || true; }
+mc_var() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]+'/.repo-setup.json'))['vars'].get('merge_method', 'none'))" "$1"; }
+mcm="$TMP/mc-merges"; mc_repo "$mcm" merges; mc_apply "$mcm" >/dev/null
+[ "$(mc_line "$mcm")" = "merge_method: merge" ] || miss "merge method: a repository that merges with merge commits gets '$(mc_line "$mcm")', not merge"
+[ "$(mc_var "$mcm")" = merge ] || miss "merge method: the manifest does not keep the method that was chosen ($(mc_var "$mcm"))"
+mcl="$TMP/mc-linear"; mc_repo "$mcl" linear; mc_apply "$mcl" >/dev/null
+[ "$(mc_line "$mcl")" = "merge_method: squash" ] || miss "merge method: a repository with no merge commit gets '$(mc_line "$mcl")', not squash"
+mcv="$TMP/mc-var"; mc_repo "$mcv" linear; mc_apply "$mcv" --var merge_method=merge >/dev/null
+[ "$(mc_line "$mcv")" = "merge_method: merge" ] || miss "merge method: --var merge_method=merge is not used ('$(mc_line "$mcv")')"
+mcb="$TMP/mc-bad"; mc_repo "$mcb" linear
+rc=0; out=$(mc_apply "$mcb" --var merge_method=rebase 2>&1) || rc=$?
+[ "$rc" != 0 ] || miss "merge method: --var merge_method=rebase is accepted"
+case "$out" in *squash*merge*) ;; *) miss "merge method: the refusal of --var merge_method=rebase does not name the two methods: $out" ;; esac
+[ ! -e "$mcb/governance/autonomy.yaml" ] || miss "merge method: a refused merge_method still wrote the policy"
+# a starter repository has no policy: it is not given a merge method to carry
+mcs="$TMP/mc-starter"; mc_repo "$mcs" merges; MC_LEVEL=starter mc_apply "$mcs" >/dev/null
+[ "$(mc_var "$mcs")" = none ] || miss "merge method: a starter repository's manifest holds a merge method ($(mc_var "$mcs"))"
+# ... and gets it from its history on the run that makes it a team repository
+python3 "$S/apply.py" --target "$mcs" --level team >/dev/null
+[ "$(mc_line "$mcs")" = "merge_method: merge" ] || miss "merge method: starter to team in a repository with merge commits gives '$(mc_line "$mcs")', not merge"
+# Only the repository's own history counts. A folder inside another repository has none of its
+# own: git would answer for the repository around it.
+mco="$TMP/mc-outer"; mc_repo "$mco" merges; mkdir -p "$mco/new-service"
+mc_apply "$mco/new-service" >/dev/null
+[ "$(mc_line "$mco/new-service")" = "merge_method: squash" ] || miss "merge method: a folder inside another repository takes that repository's history ('$(mc_line "$mco/new-service")')"
+# A shallow clone hides the parents of its last commits: a merge commit there reads as a plain one.
+# Where no merge commit is seen in a shallow history, the run does not guess: it asks for the word.
+mch="$TMP/mc-shallow"; rm -rf "$mch"; git clone -q --depth 1 "file://$mcm" "$mch"
+rm -f "$mch/governance/autonomy.yaml" "$mch/.repo-setup.json"
+rc=0; out=$(mc_apply "$mch" 2>&1) || rc=$?
+[ "$rc" != 0 ] || miss "merge method: a shallow history with no merge commit in sight is read as $(mc_line "$mch")"
+case "$out" in *shallow*"--var merge_method"*) ;; *) miss "merge method: the refusal on a shallow history does not say why and what to pass: $out" ;; esac
+mc_apply "$mch" --var merge_method=merge >/dev/null
+[ "$(mc_line "$mch")" = "merge_method: merge" ] || miss "merge method: --var merge_method=merge on a shallow history gives '$(mc_line "$mch")'"
+# The policy is where the choice is made. After a person changes it, the next run keeps their word
+# and the manifest follows; an option that says otherwise is refused, as tools/github_setup.py does.
+mcp="$TMP/mc-person"; mc_repo "$mcp" merges; mc_apply "$mcp" >/dev/null
+subst 's/^merge_method: merge$/merge_method: squash/' "$mcp/governance/autonomy.yaml"
+python3 "$S/apply.py" --target "$mcp" >/dev/null
+[ "$(mc_line "$mcp")" = "merge_method: squash" ] || miss "merge method: the word a person put in the policy was changed to '$(mc_line "$mcp")'"
+[ "$(mc_var "$mcp")" = squash ] || miss "merge method: the manifest does not follow the policy a person changed ($(mc_var "$mcp"))"
+rc=0; out=$(python3 "$S/apply.py" --target "$mcp" --var merge_method=merge 2>&1) || rc=$?
+[ "$rc" != 0 ] || miss "merge method: --var merge_method=merge against merge_method: squash in the policy is accepted"
+case "$out" in *"merge_method: squash"*governance/autonomy.yaml*) ;; *) miss "merge method: the refusal does not name the policy and its value: $out" ;; esac
+[ "$(mc_line "$mcp")" = "merge_method: squash" ] || miss "merge method: a refused option still changed the policy to '$(mc_line "$mcp")'"
 echo "ok  merge method (or misses reported above)"
 
 # 43. people decide, machines check (docs/setup-principles.md): nothing the setup generates uses a

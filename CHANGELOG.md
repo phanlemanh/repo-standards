@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Fixed: an existing repository gets the merge method it uses, not `squash`
+0.10.3 put `merge_method: squash` into the policy of every repository it upgraded. `squash` is
+right for a new repository; one that exists already merges one way or the other, and the next
+`tools/github_setup.py --apply` would have set it to squash only. Both repositories that took
+0.10.3, the probe repository and `onehub-inventory`, merge with merge commits, and both had to
+change the line by hand.
+
+- The method is now read for the repository, in this order: the value its policy names; else
+  `--var merge_method=merge` (or `squash`) of this run; else what an earlier run chose; else the
+  last 20 commits of the branch, where a merge commit means `merge`. A repository with no commit,
+  and a folder that is not the root of a repository of its own, get `squash`.
+- The policy is where the choice is made. A value it names stays as it is, the manifest
+  (`vars.merge_method`) follows it, and a `--var merge_method` that says otherwise is refused
+  with the line of the policy to change, as `tools/github_setup.py` refuses one. Another word
+  than `squash` or `merge` is refused too.
+- A shallow clone that shows no merge commit cannot be read: git hides the parents of its last
+  commits, so a merge commit there looks like any other. The run stops and asks for
+  `--var merge_method=...` or for the full history, and writes nothing.
+- Only a team repository has the policy, so only its manifest holds the variable.
+
+**What breaks on upgrade**: nothing for a repository on 0.10.3: its policy names a method
+already, and that value stays, also a `squash` the upgrade wrote and nobody changed. A repository
+that comes from before 0.10.3 gets `merge` where its history holds a merge commit. An upgrade run
+in a shallow clone of such a repository (`git clone --depth 1`, the default of
+`actions/checkout`) stops until it is told the method.
+
+**Known gaps**: the history is a guess. A repository that merges by rebase reads as `squash`; one
+that squashes and has a merge commit made by hand among its last 20 commits reads as `merge`. A
+`squash` that 0.10.3 wrote into a repository with merge commits cannot be told from a choice, so
+it stays until a person changes it.
+
 ### Fixed: the policy file says what the agent pipeline does only where there is one
 `governance/autonomy.yaml` carries a comment on the proof: once a check is named, "the PR pipeline
 stops running its own reviewer agent". Every team repository got that line as a fact, also one

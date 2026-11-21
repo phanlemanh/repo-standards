@@ -75,6 +75,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import blueprint  # noqa: E402
 import make_wiring  # noqa: E402
+import merge_choice  # noqa: E402
 import rule_kinds  # noqa: E402
 import upgrade_base  # noqa: E402
 import upgrade_merge  # noqa: E402
@@ -282,6 +283,22 @@ def main(argv: list[str] | None = None) -> int:
     missing = [k for k in REQUIRED_VARS if not raw_vars.get(k)]
     if missing:
         ap.error("Missing required --var: " + ", ".join(missing))
+    # The merge method of the policy (team level): the one the repository uses, read from its
+    # policy, then asked, then remembered, then seen in its history. See merge_choice.py.
+    asked_method = next(
+        (item.split("=", 1)[1].strip() for item in reversed(args.var)
+         if item.split("=", 1)[0].strip() == "merge_method"),
+        None,
+    )
+    if asked_method is not None and asked_method not in merge_choice.METHODS:
+        ap.error(f"--var merge_method={asked_method} is not one of "
+                 f"{', '.join(merge_choice.METHODS)}")
+    if level == "team":
+        try:
+            raw_vars["merge_method"] = merge_choice.decide(
+                target, asked_method, previous.get("vars", {}).get("merge_method"))
+        except ValueError as exc:
+            ap.error(str(exc))
     raw_vars.setdefault("today", _dt.date.today().isoformat())
     try:
         variables = derive_vars(raw_vars)
