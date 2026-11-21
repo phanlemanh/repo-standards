@@ -2306,6 +2306,64 @@ early=$(cd "$ROOT" && grep -nE '^[[:space:]]*(local[[:space:]]+)?[A-Za-z_][A-Za-
 # end (grep ... >/dev/null), and a here-string (`grep -q ... <<<"$x"`) has no pipe at all.
 early=$(cd "$ROOT" && grep -nE '\|[[:space:]]*grep([[:space:]]+-[a-zA-Z]+)*[[:space:]]+-[a-zA-Z]*[qm]' tests/*.sh || true)
 [ -z "$early" ] || miss "own rules: a pipe ends in grep -q or -m, which can stop the writer and read as a miss: $(printf '%s\n' "$early" | wc -l | tr -d ' ') places, first $(printf '%s\n' "$early" | sed -n 1p)"
+# 45d. a build between two tags carries a version of its own (the owner, 2026-11-21): while CHANGELOG.md has
+#      entries under "## Unreleased", the plugin's version is X.Y.Z.devN, so a repository set up from main
+#      never names a release that does not hold what it got. tools/bump_version.py dev sets it.
+own_version() { # <root>: "ok", or what does not hold
+  python3 - "$1" <<'PY'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+unreleased = text.split("\n## Unreleased\n", 1)[1].split("\n## ", 1)[0] if "\n## Unreleased\n" in text else ""
+version = json.loads((root / "plugins/repo-setup/.claude-plugin/plugin.json").read_text())["version"]
+market = [p["version"] for p in json.loads((root / ".claude-plugin/marketplace.json").read_text())["plugins"]
+          if p["name"] == "repo-setup"]
+bad = []
+if market != [version]:
+    bad.append(f"marketplace.json says {market}, plugin.json says {version}")
+if unreleased.strip() and not re.fullmatch(r"\d+\.\d+\.\d+\.dev\d+", version):
+    bad.append(f"CHANGELOG.md has entries under Unreleased and the version is {version}: run tools/bump_version.py dev")
+print("\n".join(bad) or "ok")
+PY
+}
+ov=$(own_version "$ROOT")
+[ "$ov" = ok ] || miss "own rules: $ov"
+# the bump tool, on a copy: dev after a release, then the release it leads to
+bv="$TMP/bump-own"; rm -rf "$bv"; mkdir -p "$bv/plugins/repo-setup" "$bv/tools"
+cp -R "$ROOT/.claude-plugin" "$bv/"; cp -R "$ROOT/plugins/repo-setup/.claude-plugin" "$bv/plugins/repo-setup/"
+cp "$ROOT/tools/bump_version.py" "$bv/tools/"
+bv_set() { python3 - "$bv" "$1" <<'PY'
+import json, pathlib, sys
+root, v = pathlib.Path(sys.argv[1]), sys.argv[2]
+for f in (root / "plugins/repo-setup/.claude-plugin/plugin.json", root / ".claude-plugin/marketplace.json"):
+    j = json.loads(f.read_text())
+    for p in j.get("plugins", [j]):
+        if p.get("name", "repo-setup") == "repo-setup":
+            p["version"] = v
+    f.write_text(json.dumps(j, indent=2) + "\n")
+PY
+}
+bv_is() { # <part> <expected version> <changelog section expected: yes|no>
+  printf '# Changelog\n\n## Unreleased\n\n- a change\n' > "$bv/CHANGELOG.md"
+  ( cd "$bv" && python3 tools/bump_version.py "$1" >/dev/null 2>&1 ) || { miss "own rules: bump_version.py $1 fails"; return; }
+  got=$(python3 -c "import json; print(json.load(open('$bv/plugins/repo-setup/.claude-plugin/plugin.json'))['version'])")
+  [ "$got" = "$2" ] || miss "own rules: bump_version.py $1 gives $got, not $2"
+  market=$(python3 -c "import json; print([p['version'] for p in json.load(open('$bv/.claude-plugin/marketplace.json'))['plugins']][0])")
+  [ "$market" = "$2" ] || miss "own rules: bump_version.py $1 leaves marketplace.json at $market"
+  if grep -q "^## $2 — " "$bv/CHANGELOG.md"; then
+    [ "$3" = yes ] || miss "own rules: bump_version.py $1 dates a changelog section for $2, a build between tags"
+  else
+    [ "$3" = no ] || miss "own rules: bump_version.py $1 adds no changelog section for the release $2"
+  fi
+}
+bv_set 0.10.2; bv_is dev 0.10.3.dev0 no
+bv_set 0.10.3.dev0; bv_is dev 0.10.3.dev1 no
+bv_set 0.10.3.dev1; bv_is patch 0.10.3 yes
+bv_set 0.10.3.dev1; bv_is minor 0.11.0 yes
+bv_set 0.10.3.dev0; bv_is 0.10.3 0.10.3 yes
+# the red direction: entries under Unreleased beside a release version
+bv_set 0.10.3
+[ "$(own_version "$bv")" != ok ] || miss "own rules: entries under Unreleased beside a release version go unseen"
 echo "ok  own rules (or misses reported above)"
 
 # 46. parallel work does not queue (docs/three-repo-overview-design.md, RS2a and RS10): the one file

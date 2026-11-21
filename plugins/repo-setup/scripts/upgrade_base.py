@@ -37,7 +37,8 @@ TAG_PREFIX = "repo-setup-v"
 ARCHIVE_URL = "https://codeload.github.com/{repo}/tar.gz/refs/tags/{tag}"
 FETCH_TIMEOUT = 30  # seconds, for the archive and for the list of tags
 PLUGIN_DIR = ("plugins", "repo-setup")
-VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+# A release, or a build between two tags (X.Y.Z.devN: on the way to X.Y.Z, after the release before).
+VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:\.dev(\d+))?$")
 ENTRY = re.compile(r"^" + re.escape(TAG_PREFIX) + r"(\d+\.\d+\.\d+)(\.tar\.gz)?$")
 
 
@@ -57,14 +58,25 @@ class Base:
     reason: str = ""
 
 
-def version_key(version: str) -> tuple[int, int, int] | None:
+def version_key(version: str) -> tuple[int, int, int, int, int] | None:
+    """Order of versions: X.Y.Z.devN comes after every release before X.Y.Z and before X.Y.Z."""
     m = VERSION.match(version)
-    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+    if not m:
+        return None
+    major, minor, patch, dev = m.groups()
+    release = (int(major), int(minor), int(patch))
+    return (*release, 0, int(dev)) if dev is not None else (*release, 1, 0)
+
+
+def is_release(version: str) -> bool:
+    """A version a tag can have. A build between two tags has none, so it is never fetched."""
+    m = VERSION.match(version)
+    return bool(m) and m.group(4) is None
 
 
 def _newest_first(versions: set[str]) -> list[str]:
     known = [v for v in versions if version_key(v) is not None]
-    return sorted(known, key=lambda v: version_key(v) or (0, 0, 0), reverse=True)
+    return sorted(known, key=lambda v: version_key(v) or (0, 0, 0, 0, 0), reverse=True)
 
 
 def released_versions(base_from: Path | None) -> list[str]:
@@ -209,7 +221,8 @@ class BaseFinder:
         """(cache key, version, root) in the order they are tried."""
         if version == self._current_version:
             yield "local", version, lambda: self._current_root
-        yield version, version, lambda: plugin_root_for(version, self._base_from, self._workdir)
+        if is_release(version):
+            yield version, version, lambda: plugin_root_for(version, self._base_from, self._workdir)
         for v in self._older(version):
             yield v, v, lambda v=v: plugin_root_for(v, self._base_from, self._workdir)
 
