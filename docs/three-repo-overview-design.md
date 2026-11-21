@@ -194,14 +194,14 @@ Mỗi gói chỉ có tên và mục tiêu. Cách làm nằm ở bản thiết k�
 | RS2a | `wiki/log.md` gộp kiểu hợp (`merge=union` trong `.gitattributes`): một dòng mẫu                                                       | 1       | Nhanh            | Đã dựng (2026-11-16), mục 46 bộ kiểm |
 | RS2b | Luật «mỗi tệp một người ghi»: sổ thành mảnh; tệp tổng hợp và mã sinh ra là vật dẫn xuất PR không mang; cơ chế dùng chung với DA1      | 1       | Nhanh            | Phát hành ở 0.8.0 và đo ở kho thử (2026-11-18), mục 48 bộ kiểm |
 | RS3  | Khuôn CI xếp tầng: tầng nhẹ mọi lần đẩy, tầng nặng khi PR sẵn sàng, một ô tổng luôn chạy; ô trình duyệt nhận danh sách màn hoặc bài   | 1       | Nguồn lực, nhanh | Phát hành ở 0.9.0 và đo ở kho thử (2026-11-18), mục 49 bộ kiểm |
-| RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Hoãn: chưa có bên đọc                |
+| RS4  | Bản đồ phạm vi: từ tệp đổi ra mô-đun bị ảnh hưởng, dựa trên `architecture/modules.yaml`                                               | 1       | Nền cho DL       | Đóng, không dựng (chủ kho, 2026-11-21): kit xếp vòng bằng `ranh_gioi` và `vung` của chính nó, không đọc `architecture/modules.yaml`; nếu gói DL4 của kit mở, kit đọc thẳng tệp đó |
 | RS5a | Tường cho biên thiết kế: PR đụng khuôn hay dòng màu thương hiệu thì lên hạng cao                                                      | 4       | Ít người         | Không dựng: `owner-calls` của design-assembly giữ, GitHub bắt buộc qua `check`; chủ kho chọn hướng A ngày 2026-11-21 (PR 55), mục 51c bộ kiểm |
-| RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn tới khi delivery-loop đọc được  |
+| RS5b | Khe uỷ quyền trong `governance/`: sáu việc ở mục 5, nạp từ nhánh gốc                                                                  | 4       | Ít người         | Hoãn: chờ một ADR ở kit rồi một vòng «giám sát chủ động» (issue 5 của delivery-loop), chưa có lịch; tệp nằm ở `governance/` của kho dùng, kit chỉ đọc |
 | RS6  | Thêm nguyên tắc 1, 2 và 5 vào [nguyên tắc của setup](setup-principles.md), kèm bài kiểm                                               | 4       | Giữ hướng        | Đã gộp (PR 51): luật 8 đến 10, mục 43k bộ kiểm                         |
 | RS7  | Mỗi luật trong `AGENTS.md` sinh ra hoặc nêu tên phép kiểm giữ nó, hoặc ghi rõ «giữ bằng lời»; bài kiểm đỏ khi thêm luật không có loại | 4       | Tin cậy          | Phát hành ở 0.10.0 và chạy ở kho thử (2026-11-19), mục 50 bộ kiểm: 13 luật máy giữ, 62 lời |
 | RS8  | Đường nâng cấp: bản sửa ở mẫu tới được tệp đã sửa tại chỗ; `doctor` báo tệp nào lệch nguồn và lệch mấy bản                            | 5       | Tin cậy, nhanh   | Đã dựng và chạy ở kho thử (2026-11-17), mục 47 bộ kiểm |
 | RS9  | Kho này giữ luật của chính nó: tên tệp và tên nhánh tiếng Anh, ghi vào `CLAUDE.md`; đổi tên bốn tệp tài liệu                          | 4, 5    | Giữ hướng        | Đã làm (2026-11-16), mục 45 bộ kiểm  |
-| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đủ các dòng của mục 2 và tách theo mốc (`--split`), đã gộp (PR 50), mục 46 bộ kiểm; ngưỡng còn mở (mục 10, điều 1) |
+| RS10 | Thước lặp lại được: `tools/sdlc_metrics.py` in các dòng của mục 2 (mở đến gộp, xung đột khi gộp ngược, phút máy mỗi PR gộp, đỏ muộn)  | Mọi gốc | Đo               | Đủ các dòng của mục 2, tách theo mốc (`--split`) và mục ngưỡng; phát hành ở 0.10.3 (PR 50, PR 63), mục 46 bộ kiểm. Ngưỡng là một dòng trong báo cáo (chủ kho, 2026-11-21) |
 
 Bản chi tiết đã có: RS1, [tường thật](superpowers/specs/2026-11-16-real-walls-design.md); RS8,
 [đường nâng cấp](superpowers/specs/2026-11-17-upgrade-path-design.md); RS2b,
@@ -543,6 +543,10 @@ Thứ tự đề xuất cho Repo Standards, thay cột của kho này trong bả
 Bước A đến C không phụ thuộc kho nào khác. Bước D nên đi cùng nhịp với design-assembly. Sau bước C
 mới chạy trên `onehub-inventory`.
 
+**Cập nhật 2026-11-21.** Bước F chỉ còn RS5b. RS4 đã đóng: delivery-loop trả lời rằng kit không đọc
+`architecture/modules.yaml` và không cần gói này; RS5b chờ một ADR ở kit, chưa có lịch. Nguồn: nhánh
+`chuyen-nha` của delivery-loop, `migration/KE-HOACH-12-MUC-REPO-STANDARDS.md` mục 5 (commit `f575b7fc`).
+
 ## 9. Rủi ro và giới hạn đã biết
 
 - **GitHub không ép được «chỉ gộp qua lệnh gộp».** Lệnh gộp của gói `dieu-phoi` đòi mọi ô xanh,
@@ -572,8 +576,12 @@ mới chạy trên `onehub-inventory`.
 
 ## 10. Điều còn mở cho chủ kho
 
-1. Ngưỡng tỉ lệ lỗi chấp nhận. Máy gợi ý: đỏ muộn 20%, nhánh chính đỏ 1 trên 20.
-2. Tên và chỗ đặt tệp uỷ quyền. Máy gợi ý: trong `governance/` của kho tiêu thụ.
+1. Ngưỡng tỉ lệ lỗi chấp nhận. Máy gợi ý: đỏ muộn 20%, nhánh chính đỏ 1 trên 20. Chủ kho chọn ngày
+   2026-11-21: ngưỡng chỉ là một dòng trong báo cáo của `tools/sdlc_metrics.py`, không đổi mã thoát.
+   Ba giá trị khởi đầu là hai số trên và «một tệp chiếm quá nửa số lần gộp ngược xung đột», với mẫu
+   tối thiểu 20; chưa giá trị nào được suy ra từ dữ liệu.
+2. Tên và chỗ đặt tệp uỷ quyền. Máy gợi ý: trong `governance/` của kho tiêu thụ. Trả lời của
+   delivery-loop ngày 2026-11-21: ở `governance/` của kho dùng, kit chỉ đọc; cần một ADR ở kit trước.
 3. Kho nào giữ phép so của từng bất biến ở mục 5.
 4. Có bắt buộc cả chín ô trên GitHub không, hay chỉ các ô kho khai là tường.
 5. Khoá bật lối gộp nhanh của gói `dieu-phoi` có đang bật ở `onehub-inventory` không. Đọc ngày
