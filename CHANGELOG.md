@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Fixed: the roadmap page of the feature loop is not an input of the heavy tier
+`HEAVY_NOT_INPUTS` in the `ci.yml` of every preset, and the default list of `tools/ci_inputs.py`,
+now end with `LO-TRINH.html`. The feature loop redraws that page in the commit that carries the
+signature. It was an input, so that commit changed the key and the heavy tier ran again on a tree
+whose code had not changed. Measured in `onehub-inventory`: 63 of 78 signature commits on `main`
+differed from their parent only in this page among the inputs
+([#71](https://github.com/phanlemanh/repo-standards/issues/71)).
+
+- Only the file of that name at the root is left out. Another `.html` page, and a file of the same
+  name in a subfolder, are still inputs.
+- `docs/seam-contracts.md`, section 4, names the page next to `_acceptance/**`.
+
+**What breaks on upgrade**: a pull request that changes only `LO-TRINH.html` (and other files
+that are not inputs) reuses an earlier green heavy run instead of running the heavy tier. A
+repository whose heavy tier reads that page loses a run it needs: take the name out of
+`HEAVY_NOT_INPUTS` in its `ci.yml`. A repository that changed the line by hand to the same value
+merges clean; one that changed it to something else gets the line between markers.
+
+**Checked**: a scratch clone of `onehub-inventory`, which changed the line by hand to this value
+before the fix: exit code 0, no conflict markers, `ci.yml` left as it is, and `tools/ci_inputs.py`
+taking the new default. Nothing was pushed to it.
+
+**Not yet run**: the reuse on a real pull request with a signature commit. The list itself is
+tested on throwaway repositories.
+
 ## 0.10.4 — 2026-11-21
 
 Two fixes, both found while the probe repository and `onehub-inventory` took 0.10.3.

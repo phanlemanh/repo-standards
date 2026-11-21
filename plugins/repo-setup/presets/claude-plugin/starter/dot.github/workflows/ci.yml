@@ -18,7 +18,7 @@ env:
   # Files the heavy tier does not read. A pull request that changes only these reuses an earlier
   # green heavy run with the same inputs. A path not listed is an input: when unsure, it runs.
   # Changing this list changes the rules of the game.
-  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/**"
+  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/** LO-TRINH.html"
 
 jobs:
   # The light tier, on every push.

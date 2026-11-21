@@ -172,11 +172,12 @@ cp "$ROOT/docs/seam-contracts.md" "$TMP/seam-page.md"; subst '/^| `grep` |/d' "$
 [ "$(seam_keys "$TMP/seam-page.md" "$sk_ui")" != same ] || miss "seams: a key left out of the page goes unseen"
 
 # 51e. the names and the list other tools read in the workflows (docs/seam-contracts.md, sections 3
-#      and 4): every ci.yml has the summary job check and leaves _acceptance/** out of the heavy
-#      tier's inputs; the agent pipeline's job is gate
+#      and 4): every ci.yml has the summary job check and leaves _acceptance/** and the roadmap
+#      page LO-TRINH.html out of the heavy tier's inputs; the agent pipeline's job is gate
 seam_ci() { # <ci.yml>: nothing, or what is missing
   grep -q '^  check:$' "$1" || echo "no job check"
   grep -qE '^  HEAVY_NOT_INPUTS: ".*_acceptance/\*\*' "$1" || echo "_acceptance/** is an input of the heavy tier"
+  grep -qE '^  HEAVY_NOT_INPUTS: "(.* )?LO-TRINH\.html[ "]' "$1" || echo "LO-TRINH.html is an input of the heavy tier"
 }
 for ci in "$ROOT"/plugins/repo-setup/presets/*/starter/dot.github/workflows/ci.yml; do
   sc=$(seam_ci "$ci")
@@ -187,5 +188,8 @@ grep -q '^  gate:$' "$ROOT/plugins/repo-setup/capabilities/github-agents/team/do
 cp "$ROOT/plugins/repo-setup/presets/ts-node/starter/dot.github/workflows/ci.yml" "$TMP/seam-ci.yml"
 subst 's| _acceptance/\*\*||' "$TMP/seam-ci.yml"
 [ -n "$(seam_ci "$TMP/seam-ci.yml")" ] || miss "seams: a ci.yml that reads _acceptance/** as an input goes unseen"
+cp "$ROOT/plugins/repo-setup/presets/ts-node/starter/dot.github/workflows/ci.yml" "$TMP/seam-ci.yml"
+subst 's| LO-TRINH\.html||' "$TMP/seam-ci.yml"
+[ -n "$(seam_ci "$TMP/seam-ci.yml")" ] || miss "seams: a ci.yml that reads LO-TRINH.html as an input goes unseen"
 
 echo "ok  seams with other tools (or misses reported above)"

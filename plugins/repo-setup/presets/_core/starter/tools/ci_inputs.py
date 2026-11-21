@@ -34,7 +34,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_NOT_INPUTS = "docs/** wiki/** *.md _acceptance/**"
+DEFAULT_NOT_INPUTS = "docs/** wiki/** *.md _acceptance/** LO-TRINH.html"
 ENV_NOT_INPUTS = "HEAVY_NOT_INPUTS"
 
 

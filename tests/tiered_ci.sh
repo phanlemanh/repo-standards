@@ -23,7 +23,7 @@ ci_rc() { local d="$1" rc=0; shift; ( cd "$d" && python3 "$ci_tools/ci_inputs.py
 
 # 49a. what is not an input leaves the key alone; what is an input changes it
 ci_a=$(ci_repo a)
-for f in docs/a.md wiki/x.md README.md _acceptance/v/evidence.md src/a.ts package-lock.json docs.ts sub/README.md; do
+for f in docs/a.md wiki/x.md README.md _acceptance/v/evidence.md LO-TRINH.html src/a.ts package-lock.json docs.ts sub/README.md; do
   ci_put "$ci_a" "$f" one
 done
 ci_commit "$ci_a" base
@@ -32,7 +32,7 @@ case "$ci_k0" in
   sha256:????????????????????????????????????????????????????????????????) ;;
   *) miss "ci_inputs: key does not print sha256:<64 hex> ($ci_k0)" ;;
 esac
-for f in docs/a.md wiki/x.md README.md _acceptance/v/evidence.md; do
+for f in docs/a.md wiki/x.md README.md _acceptance/v/evidence.md LO-TRINH.html; do
   ci_put "$ci_a" "$f" two; ci_commit "$ci_a" "edit $f"
   [ "$(ci_key "$ci_a")" = "$ci_k0" ] || miss "ci_inputs: editing $f (not an input) changes the key"
 done
@@ -46,10 +46,11 @@ done
 [ "$(ci_key "$ci_a" --rev HEAD~4)" = "$ci_k0" ] || miss "ci_inputs: --rev HEAD~4 does not give the key of that commit"
 [ "$(ci_key "$ci_a" --not-inputs "docs/** wiki/** *.md _acceptance/** src/**")" != "$ci_prev" ] || miss "ci_inputs: --not-inputs does not change what is read"
 [ "$(ci_rc "$ci_a" matches src/a.ts)" = 0 ] || miss "ci_inputs: matches src/a.ts is not 0 (an input)"
-for f in README.md docs/deep/x.md _acceptance/v/e.md wiki/a.md; do
+for f in README.md docs/deep/x.md _acceptance/v/e.md wiki/a.md LO-TRINH.html; do
   [ "$(ci_rc "$ci_a" matches "$f")" = 1 ] || miss "ci_inputs: matches $f is not 1 (not an input)"
 done
-for f in sub/README.md docs.ts; do
+# the roadmap page the feature loop redraws is left out by name, at the root only: no other page is
+for f in sub/README.md docs.ts index.html sub/LO-TRINH.html; do
   [ "$(ci_rc "$ci_a" matches "$f")" = 0 ] || miss "ci_inputs: matches $f is not 0 (an input)"
 done
 [ "$(ci_rc "$ci_a" matches src/a.ts --not-inputs 'src/**')" = 1 ] || miss "ci_inputs: --not-inputs is not read by matches"
@@ -198,7 +199,7 @@ for ci_p in ts-node python claude-plugin; do
   [ -n "$ci_l_chk" ] && [ -n "$ci_l_rec" ] && [ -n "$ci_l_sav" ] && [ "$ci_l_rec" -gt "$ci_l_chk" ] && [ "$ci_l_sav" -gt "$ci_l_chk" ] \
     || miss "ci.yml ($ci_p): the green run is recorded or saved before make check-heavy runs"
   grep -qx '    types: \[opened, synchronize, reopened, ready_for_review\]' "$ci_y" || miss "ci.yml ($ci_p): pull_request lacks ready_for_review"
-  grep -qxF '  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/**"' "$ci_y" || miss "ci.yml ($ci_p): HEAVY_NOT_INPUTS is not the default list"
+  grep -qxF '  HEAVY_NOT_INPUTS: "docs/** wiki/** *.md _acceptance/** LO-TRINH.html"' "$ci_y" || miss "ci.yml ($ci_p): HEAVY_NOT_INPUTS is not the default list"
   grep -qxF '  group: ci-${{ github.ref }}' "$ci_y" && grep -qx '  cancel-in-progress: true' "$ci_y" || miss "ci.yml ($ci_p): concurrency changed"
 done
 grep -q 'run: make build$' "$ROOT/plugins/repo-setup/presets/ts-node/starter/dot.github/workflows/ci.yml" || miss "ci.yml (ts-node): quick does not build"
