@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.10.4 — 2026-11-21
+
+Two fixes, both found while the probe repository and `onehub-inventory` took 0.10.3.
+
 ### Fixed: an existing repository gets the merge method it uses, not `squash`
 0.10.3 put `merge_method: squash` into the policy of every repository it upgraded. `squash` is
 right for a new repository; one that exists already merges one way or the other, and the next
@@ -49,6 +53,42 @@ with no agent workflows, where no such pipeline runs. It is the same slip 0.10.3
 
 **What breaks on upgrade**: nothing. One comment of `governance/autonomy.yaml` changes; a
 repository that edited the lines around it gets the usual three-way merge.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI:
+  each of the two pull requests was green on the head that was merged, all five checks, `e2e` in
+  21 minutes.
+- What 0.10.3 listed as not yet run, an upgrade of a real repository to that version: the probe
+  repository from 0.10.1 (phanlemanh/design-ci-probe#22) and `onehub-inventory` from 0.10.2
+  (phanlemanh/onehub-inventory#98), both merged. Those two upgrades are where the two defects
+  fixed here were found.
+- The upgrade to this version on scratch clones of both repositories as they are now (on 0.10.3,
+  the policy says `merge_method: merge`), full and `--depth 1`: exit code 0, no conflict
+  markers, the method kept, `vars.merge_method` in the manifest set to `merge`. The only change
+  to the policy is the comment of the second entry.
+- The reading of the history on scratch clones of both repositories as they were before 0.10.3
+  (the probe repository on 0.10.1, `onehub-inventory` on 0.10.2, no `merge_method` in either
+  policy): both come out with `merge_method: merge`, where 0.10.3 wrote `squash`. The probe
+  repository merges clean. `onehub-inventory` gets `governance/autonomy.yaml` between markers
+  at the proof block it took out, the same place as on its real upgrade to 0.10.3, and the
+  template's side there says `merge`.
+- Nothing was pushed to either repository for this release: the clones were read and thrown away.
+- Not yet run: an upgrade of a real repository to this version, merged; the stop in a shallow
+  clone on a real repository (both name the method in their policy now, so their history is not
+  read; the stop ran on repositories the tests build); `merge_method` on a real repository
+  (`github_setup.py --apply`); an upgrade of a repository that was set up from a `devN` build;
+  whether GitHub itself applies `merge=union` when it merges a pull request.
+
+### Known gaps
+
+- The gaps of the first entry are listed with it above: the history is a guess.
+- The policy on `onehub-inventory` and what GitHub has there differ: the policy says `merge`,
+  GitHub still allows merge, squash and rebase, because `github_setup.py --apply` has not run.
+- `tools/ontology_actions.py`, a file every repository receives, is 856 lines, over the limit of
+  800 the setup gives.
+- No test runs the real tool of design-assembly or delivery-loop: the contracts in
+  `docs/seam-contracts.md` are pinned from this side only.
 
 ## 0.10.3 — 2026-11-21
 
