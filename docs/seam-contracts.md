@@ -58,15 +58,26 @@ bảng trên là đúng những khoá `ui_select.mjs` đọc.
 
 Bài kiểm: 51a; 51e ghim tên hai job trong các tệp workflow.
 
-## 4. `_acceptance/**` không phải đầu vào của tầng nặng
+## 4. `_acceptance/**` và `LO-TRINH.html` không phải đầu vào của tầng nặng
 
 **Bên định nghĩa:** kho này. **Bên dùng:** delivery-loop, nơi ghi các tệp đó.
 
-`HEAVY_NOT_INPUTS` của `ci.yml` ở mọi preset có `_acceptance/**`, và `tools/ci_inputs.py` dùng cùng
-danh sách khi biến đó không có. Một PR chỉ đổi tệp ở đó dùng lại lượt nặng xanh có cùng đầu vào. Setup
-không đọc nội dung các tệp đó.
+`HEAVY_NOT_INPUTS` của `ci.yml` ở mọi preset có `_acceptance/**` và `LO-TRINH.html`, và
+`tools/ci_inputs.py` dùng cùng danh sách khi biến đó không có. Một PR chỉ đổi các tệp đó dùng lại lượt
+nặng xanh có cùng đầu vào. Setup không đọc nội dung các tệp đó.
 
-Bài kiểm: 49c (khoá đầu vào bỏ qua `_acceptance/`); 51e ghim dòng `HEAVY_NOT_INPUTS` của mọi preset.
+`LO-TRINH.html` là trang lộ trình delivery-loop vẽ lại trong commit chữ ký. Nó có tên trong danh sách
+từ ngày 2026-11-21 ([issue 71](https://github.com/phanlemanh/repo-standards/issues/71)): trước đó commit
+chữ ký đổi khoá, và tầng nặng chạy lại trên một cây không đổi mã. Chỉ tệp đúng tên đó ở gốc kho được
+bỏ qua; một trang `.html` khác, hay một tệp cùng tên trong thư mục con, vẫn là đầu vào. `PRODUCT-MAP.md`
+đã được `*.md` ở gốc che.
+
+Kho nào có bài tầng nặng đọc trang lộ trình thì bỏ tên đó khỏi `HEAVY_NOT_INPUTS` trong `ci.yml` của
+mình. Không bài kiểm nào ở đây biết một kho có bài như thế.
+
+Bài kiểm: 49a (tệp nào là đầu vào theo danh sách mặc định), 49c (khoá đầu vào bỏ qua `_acceptance/`),
+49f (dòng `HEAVY_NOT_INPUTS` của mọi preset đúng là danh sách mặc định); 51e ghim hai tên ở trên trong
+dòng đó.
 
 ## 5. Chưa có hợp đồng
 
