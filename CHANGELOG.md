@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Changed: the merge method is stored in `governance/autonomy.yaml`
+`tools/github_setup.py` set squash unless `--merge-method merge` was passed, and nothing stored the
+choice: one run that forgot the option set a repository back to squash only, which a feature loop
+that needs merge commits (delivery-loop) cannot work with.
+
+- `governance/autonomy.yaml` has `merge_method: squash` (or `merge`). `github_setup.py` sets that
+  one method. An option that differs from it is refused with exit code 2, saying where the choice
+  is made.
+- A policy without the key (a repository from an earlier release): a run without the option
+  leaves the merge settings as they are and says so; `--merge-method` still sets them for that
+  run.
+- A value that is neither `squash` nor `merge` turns `make check` red (`autonomy.py
+  --check-codeowners` names it), and `github_setup.py` stops before any change. It never changes
+  a tier.
+
+**What breaks on upgrade**: the upgrade adds `merge_method: squash` to `governance/autonomy.yaml`.
+A repository that merges with merge commits must set `merge_method: merge` in the same pull
+request, or the next `github_setup.py --apply` sets it to squash. After that, a script that
+passes `--merge-method merge` against a policy that says `squash` stops with exit code 2.
 ### Changed: a build between two tags has a version of its own, `X.Y.Z.devN`
 Every commit between two tags carried the number of the release before it, so a repository set up
 from the default branch recorded files under a release that did not hold them. That is how

@@ -3,9 +3,10 @@
 
   python3 tools/github_setup.py              # show what would be done (dry run)
   python3 tools/github_setup.py --apply      # do it (needs admin rights on the repository)
-  python3 tools/github_setup.py --merge-method merge   # keep merge commits instead of squashing
 
-Always: one merge method (squash unless --merge-method says otherwise); environments "staging"
+Always: one merge method, the one governance/autonomy.yaml stores as merge_method (a policy
+from before that key keeps the repository's merge settings, or takes --merge-method);
+environments "staging"
 and "production" (production requires a human reviewer); a ruleset on the default branch (pull
 request + required checks; a code owner decides only where .github/CODEOWNERS names one, and
 nobody else has to approve). Required: `check`, `secret-scan`, the commit-format checks
@@ -32,7 +33,14 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autonomy import AGENT_WORKFLOW, own_checks, proof_check, required_checks
+from autonomy import (
+    AGENT_WORKFLOW,
+    merge_method,
+    merge_method_problems,
+    own_checks,
+    proof_check,
+    required_checks,
+)
 from repo_ontology import find_repo_root, load_yaml_file
 
 LABELS = [
@@ -60,6 +68,9 @@ MERGE_METHODS = {
     "merge": ("merge commits only", "allow_merge_commit"),
 }
 MERGE_SETTINGS = ("allow_squash_merge", "allow_merge_commit", "allow_rebase_merge")
+KEEP_MERGE = (
+    "merge method left as it is (governance/autonomy.yaml names no merge_method: add one to choose)"
+)
 
 
 def workflow_has(root: Path, pattern: str) -> bool:
@@ -200,10 +211,11 @@ def plan(
     secret_scan: bool = True,
     commit_format: tuple[str, ...] | list[str] = (),
 ) -> list[dict[str, Any]]:
-    merge_title, merge_allowed = MERGE_METHODS[merge_method]
+    # "" (a policy from before merge_method, and no option): the merge settings are left alone.
+    merge_title, merge_allowed = MERGE_METHODS[merge_method] if merge_method else (KEEP_MERGE, "")
     merge_fields = [
         arg
-        for setting in MERGE_SETTINGS
+        for setting in (MERGE_SETTINGS if merge_method else ())
         for arg in ("-F", f"{setting}={'true' if setting == merge_allowed else 'false'}")
     ]
     steps: list[dict[str, Any]] = []
@@ -381,9 +393,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--merge-method",
         choices=list(MERGE_METHODS),
-        default="squash",
-        help="the one way pull requests are merged: squash (default) puts one commit per pull "
-        "request on the default branch; merge keeps the branch's commits and adds a merge commit",
+        help="the one way pull requests are merged, for a policy that does not store it yet: "
+        "squash puts one commit per pull request on the default branch; merge keeps the branch's "
+        "commits and adds a merge commit. Where governance/autonomy.yaml names merge_method, that "
+        "is the choice, and an option that differs is refused",
     )
     ap.add_argument(
         "--prune",
@@ -408,6 +421,18 @@ def main(argv: list[str] | None = None) -> int:
     owners = (policy.get("owners") or {}).get("high") or []
     reviewer = args.reviewer or (owners[0] if owners else "")
 
+    stored, bad = merge_method(policy), merge_method_problems(policy)
+    if bad:
+        print(f"governance/autonomy.yaml: {bad[0]}. Nothing was changed.", file=sys.stderr)
+        return 1
+    if stored and args.merge_method and args.merge_method != stored:
+        print(
+            f"governance/autonomy.yaml says merge_method: {stored}, and --merge-method asks for "
+            f"{args.merge_method}. The choice is stored in the policy: change merge_method in "
+            "governance/autonomy.yaml (a change to the rules of the game) and run again.",
+            file=sys.stderr,
+        )
+        return 2
     agents, own = has_agents(root), own_checks(root)
     commit_format, commit_format_notes, unread_format = commit_format_checks(root, repo, branch)
     commit_format += kept_checks(repo, unread_format)
@@ -416,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
         branch,
         reviewer,
         agents,
-        args.merge_method,
+        stored or args.merge_method or "",
         proof_check(policy, own),
         required_checks(policy, own),
         has_secret_scan(root),

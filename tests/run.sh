@@ -1555,15 +1555,31 @@ dry() { ( cd "$1" && shift && PATH="$TMP/gsbin:$PATH" GH_CALLS="$TMP/gs-calls" p
 [ "$(dry "$gs")" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: the dry run without the option changed: $(dry "$gs" | diff "$FX/dry-run-team.txt" - | head -5)"
 [ "$(dry "$gsa")" = "$(cat "$FX/dry-run-team-agents.txt")" ] || miss "merge method: the dry run with agents and without the option changed: $(dry "$gsa" | diff "$FX/dry-run-team-agents.txt" - | head -5)"
 [ "$(dry "$gs" --merge-method squash)" = "$(cat "$FX/dry-run-team.txt")" ] || miss "merge method: squash is not the default: $(dry "$gs" --merge-method squash | head -3)"
-# asking for merge commits: the diff against the fixture is the title of one step and two values on its line
-gsdiff() { { dry "$1" --merge-method merge || true; } | diff "$FX/$2" - | grep '^[<>]' | head -8 || true; }
+# asking for merge commits (merge_method: merge in the policy): the diff against the fixture is the title of one
+# step and two values on its line
+gs_policy() { # <repo> <copy> <the merge_method line, or "" to leave the key out>
+  rm -rf "$2"; cp -R "$1" "$2"
+  python3 - "$2/governance/autonomy.yaml" "$3" <<'PY2'
+import re, sys
+path, line = sys.argv[1:]
+text = open(path, encoding="utf-8").read()
+text, n = re.subn(r"^merge_method: .*\n", line + "\n" if line else "", text, flags=re.M)
+if n != 1:
+    sys.exit(f"{path}: {n} merge_method lines, not one")
+open(path, "w", encoding="utf-8").write(text)
+PY2
+}
+gsm="$TMP/gs-team-merge"; gsam="$TMP/gs-agents-merge"
+gs_policy "$gs" "$gsm" 'merge_method: merge' || miss "merge method: the policy of a new repository has no merge_method line to change"
+gs_policy "$gsa" "$gsam" 'merge_method: merge' || miss "merge method: the policy of a new repository with agents has no merge_method line to change"
+gsdiff() { { dry "$1" || true; } | diff "$FX/$2" - | grep '^[<>]' | head -8 || true; }
 want_diff() { printf '%s\n' \
   "<   - squash-only merges, delete merged branches$1" \
   "<       gh api -X PATCH repos/acme/sample$2 -F delete_branch_on_merge=true -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false" \
   ">   - merge commits only, delete merged branches$1" \
   ">       gh api -X PATCH repos/acme/sample$2 -F delete_branch_on_merge=true -F allow_squash_merge=false -F allow_merge_commit=true -F allow_rebase_merge=false"; }
-[ "$(gsdiff "$gs" dry-run-team.txt)" = "$(want_diff '' '')" ] || miss "merge method: merge changed more or less than the three merge settings: $(gsdiff "$gs" dry-run-team.txt)"
-[ "$(gsdiff "$gsa" dry-run-team-agents.txt)" = "$(want_diff ', auto-merge' ' -F allow_auto_merge=true')" ] || miss "merge method: merge with agents changed more or less than the three merge settings: $(gsdiff "$gsa" dry-run-team-agents.txt)"
+[ "$(gsdiff "$gsm" dry-run-team.txt)" = "$(want_diff '' '')" ] || miss "merge method: merge changed more or less than the three merge settings: $(gsdiff "$gs" dry-run-team.txt)"
+[ "$(gsdiff "$gsam" dry-run-team-agents.txt)" = "$(want_diff ', auto-merge' ' -F allow_auto_merge=true')" ] || miss "merge method: merge with agents changed more or less than the three merge settings: $(gsdiff "$gsa" dry-run-team-agents.txt)"
 # the same from the plan: one step differs, same fields in the same order, two values flipped
 ( cd "$gsa" && python3 -B -c "
 import sys; sys.path.insert(0,'tools')
@@ -1586,7 +1602,7 @@ for agents in (False, True):
 " ) || miss "merge method: the plan for merge commits differs from squash in more than the merge settings"
 out=$(dry "$gs" --merge-method rebase || true)
 grep -q "invalid choice: 'rebase'" <<<"$out" || miss "merge method: an unknown method was not refused by name: $out"
-dry "$gs" --merge-method merge --reviewer @b | grep 'human approval by @b' >/dev/null || miss "merge method: --reviewer is lost next to --merge-method"
+dry "$gsm" --merge-method merge --reviewer @b | grep 'human approval by @b' >/dev/null || miss "merge method: --reviewer is lost next to --merge-method"
 [ ! -s "$TMP/gs-calls" ] || miss "merge method: a dry run called gh to change something: $(cat "$TMP/gs-calls")"
 python3 "$gs/tools/github_setup.py" --help | grep -- '--merge-method' >/dev/null || miss "merge method: --help does not show the option"
 # agents merge low-tier PRs with the method the repository allows, and squash when it cannot tell
@@ -1611,6 +1627,30 @@ merged_with() { rm -f "$TMP/pm-calls"
 [ "$(merged_with false)" = "pr merge 7 --auto --merge" ] || miss "merge method: the pipeline does not use a merge commit where squash is off: $(merged_with false)"
 [ "$(merged_with unknown)" = "pr merge 7 --auto --squash" ] || miss "merge method: the pipeline does not fall back to squash: $(merged_with unknown)"
 grep -q -- '--merge-method merge' "$ROOT/plugins/repo-setup/skills/github/SKILL.md" || miss "merge method: the github skill does not name the option"
+# 42b. the choice is stored in governance/autonomy.yaml (merge_method), so a run without the option
+#      does not set a repository back to squash. Found on a repository whose feature loop needs merge
+#      commits: one run that forgot --merge-method merge made it squash-only again.
+grep -q '^merge_method: squash$' "$gs/governance/autonomy.yaml" || miss "merge method: a new repository's policy does not store merge_method: squash"
+dry "$gsm" | grep 'merge commits only' >/dev/null || miss "merge method: merge_method: merge in the policy is not what github_setup sets"
+# an option that disagrees with the policy is refused, and says where the choice is made
+rc=0; out=$(dry "$gs" --merge-method merge) || rc=$?
+[ "$rc" = 2 ] || miss "merge method: --merge-method merge against merge_method: squash ends with $rc, not 2"
+case "$out" in *"merge_method: squash"*governance/autonomy.yaml*) ;; *) miss "merge method: the refusal does not name the policy and its value: $out" ;; esac
+[ "$(dry "$gs" --merge-method squash)" = "$(dry "$gs")" ] || miss "merge method: an option that agrees with the policy changes the run"
+# a policy from before this key: without the option the merge settings are left as they are, never reset
+gso="$TMP/gs-team-nokey"; gs_policy "$gs" "$gso" '' || true
+out=$(dry "$gso")
+case "$out" in *allow_squash_merge*|*allow_merge_commit*) miss "merge method: a policy with no merge_method still sets the merge settings: $(grep -m1 allow_ <<<"$out")" ;; esac
+case "$out" in *"names no merge_method"*) ;; *) miss "merge method: a policy with no merge_method does not say the merge settings are left as they are" ;; esac
+grep -q 'delete_branch_on_merge=true' <<<"$out" || miss "merge method: a policy with no merge_method loses the rest of the repository settings"
+dry "$gso" --merge-method merge | grep 'merge commits only' >/dev/null || miss "merge method: with no merge_method in the policy, --merge-method merge is not used"
+# a value that is neither squash nor merge: autonomy.py names it, github_setup stops before any change
+gsb="$TMP/gs-team-badkey"; gs_policy "$gs" "$gsb" 'merge_method: rebase' || true
+out=$( cd "$gsb" && python3 -B tools/autonomy.py --check-codeowners 2>&1 || true )
+case "$out" in *"merge_method: rebase is not one of squash, merge"*) ;; *) miss "merge method: autonomy.py does not name a merge_method that is neither squash nor merge: $out" ;; esac
+rc=0; out=$(dry "$gsb") || rc=$?
+[ "$rc" = 1 ] || miss "merge method: github_setup goes on with merge_method: rebase (exit $rc)"
+case "$out" in *"merge_method: rebase"*) ;; *) miss "merge method: github_setup does not say which merge_method it refused: $out" ;; esac
 echo "ok  merge method (or misses reported above)"
 
 # 43. people decide, machines check (docs/setup-principles.md): nothing the setup generates uses a

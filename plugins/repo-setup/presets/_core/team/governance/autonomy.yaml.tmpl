@@ -30,6 +30,12 @@ proof:
 # and report on every pull request; on GitHub a skipped job counts as passed.
 required_checks: []
 
+# How pull requests merge: the one method `python3 tools/github_setup.py --apply` sets. `squash`
+# puts one commit per pull request on the default branch; `merge` keeps the branch's commits and
+# adds a merge commit, for a feature loop that needs them. It is stored here so that a later run
+# does not set the repository back to squash.
+merge_method: squash
+
 # Deciders by tier (rendered into .github/CODEOWNERS by `make codeowners`).
 # A path with no owner needs no person.
 owners:
