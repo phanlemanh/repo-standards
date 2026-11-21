@@ -46,6 +46,11 @@ for own in check secret-scan; do
   sm_set "$sm" '^required_checks: .*$' "required_checks: [$own]"
   if sm_ok "$sm"; then miss "seams: the setup's own check '$own' was accepted under required_checks"; fi
 done
+# The policy every team repository receives names the agent pipeline only as a condition. One line
+# said "the PR pipeline stops running its own reviewer agent" as a fact, also where no pipeline runs.
+# Found on a repository with a feature loop and no agent workflows, while it took 0.10.3.
+sm_said=$(grep -nE 'pipeline|reviewer agent' "$gs/governance/autonomy.yaml" | grep -v 'agent workflows' || true)
+[ -z "$sm_said" ] || miss "seams: the policy says what the agent pipeline does without saying it is only with agent workflows: $sm_said"
 
 # 51b. a file of the repository's own where the setup puts a file that joins checks to
 #      `make check`: the checks are not joined, so the run is not done. It ends with 1 and names
