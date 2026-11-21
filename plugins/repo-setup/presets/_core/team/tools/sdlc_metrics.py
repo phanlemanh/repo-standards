@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from repo_ontology import find_repo_root
 from sdlc_gh import PR_LIMIT, each, first_line, gh_json, gh_rows, git, parse_time, read_or_say
 from sdlc_jobs import ci_numbers, mark_waiting
+from sdlc_limits import thresholds
 from sdlc_pulls import merges_of_default_in, pr_commits, pull_times
 from sdlc_report import render, render_split
 
@@ -261,7 +262,7 @@ def metrics(raw: dict[str, Any], part: Part, agents: set[str]) -> dict[str, Any]
     ]
     runs = raw["runs"] if isinstance(raw["runs"], str) else raw["runs"][0]
     start = parse_time(raw["since"] + "T00:00:00Z")
-    return {
+    part_metrics = {
         "since": raw["since"],
         "days": raw["days"],
         "merged": len(merged),
@@ -280,6 +281,7 @@ def metrics(raw: dict[str, Any], part: Part, agents: set[str]) -> dict[str, Any]
         "agent_changes_requested": len(changes_requested),
         "tiers": dict(collections.Counter(tier(p) for p in merged)),
     }
+    return {**part_metrics, "thresholds": thresholds(part_metrics)}
 
 
 def split_moment(value: str, root: Path) -> dt.datetime:
