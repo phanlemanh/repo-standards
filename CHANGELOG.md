@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.10.3 — 2026-11-21
+
 ### Changed: the merge method is stored in `governance/autonomy.yaml`
 `tools/github_setup.py` set squash unless `--merge-method merge` was passed, and nothing stored the
 choice: one run that forgot the option set a repository back to squash only, which a feature loop
@@ -117,6 +119,51 @@ too.
 **Known gaps**: a pull request last ready before the window has its pushes left out, and the page
 says how many. A repository whose rules require no check gets no times to and from green, with
 that reason. A pull request with more than 250 commits loses merges, as before.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI:
+  on `main` at `18b30ad`, which holds all five entries above, all five checks green, `e2e` in 26
+  minutes. Each of the five pull requests was green on the head that was merged.
+- The flow measure on real history, read only: `onehub-inventory` over 2, 3 and 6 days, and this
+  repository over 17 days with and without `--split repo-setup-v0.9.0`. The job table, the time
+  of a merged pull request, the steps red on several branches and the thresholds all print. On
+  `onehub-inventory` from 14 November: late red 16 of 69, with 3 reds of a draft counted apart.
+  One defect only real data showed (`gh --jq` prints a string without quotes, so the required
+  checks were read only from the stand-in `gh` of the tests) was fixed before the merge, with a
+  test.
+- The thresholds on live data: `onehub-inventory` over 3 days, where every line says "too few to
+  tell" because each sample is below 20. A verdict of "over" has been seen only on numbers saved
+  from an earlier run, not on a live one.
+- The version of a build between two tags: this repository itself carried `0.10.3.dev0` from the
+  merge of that change until this release.
+- What 0.10.2 listed as not yet run, the fenced `conventional-commits` job on a real runner: run
+  on `onehub-inventory` after it took 0.10.2 (phanlemanh/onehub-inventory#95), by a trial pull
+  request with one commit the hooks refuse (phanlemanh/onehub-inventory#96, closed unmerged).
+  Read in the log of that run: the checkout with `persist-credentials: false`, the hook output
+  between `::stop-commands::` and its closing token, and after the fence the error annotation
+  naming the commit, with its `%` shown as written.
+- Four of the five pull requests (the fifth was already on `main`) merged together on a scratch
+  clone before they were merged, at the heads they had then: no conflict in `CHANGELOG.md` once
+  the union rule was on the base, every entry whole, and the fast suite green on the result.
+- Not yet run: `merge_method` on a real repository (`github_setup.py --apply`); an upgrade of a
+  real repository to this version (the probe repository is on 0.10.1, `onehub-inventory` on
+  0.10.2); an upgrade of a repository that was set up from a `devN` build; whether GitHub itself
+  applies `merge=union` when it merges a pull request, which decides if the rule also helps
+  there or only for merges made with git on a machine.
+
+### Known gaps
+
+- The gaps of the five entries are listed with them above.
+- Nothing runs the flow measure by itself, and being over a threshold stops nothing: a line in
+  the report only, by the owner's choice. A repository that never writes the report out does
+  not see the line.
+- A repository whose feature loop needs merge commits must say `merge_method: merge` when it
+  upgrades: the upgrade writes `squash` where the key is missing.
+- `tools/ontology_actions.py`, a file every repository receives, is 856 lines, over the limit of
+  800 the setup gives.
+- No test runs the real tool of design-assembly or delivery-loop: the contracts in
+  `docs/seam-contracts.md` are pinned from this side only.
 
 ## 0.10.2 — 2026-11-20
 
