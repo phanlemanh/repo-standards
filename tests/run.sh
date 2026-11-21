@@ -2667,8 +2667,61 @@ if command -v jq >/dev/null 2>&1; then
   done
   # 46l. the measure reads no file of the feature loop: its gate marks are its own to measure
   grep -n '_acceptance' "$fl"/tools/sdlc_*.py && miss "flow: the measure reads _acceptance/, the feature loop's files"
+  # 46m. thresholds (the owner, 2026-11-21: a line in the report, nothing more): late red, red on the default
+  #      branch per workflow, and one file in most of the conflicting merges each say over, within, too few
+  #      to tell, or not read. A number over its threshold never changes the exit code.
+  flow=$(fl_metrics "$fl" --json)
+  fl_is '[(t["measure"], t.get("subject", ""), t["verdict"]) for t in d["thresholds"]]' \
+    "[('late red', '', 'too few to tell'), ('default branch red', 'CI', 'too few to tell'), ('default branch red', 'Release', 'too few to tell'), ('one file in the conflicting merges', 'src/grid.ts', 'too few to tell')]" \
+    "the thresholds are not one line per measure and per workflow, each too few to tell on four heads, two runs and one conflict"
+  th=$(cd "$fl" && python3 - <<'PY' 2>&1 || true
+import sys
+sys.path.insert(0, "tools")
+import sdlc_limits as L
+
+def rows(ci, merges):
+    return [(t["measure"], t.get("subject", ""), t["verdict"]) for t in L.thresholds({"ci": ci, "back_merges": merges})]
+
+problems = []
+def want(name, got, expected):
+    if got != expected:
+        problems.append(f"{name}: {got}, want {expected}")
+
+clean = {"conflicting": 0, "files": {}}
+want("late red 5 of 20 is over 20%", rows({"late_red": [5, 20], "default_branch": {}}, clean), [("late red", "", "over")])
+want("late red 4 of 20 is not over 20%", rows({"late_red": [4, 20], "default_branch": {}}, clean), [("late red", "", "within")])
+want("late red 5 of 19 is too few", rows({"late_red": [5, 19], "default_branch": {}}, clean), [("late red", "", "too few to tell")])
+want("per workflow", rows({"late_red": [0, 0], "default_branch": {"CI": [2, 36], "Release": [33, 40], "Docs": [0, 25]}}, clean),
+     [("late red", "", "too few to tell"), ("default branch red", "CI", "over"),
+      ("default branch red", "Docs", "within"), ("default branch red", "Release", "over")])
+want("one file in most conflicts", rows({"late_red": [0, 0], "default_branch": {}}, {"conflicting": 140, "files": {"LO-TRINH.html": 129, "b": 30}}),
+     [("late red", "", "too few to tell"), ("one file in the conflicting merges", "LO-TRINH.html", "over")])
+want("no file in most conflicts", rows({"late_red": [0, 0], "default_branch": {}}, {"conflicting": 40, "files": {"a": 20, "b": 20}}),
+     [("late red", "", "too few to tell"), ("one file in the conflicting merges", "a", "within")])
+unread = L.thresholds({"ci": {"unread": "rate limit"}, "back_merges": {"unread": "shallow clone"}})
+want("unread parts", [(t["measure"], t["verdict"], t.get("reason")) for t in unread],
+     [("late red", "not read", "rate limit"), ("default branch red", "not read", "rate limit"),
+      ("one file in the conflicting merges", "not read", "shallow clone")])
+want("the values", (L.LATE_RED_MAX, L.DEFAULT_RED_MAX, L.ONE_FILE_MAX, L.MIN_SAMPLE), (0.2, 0.05, 0.5, 20))
+print("\n".join(problems) or "ok")
+PY
+)
+  [ "$th" = ok ] || miss "flow: thresholds: $th"
+  # over a threshold: the page says so, and the exit code is still 0
+  th_rc=0; th_page=$(cd "$fl" && PATH="$TMP/flbin:$PATH" FLOW_GH="$TMP/flowgh" FLOW_DAY="$fl_day" python3 -c "
+import sys; sys.path.insert(0, 'tools')
+import sdlc_limits, sdlc_metrics
+sdlc_limits.MIN_SAMPLE = 1
+sys.exit(sdlc_metrics.main(['--days', '7']))" 2>/dev/null) || th_rc=$?
+  [ "$th_rc" = 0 ] || miss "flow: a number over its threshold changes the exit code to $th_rc"
+  grep -F -- '| Late red | 2 of 4 (50%) | more than 20% | over |' <<<"$th_page" >/dev/null || miss "flow: the page does not say late red is over its threshold"
+  page=$(fl_metrics "$fl")
+  for line in '## Thresholds' '| Red on the default branch: `CI` | 1 of 2 (50%) | more than 1 in 20 | too few to tell (fewer than 20) |' \
+    'starting values' 'python3 tools/sdlc_metrics.py --days 14 --write'; do
+    grep -F -- "$line" <<<"$page" >/dev/null || miss "flow: the page does not carry the line: $line"
+  done
 else
-  echo "skip  flow 46b-46l: jq is not installed, the measure was not run"
+  echo "skip  flow 46b-46m: jq is not installed, the measure was not run"
 fi
 # 46f. a list of pull requests that stops at the limit of the query is said to be partial
 partial=$(cd "$fl" && python3 -c "

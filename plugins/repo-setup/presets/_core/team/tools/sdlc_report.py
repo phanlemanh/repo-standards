@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import sdlc_limits as limits
 from sdlc_gh import PR_LIMIT
 from sdlc_jobs import GATE_JOB
 
@@ -127,6 +128,47 @@ def jobs_section(ci: dict[str, Any], mark: str) -> str:
     )
 
 
+THRESHOLD_NAMES = {
+    limits.LATE_RED: "Late red",
+    limits.DEFAULT_RED: "Red on the default branch",
+    limits.ONE_FILE: "One file in the conflicting merges",
+}
+
+
+def threshold_row(t: dict[str, Any]) -> str:
+    name = THRESHOLD_NAMES[t["measure"]] + (f": `{t['subject']}`" if t.get("subject") else "")
+    limit = limits.limit_text(t["measure"])
+    if t["verdict"] == limits.NOT_READ:
+        return f"| {name} | not read: {t['reason'].replace('|', '/')} | {limit} | not read |"
+    share = f" ({round(100 * t['count'] / t['sample'])}%)" if t["sample"] else ""
+    said = t["verdict"]
+    if said == limits.TOO_FEW:
+        said = f"{limits.TOO_FEW} (fewer than {limits.MIN_SAMPLE})"
+    return f"| {name} | {t['count']} of {t['sample']}{share} | {limit} | {said} |"
+
+
+def thresholds_section(rows: list[dict[str, Any]], mark: str) -> str:
+    lines = [threshold_row(t) for t in rows] or ["| No conflicting merge, no finished run | | | |"]
+    return "\n".join(
+        [
+            f"{mark} Thresholds",
+            "",
+            "| Measure | Value | Threshold | Verdict |",
+            "| --- | --- | --- | --- |",
+            *lines,
+            "",
+            "The thresholds are starting values: the machine suggested them on 2026-11-16, and"
+            " nothing has derived them from data yet (`tools/sdlc_limits.py`). Below"
+            f" {limits.MIN_SAMPLE} cases a share is too few to tell. A number over its threshold"
+            " changes nothing else: the exit code stays 0, and no check goes red. Nothing runs this"
+            " tool by itself: run it when you want the numbers, for example"
+            " `python3 tools/sdlc_metrics.py --days 14 --write`, which writes"
+            " `wiki/metrics/<year>-W<week>.md`.",
+            "",
+        ]
+    )
+
+
 def spread(part: dict[str, Any]) -> str:
     if part["n"] == 0:
         return "n/a (no pull request)"
@@ -207,6 +249,7 @@ def sections(m: dict[str, Any], mark: str) -> str:
 | --- | --- |
 {flow_rows(m)}
 
+{thresholds_section(m["thresholds"], mark)}
 {pulls_section(m["pulls"], mark)}
 {jobs_section(m["ci"], mark)}
 {mark} Agents
