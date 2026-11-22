@@ -175,4 +175,47 @@ for ac_owners in '"@acme", "@lan"' '"@acme/core"'; do
   if grep -qF 'one decider' <<<"$out"; then miss "machine drafts: owners.high [$ac_owners] is told it has one decider"; fi
 done
 
+# 53e. the upgrade: a team repository that never edited its settings loses exactly the two edit
+#      walls; one that edited next to them gets conflict markers and keeps its line; a starter
+#      repository keeps both. 0.0.1 stands for the release before this one (its settings template,
+#      tests/fixtures/autonomy-change/pre), 0.0.2 for this one.
+ac_release() { # <dir> <version> [pre]
+  mkdir -p "$(dirname "$1")"; cp -R "$ROOT/plugins/repo-setup" "$1"
+  find "$1" -name __pycache__ -prune -exec rm -rf {} +
+  subst "s/\"version\": \"[^\"]*\"/\"version\": \"$2\"/" "$1/.claude-plugin/plugin.json"
+  if [ "${3:-}" = pre ]; then cp -R "$ROOT/tests/fixtures/autonomy-change/pre/." "$1/"; fi
+}
+ac_old="$TMP/ac-arch/repo-setup-v0.0.1"; ac_release "$ac_old" 0.0.1 pre
+ac_new="$TMP/ac-arch/repo-setup-v0.0.2"; ac_release "$ac_new" 0.0.2
+ac_up() { # <repo> <apply arguments of the first install...>: install with 0.0.1; <repo>.json, .rc after the upgrade
+  local repo="$1" rc=0; shift
+  mkdir -p "$repo"; git -C "$repo" init -q -b main
+  python3 "$ac_old/scripts/apply.py" --target "$repo" "$@" --var project_name=U --var description=x --var owner=acme >/dev/null
+  cp "$repo/.claude/settings.json" "$repo.before"
+  [ -z "${AC_EDIT:-}" ] || subst 's|^      "Edit(./governance/\*\*)"$|      "Edit(./governance/**)",\n      "Edit(./infra/**)"|' "$repo/.claude/settings.json"
+  python3 "$ac_new/scripts/apply.py" --target "$repo" --json --base-from "$TMP/ac-arch" > "$repo.json" 2> "$repo.err" || rc=$?
+  echo "$rc" > "$repo.rc"
+}
+ac_group() { python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(next((g for g, v in d.items() if isinstance(v, list) and '.claude/settings.json' in v), 'none'))" "$1.json" 2>/dev/null || echo unreadable; }
+ac_u="$TMP/ac-up-team"; ac_up "$ac_u" --preset python --level team
+[ "$(ac_group "$ac_u")" = updated ] || miss "machine drafts: an untouched team settings.json is '$(ac_group "$ac_u")' on upgrade, want updated ($(head -c 300 "$ac_u.err"))"
+[ "$(cat "$ac_u.rc")" = 0 ] || miss "machine drafts: the upgrade of an untouched team repository ends with $(cat "$ac_u.rc")"
+python3 - "$ac_u.before" "$ac_u/.claude/settings.json" <<'PY' || miss "machine drafts: the upgrade changed more than the two edit walls of an untouched team settings.json"
+import sys
+before, after = (open(f, encoding="utf-8").read() for f in sys.argv[1:])
+walls = ',\n      "Edit(./.github/workflows/**)",\n      "Edit(./governance/**)"\n'
+assert before.count(walls) == 1, "the 0.0.1 file has no walls to lose"
+assert before.replace(walls, "\n") == after, after
+PY
+AC_EDIT=1 ac_up "$TMP/ac-up-edited" --preset python --level team
+[ "$(ac_group "$TMP/ac-up-edited")" = marked ] || miss "machine drafts: a team settings.json edited next to the walls is '$(ac_group "$TMP/ac-up-edited")' on upgrade, want marked"
+[ "$(cat "$TMP/ac-up-edited.rc")" = 1 ] || miss "machine drafts: a marked settings.json does not end the upgrade with exit code 1 ($(cat "$TMP/ac-up-edited.rc"))"
+grep -q '^<<<<<<<' "$TMP/ac-up-edited/.claude/settings.json" || miss "machine drafts: the edited settings.json has no conflict markers"
+grep -qF '"Edit(./infra/**)"' "$TMP/ac-up-edited/.claude/settings.json" || miss "machine drafts: the upgrade lost the repository's own deny line"
+ac_up "$TMP/ac-up-starter" --preset python
+cmp -s "$TMP/ac-up-starter.before" "$TMP/ac-up-starter/.claude/settings.json" || miss "machine drafts: the upgrade changed a starter settings.json: $(diff "$TMP/ac-up-starter.before" "$TMP/ac-up-starter/.claude/settings.json" | head -4)"
+
 echo "ok  the machine drafts, a person decides (or misses reported above)"
