@@ -506,8 +506,9 @@ case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the cha
 
 # 54k. the owner's ruling "say what is true": a low pull request merges by itself only where the
 # agent pipeline is installed (its auto-merge). Outside capabilities/github-agents, no template,
-# label or doc says it merges itself; it needs no approval once the checks pass.
-acd_self=$(grep -rn -E 'merges itself|can merge itself' "$acd_pl" "$acd_pl/README.md" 2>/dev/null \
+# label or doc says it merges itself; it needs no approval once the checks pass. Text files only:
+# a stale ignored __pycache__ of an older tool still holds the old words, and is not shipped.
+acd_self=$(grep -rnI --exclude-dir=__pycache__ -E 'merges itself|can merge itself' "$acd_pl" 2>/dev/null \
   | grep -v '/capabilities/github-agents/' | sort -u || true)
 [ -z "$acd_self" ] || miss "autonomy card: an unconditional 'merges itself' claim outside github-agents: $acd_self"
 
