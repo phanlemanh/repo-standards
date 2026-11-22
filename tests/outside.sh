@@ -274,4 +274,91 @@ rc=0; ob_status "$ob_plain" >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || miss "out
 ob_badtoml=$(ob_repo badtoml "[recipe.a" "")
 rc=0; ob_status "$ob_badtoml" >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || miss "outside: a recipes file that is not TOML does not exit 2 ($rc)"
 
+# A terminal for the tool: runs a command under a pseudo-terminal and types the given lines, one
+# per prompt. "^C" as a line sends an interrupt. Exit code: the command's.
+ob_tty() { # <line>[<TAB><line>...] -- <command...>
+  local typed="$1"; shift; [ "$1" = "--" ] && shift
+  python3 - "$typed" "$@" <<'PY'
+import os, pty, sys, time
+typed, argv = sys.argv[1].split("\t"), sys.argv[2:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(argv[0], argv)
+out, seen, answers = b"", b"", list(typed)
+while True:
+    try:
+        chunk = os.read(fd, 1024)
+    except OSError:
+        break
+    if not chunk:
+        break
+    out += chunk
+    seen += chunk
+    if answers and out.rstrip().endswith(b":"):
+        line = answers.pop(0)
+        os.write(fd, b"\x03" if line == "^C" else line.encode() + b"\r")
+        out = b""
+sys.stdout.buffer.write(seen)
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))
+PY
+}
+# the command line of a tool run under ob_tty, from the folder of a repository
+ob_tool() { printf 'cd %q && PATH=%q OUTSIDE_TIMEOUT=1 exec python3 tools/outside.py %s' "$1" "$ob_bin:$PATH" "$2"; }
+
+# 52c. apply: settings that are missing and generated keys, nothing of the person's
+ob_put "$ob_a" ops/outside.toml "$ob_rows
+$(ob_row var LOCAL_ONLY 'value = "9"')"
+ob_reset
+rc=0; ob_run "$ob_a" apply >"$TMP/ob-apply.out" 2>&1 || rc=$?
+grep -q '^setter ABSENT 2$' "$OB_LOG" || miss "outside: apply did not apply the missing setting"
+if grep -q '^setter PRESENT' "$OB_LOG"; then miss "outside: apply applied a setting that is in place"; fi
+if grep -q '^setter LOCAL_ONLY' "$OB_LOG"; then miss "outside: apply applied a row that is not merged"; fi
+grep -q '^keeper GENERATED$' "$OB_LOG" && [ "$(wc -c < "$OB_STDIN.GENERATED" 2>/dev/null || echo 0)" -ge 32 ] || miss "outside: apply did not generate and store the key"
+if grep -q '^keeper PERSON' "$OB_LOG"; then miss "outside: apply stored a key only a person may enter"; fi
+ob_value=$(cat "$OB_STDIN.GENERATED" 2>/dev/null || echo "(none)")
+if grep -qF -- "$ob_value" "$OB_LOG" "$TMP/ob-apply.out"; then miss "outside: a generated value is in the arguments or the output"; fi
+[ "$rc" = 0 ] || miss "outside: apply where every command worked does not exit 0 ($rc)"
+grep -q 'Yours (3)' "$TMP/ob-apply.out" || miss "outside: apply does not print the lists again"
+git -C "$ob_a" checkout -q -- .
+# a second run has nothing of the machine's left
+: > "$OB_LOG"; ob_run "$ob_a" apply >/dev/null 2>&1 || true
+if grep -qE '^(setter|keeper) ' "$OB_LOG"; then miss "outside: a second apply ran a command: $(grep -E '^(setter|keeper) ' "$OB_LOG" | head -2)"; fi
+# a key stored in two places, the second fails: say where it is, exit 1, never generate again
+ob_twin=$(ob_repo twin "$ob_recipes" '[[item]]
+recipe = ["key", "key2"]
+name = "TWIN"
+source = "generated"' trunk)
+ob_reset; rc=0; OB_FAIL_STORE=keeper2 ob_run "$ob_twin" apply >"$TMP/ob-twin.out" 2>&1 || rc=$?
+[ "$rc" = 1 ] || miss "outside: a store that fails does not exit 1 ($rc)"
+grep -q 'vault-a' "$TMP/ob-twin.out" || miss "outside: apply does not say where the key already is"
+: > "$OB_LOG"; ob_run "$ob_twin" apply >/dev/null 2>&1 || true
+if grep -q '^keeper' "$OB_LOG"; then miss "outside: a key present in one place was generated again"; fi
+j=$(ob_status "$ob_twin" --json 2>/dev/null || true)
+[ "$(ob_ids yours)" = "key:TWIN" ] || miss "outside: a partial key is not the person's to decide: $(ob_ids yours)"
+# a setting whose apply fails: exit 1, the list says it is still to do
+ob_broken=$(ob_repo broken '[recipe.var]
+where = "github"
+kind = "setting"
+check = ["probe", "{name}"]
+expect_line = "{name}={value}"
+apply = ["no-such-command-xyz", "{name}"]' "$(ob_row var ABSENT 'value = "2"')" trunk)
+ob_reset; rc=0; ob_run "$ob_broken" apply >"$TMP/ob-broken.out" 2>&1 || rc=$?
+[ "$rc" = 1 ] && grep -q 'no-such-command-xyz' "$TMP/ob-broken.out" || miss "outside: an apply that cannot run does not exit 1 and say so ($rc)"
+
+# 52d. secrets: a terminal of the person's own, and the value goes nowhere but the store's stdin
+ob_reset; rc=0; ob_run "$ob_a" secrets </dev/null >"$TMP/ob-notty.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] && grep -q 'run this in a terminal of your own' "$TMP/ob-notty.out" || miss "outside: secrets ran without a terminal ($rc)"
+if grep -q '^keeper' "$OB_LOG"; then miss "outside: secrets stored something without a terminal"; fi
+ob_reset; rc=0; ob_tty 's3cr3t-VALUE' -- sh -c "$(ob_tool "$ob_a" secrets)" >"$TMP/ob-tty.out" 2>&1 || rc=$?
+[ "$(cat "$OB_STDIN.PERSON" 2>/dev/null)" = "s3cr3t-VALUE" ] || miss "outside: the entered value did not reach the store ($rc)"
+grep -q 'create it at the vault' "$TMP/ob-tty.out" || miss "outside: secrets does not say how to create the key before asking"
+if grep -qF 's3cr3t-VALUE' "$OB_LOG" "$TMP/ob-tty.out"; then miss "outside: the entered value is in the arguments or the output"; fi
+if grep -q '^keeper GENERATED' "$OB_LOG"; then miss "outside: secrets asked for or stored a key the machine generates"; fi
+ob_b=$(ob_repo b "$ob_recipes" "$(ob_row key PERSON2 'how = "make one"')" trunk)
+ob_reset; rc=0; ob_tty '' -- sh -c "$(ob_tool "$ob_b" secrets)" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 1 ] && [ ! -e "$OB_STDIN.PERSON2" ] || miss "outside: an empty answer stored something or did not exit 1 ($rc)"
+ob_reset; rc=0; ob_tty '^C' -- sh -c "$(ob_tool "$ob_b" secrets)" >/dev/null 2>&1 || rc=$?
+[ "$rc" != 0 ] && [ ! -e "$OB_STDIN.PERSON2" ] || miss "outside: Ctrl-C at the prompt stored something or exited 0 ($rc)"
+
 echo "ok  work outside the repository (or misses reported above)"

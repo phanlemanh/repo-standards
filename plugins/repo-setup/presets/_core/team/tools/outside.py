@@ -2,6 +2,8 @@
 """Work outside the repository: what is in place, what the machine applies, what is yours.
 
   python3 tools/outside.py [--root DIR] status [--json] [--draft]
+  python3 tools/outside.py [--root DIR] apply
+  python3 tools/outside.py [--root DIR] secrets
 
 The ledger is two files (see tools/outside_ledger.py): governance/outside.toml, the kinds of
 work the machine may do, and ops/outside.toml, each piece of work. `status` reads both from the
@@ -10,11 +12,19 @@ after the pull request that brings it is merged. A row only the working tree has
 not merged, and its check does not run. `--draft` prints the commands the working tree would
 run, and runs none. A repository without a remote reads its working tree, and says so.
 
+`apply` applies the settings that are not in place and whose recipe has `apply`, and generates
+the keys the machine makes (`source = "generated"`) where they are missing in every place. A key
+present in one place only is never made again: that would replace the one in use. `secrets` asks,
+with the typing hidden, for each key only a person can create, and hands it to the recipe's
+`store` on standard input. It runs only in a terminal: a machine cannot answer it for you.
+
 Each check answers within OUTSIDE_TIMEOUT seconds (default 30). A check that cannot run, or
 whose answer cannot be read, is unknown: never in place.
 
-Exit codes: 0 nothing is left to do; 1 work is left (the machine's, yours, unknown or refused);
-2 a wrong call, a file that is not valid TOML, or no governance/outside.toml.
+Exit codes of status: 0 nothing is left to do; 1 work is left (the machine's, yours, unknown
+or refused); 2 a wrong call, a file that is not valid TOML, or no governance/outside.toml. Of
+apply and secrets: 0 everything they tried was done, 1 something failed or was skipped, 2 as
+above (and secrets without a terminal).
 
 The value of a key is never read, printed or passed as an argument. Only the Python standard
 library is used (Python 3.11 or later).
@@ -23,8 +33,10 @@ library is used (Python 3.11 or later).
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
+import secrets
 import shlex
 import subprocess
 import sys
@@ -278,14 +290,22 @@ def _unmerged(root: Path, base_ids: set[str]) -> list[Row]:
     ]
 
 
-def status(root: Path) -> tuple[str | None, dict[str, list[Row]]]:
-    timeout = _timeout()
+def _load(
+    root: Path,
+) -> tuple[str | None, dict[str, ledger.Recipe], list[ledger.Item], list[str]]:
+    """The ledger of the default branch (fetched first), or of the working tree without a remote."""
     ref = base_ref(root)
     if ref is None:
         _say(NO_REMOTE)
     else:
         _fetch(root, ref)
     recipes, items, refused = _parse(read_ledger(root, ref), ref or "the working tree")
+    return ref, recipes, items, refused
+
+
+def status(root: Path) -> tuple[str | None, dict[str, list[Row]]]:
+    timeout = _timeout()
+    ref, recipes, items, refused = _load(root)
     lists = classify(items, recipes, root, timeout)
     lists["refused"] = _refused_rows(refused)
     if ref is not None:
@@ -369,6 +389,114 @@ def _status_command(root: Path, as_json: bool, show_draft: bool) -> int:
     return 1 if any(lists[name] for name in LEFT) else 0
 
 
+def _store(recipe: ledger.Recipe, item: ledger.Item, value: str, root: Path, timeout: float) -> str:
+    """Hands `value` to the recipe's store on standard input; "" when stored, else why not."""
+    argv = ledger.render(recipe.store, item.fields)
+    try:
+        done = subprocess.run(  # noqa: S603
+            argv,
+            cwd=root,
+            input=value,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError:
+        return f"command not found: {argv[0]}"
+    except subprocess.TimeoutExpired:
+        return f"no answer in {timeout:g} s: {shlex.join(argv)}"
+    except OSError as exc:
+        return f"cannot run {argv[0]}: {exc}"
+    return "" if done.returncode == 0 else f"{shlex.join(argv)} exited {done.returncode}"
+
+
+def _store_all(
+    item: ledger.Item,
+    recipes: Mapping[str, ledger.Recipe],
+    value: str,
+    root: Path,
+    timeout: float,
+) -> bool:
+    """Stores one value in every place of a key. Stops at the first place that fails."""
+    stored: list[str] = []
+    for name in item.recipes:
+        failed = _store(recipes[name], item, value, root, timeout)
+        if failed:
+            where = ", ".join(stored) if stored else "nowhere"
+            place = recipes[name].where
+            _say(f"  ! {item.id}: storing in {place} failed ({failed}); it is in {where}")
+            return False
+        stored.append(recipes[name].where)
+    print(f"  + {item.id}: stored in {', '.join(stored)}")
+    return True
+
+
+def _apply_setting(
+    item: ledger.Item, recipes: Mapping[str, ledger.Recipe], root: Path, timeout: float
+) -> bool:
+    for name in item.recipes:
+        argv = ledger.render(recipes[name].apply, item.fields)
+        code, _, failed = _run(argv, root, timeout)
+        if code != 0:
+            _say(f"  ! {item.id}: {failed or f'{shlex.join(argv)} exited {code}'}")
+            return False
+    print(f"  + {item.id}: applied")
+    return True
+
+
+def apply(root: Path) -> int:
+    """Applies the machine's list. Rows that are not merged are never applied."""
+    timeout = _timeout()
+    _, recipes, items, _ = _load(root)
+    failures = 0
+    for item in items:
+        if item.kind not in ("setting", "secret"):
+            continue
+        state, why = assess(item, recipes, root, timeout)
+        if _place(item, state, why, recipes)[0] != "apply":
+            continue
+        if item.kind == "setting":
+            done = _apply_setting(item, recipes, root, timeout)
+        else:
+            done = _store_all(item, recipes, secrets.token_urlsafe(32), root, timeout)
+        failures += 0 if done else 1
+    print_text(*status(root))
+    return 1 if failures else 0
+
+
+def enter_secrets(root: Path) -> int:
+    """Asks for each key only a person can create, with the typing hidden."""
+    if not sys.stdin.isatty():
+        _say("secrets reads keys with the typing hidden: run this in a terminal of your own.")
+        return 2
+    timeout = _timeout()
+    _, recipes, items, _ = _load(root)
+    left = 0
+    for item in items:
+        if item.kind != "secret" or item.source != "person":
+            continue
+        if assess(item, recipes, root, timeout)[0] != "missing":
+            continue
+        print(f"\n{item.id}  [{_where(item, recipes)}]")
+        if item.how:
+            print(f"  how: {item.how}")
+        try:
+            value = getpass.getpass(f"Value for {item.id} (hidden; Enter skips):")
+        except (KeyboardInterrupt, EOFError):
+            print()
+            _say("stopped: nothing more was stored")
+            return 130
+        if not value:
+            print(f"  - {item.id}: skipped")
+            left += 1
+            continue
+        left += 0 if _store_all(item, recipes, value, root, timeout) else 1
+    print()
+    print_text(*status(root))
+    return 1 if left else 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="outside.py",
@@ -380,6 +508,8 @@ def _parser() -> argparse.ArgumentParser:
     st = sub.add_parser("status", help="what is in place, the machine's work and yours")
     st.add_argument("--json", action="store_true", help="print JSON")
     st.add_argument("--draft", action="store_true", help="print the working tree's commands")
+    sub.add_parser("apply", help="apply the machine's list")
+    sub.add_parser("secrets", help="enter the keys only you can create (in a terminal)")
     return parser
 
 
@@ -387,6 +517,10 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         root = repo_root(Path(args.root) if args.root else Path.cwd())
+        if args.command == "apply":
+            return apply(root)
+        if args.command == "secrets":
+            return enter_secrets(root)
         return _status_command(root, getattr(args, "json", False), getattr(args, "draft", False))
     except CallError as exc:
         _say(str(exc))
