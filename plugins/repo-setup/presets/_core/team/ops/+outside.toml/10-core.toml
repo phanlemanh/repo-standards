@@ -1,0 +1,19 @@
+# Each piece of work outside this repository, read by tools/outside.py from the default branch.
+# A row names a recipe of governance/outside.toml, a decision that is always a person's, or an
+# action a person takes once. Adding a row goes like any change to the product; adding a kind of
+# command is a change to governance/outside.toml. `python3 tools/outside.py status` (or
+# `make outside`) shows what is in place, what the machine applies and what is yours.
+#
+#   [[item]]
+#   recipe = "github-env-variable"
+#   name = "APP_URL"
+#   env = "staging"
+#   value = "https://staging.example.com"
+#
+# A key: source = "person" (you enter it with `python3 tools/outside.py secrets`, in a terminal)
+# or "generated" (the machine makes it and stores it; nobody sees it). Never write a value here.
+
+[[item]]
+recipe = "github-setup"
+name = "repository"
+how = "python3 tools/github_setup.py shows the changes; --apply makes them after your go-ahead"

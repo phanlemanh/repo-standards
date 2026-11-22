@@ -2,7 +2,8 @@
 
 Ngày: 2026-11-16. Trạng thái: chủ kho nêu tiêu chí và cho sửa cùng ngày. Luật 8 đến 10 thêm ngày
 2026-11-20, lấy từ nguyên tắc 1, 2 và 5 của [thiết kế tổng quan ba kho](three-repo-overview-design.md),
-mục 4 (gói RS6). Trang này nói thứ repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md).
+mục 4 (gói RS6). Luật 11 thêm ngày 2026-11-22, theo [thiết kế việc ngoài kho](superpowers/specs/2026-11-22-outside-work-and-autonomy-card-design.md)
+chủ kho duyệt cùng ngày. Trang này nói thứ repo-setup sinh ra phải giữ điều gì. Việc nào ở kho nào xem [ranh giới ba kho](three-repo-boundaries.md).
 
 ## Ý định
 
@@ -21,7 +22,7 @@ kéo người vào để tăng độ tin cậy.
 - Kiểm: đọc lại để bắt lỗi. Máy làm rẻ hơn và kỹ hơn. Thay bằng máy. Chưa thay được thì ghi nó
   vào mục «Chỗ còn hở», không coi nó là thiết kế.
 
-## Mười luật
+## Mười một luật
 
 1. **Setup không dùng người làm người kiểm.** Độ tin cậy do máy tạo ra: check bắt buộc, luật nạp
    từ nhánh gốc, bằng chứng kiểm lại trước khi gộp.
@@ -50,6 +51,10 @@ kéo người vào để tăng độ tin cậy.
     rồi luật trong mã, rồi uỷ quyền có biên, sau cùng mới là người quyết. Luật nào chưa có máy giữ
     thì ghi rõ là giữ bằng lời, không giả là đã có tường. Bậc uỷ quyền có biên chưa có trong setup
     (RS5b, chờ vòng làm việc đọc được).
+11. **Việc ngoài kho: máy làm.** Người tạo khoá, nhập khoá và quyết. Cài đặt, biến và nơi chạy ứng dụng
+    đi qua một công cụ; khoá chỉ nhập ở Terminal của người, không qua cuộc trò chuyện. Loại lệnh máy
+    được chạy ngoài kho nằm trong `governance/` và nạp từ nhánh gốc, nên một lệnh chỉ chạy sau khi PR
+    của nó đã gộp. Mã của chính công cụ thì chạy từ cây làm việc: xem «Chỗ còn hở».
 
 ## Người xuất hiện ở đâu
 
@@ -79,6 +84,7 @@ Ngoài bảng này, mỗi lần người bị gọi là một lỗi của setup.
 | 8 | `ci.yml` của mỗi preset: job `quick`, `heavy`, `check`; `tools/ci_inputs.py` (khoá đầu vào của tầng nặng), `tools/ci_verdict.py` (ô tổng) | 49a, 49d, 49e, 49f |
 | 9 | `tools/ledgers.py` và `mk/derived.mk`: sổ thành mảnh, tệp vẽ ra không vào git; `.gitattributes`: `wiki/log.md merge=union` | 46a, 48c, 48f |
 | 10 | `plugins/repo-setup/rule-checks.toml` và `scripts/rule_kinds.py`: mỗi luật của `AGENTS.md` sinh ra nêu máy giữ nó hoặc ghi «giữ bằng lời» | 50m, 50n |
+| 11 | `tools/outside.py`: nạp `governance/outside.toml` và `ops/outside.toml` từ nhánh gốc; khoá chỉ đi qua đầu vào chuẩn của lệnh cất, từ một Terminal | 52b, 52c, 52d, 52e |
 
 Đường dẫn tính từ `plugins/repo-setup/presets/_core/` và `capabilities/github-agents/`, trừ khi ghi
 từ gốc kho. Mục 43k của bộ kiểm đỏ khi một luật không có hàng ở bảng này, hay một hàng nêu một mục
@@ -125,6 +131,12 @@ Thêm một hàng vào bảng «Người xuất hiện ở đâu» là đổi ng
 - **`conftest.py` và các tệp cấu hình kiểm tra** vẫn ở hạng high. Tính năng Python chạm
   `conftest.py` khá thường. Chưa có máy phân biệt thêm fixture với tắt bài test.
 - **Lớp agent trên GitHub chưa chạy với một phiên Claude thật.**
+- **Luật 11 nạp dữ liệu từ nhánh gốc, còn mã thì chạy từ cây làm việc.** `tools/outside.py`,
+  `tools/github_setup.py` và `tools/github_check.py` chạy bản trong cây làm việc, và hai công cụ sau
+  đọc `governance/autonomy.yaml` của cây làm việc. Một nhánh sửa các tệp đó có thể đổi điều gì được
+  tính là «đã đủ», và phiên chạy chúng không hiện hộp xin quyền (`Bash(python3 tools/:*)`). Hạng
+  high của `tools/**` và `governance/**` giữ việc gộp, không giữ việc chạy trên nhánh: phần này giữ
+  bằng lời.
 
 ## Nguồn
 

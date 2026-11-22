@@ -1,0 +1,47 @@
+# The kinds of work the machine may do outside this repository: one command template each.
+# Read by tools/outside.py from the default branch, never from a working tree, so a recipe runs
+# only once the pull request that brings it is merged. Adding or changing one changes the rules
+# of the game: a person decides. The rows that use them are in ops/outside.toml.
+#
+#   kind      setting (checked, applied when the recipe has apply), secret (checked by name,
+#             the value goes to store on standard input), action (a person does it once)
+#   check     the command that says it is in place; expect or expect_line says what it prints,
+#             missing_exit the exit code that means "not in place". Any other answer is unknown.
+#
+# Commands are lists of arguments; no shell reads them. {key} is the row's key of that name.
+
+[recipe.github-variable]
+where = "GitHub, repository variables"
+kind = "setting"
+check = ["gh", "variable", "list", "--json", "name,value", "--jq", '.[] | "\(.name)=\(.value)"']
+expect_line = "{name}={value}"
+apply = ["gh", "variable", "set", "{name}", "--body", "{value}"]
+
+[recipe.github-env-variable]
+where = "GitHub, environment variables"
+kind = "setting"
+check = ["gh", "variable", "list", "--env", "{env}", "--json", "name,value", "--jq", '.[] | "\(.name)=\(.value)"']
+expect_line = "{name}={value}"
+apply = ["gh", "variable", "set", "{name}", "--env", "{env}", "--body", "{value}"]
+
+[recipe.github-secret]
+where = "GitHub, repository secrets"
+kind = "secret"
+check = ["gh", "secret", "list", "--json", "name", "--jq", ".[].name"]
+expect_line = "{name}"
+store = ["gh", "secret", "set", "{name}"]
+
+[recipe.github-env-secret]
+where = "GitHub, environment secrets"
+kind = "secret"
+check = ["gh", "secret", "list", "--env", "{env}", "--json", "name", "--jq", ".[].name"]
+expect_line = "{name}"
+store = ["gh", "secret", "set", "{name}", "--env", "{env}"]
+
+# The walls: merge settings, environments, the branch ruleset. Only checked here: applying them
+# is `python3 tools/github_setup.py --apply`, after a person read the dry run and said go.
+[recipe.github-setup]
+where = "GitHub, repository settings"
+kind = "setting"
+check = ["python3", "tools/github_setup.py", "--check"]
+missing_exit = 1

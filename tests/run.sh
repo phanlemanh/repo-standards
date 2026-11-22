@@ -1933,7 +1933,7 @@ principles_hold() { # <page>: prints what does not hold, exits 1 when anything d
 import pathlib, re, sys
 page, tests = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"), pathlib.Path(sys.argv[2])
 headers = "\n".join(p.read_text(encoding="utf-8") for p in sorted(tests.glob("*.sh")))
-rules_part = page.split("## Mười luật", 1)[1].split("\n## ", 1)[0] if "## Mười luật" in page else ""
+rules_part = page.split("## Mười một luật", 1)[1].split("\n## ", 1)[0] if "## Mười một luật" in page else ""
 rules = {int(n): title for n, title in re.findall(r"^(\d+)\. \*\*(.+?)\*\*", rules_part, re.M)}
 table = page.split("## Luật nằm ở đâu trong mã", 1)[-1].split("\n## ", 1)[0]
 rows = {int(m.group(1)): m.group(2) for m in re.finditer(r"^\| (\d+) \|.*\| ([^|]+) \|$", table, re.M)}
@@ -3908,6 +3908,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/seams.sh
 . "$ROOT/tests/seams.sh"
+
+# shellcheck source=tests/outside.sh
+. "$ROOT/tests/outside.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

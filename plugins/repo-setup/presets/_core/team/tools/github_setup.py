@@ -3,6 +3,7 @@
 
   python3 tools/github_setup.py              # show what would be done (dry run)
   python3 tools/github_setup.py --apply      # do it (needs admin rights on the repository)
+  python3 tools/github_setup.py --check      # would --apply change anything? exit 0, 1 or 2
 
 Always: one merge method, the one governance/autonomy.yaml stores as merge_method (a policy
 from before that key keeps the repository's merge settings, or takes --merge-method);
@@ -384,7 +385,14 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--apply", action="store_true", help="execute (default: dry run)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true", help="execute (default: dry run)")
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="read only: exit 0 when --apply would change nothing, 1 when it would, "
+        "2 when the state could not be read (tools/github_check.py)",
+    )
     ap.add_argument(
         "--reviewer",
         help="production approver, e.g. @alice or @org/team "
@@ -405,14 +413,25 @@ def main(argv: list[str] | None = None) -> int:
         "governance/autonomy.yaml does not name (default: stop and say which)",
     )
     args = ap.parse_args(argv)
+    if not args.check:
+        return run(args)
+    # --check reads only: a state it could not read is 2, never 1 ("--apply would change it").
+    try:
+        return run(args)
+    except Exception as exc:  # anything unexpected while reading is a state not read
+        print(f"--check could not read the state: {exc}", file=sys.stderr)
+        return 2
 
+
+def run(args: argparse.Namespace) -> int:
+    unread = 2 if args.check else 1
     if not shutil.which("gh"):
         print("gh CLI not found: https://cli.github.com", file=sys.stderr)
-        return 1
+        return unread
     ok, out = gh(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"])
     if not ok:
         print(f"Not a GitHub repository or not logged in (gh auth login): {out}", file=sys.stderr)
-        return 1
+        return unread
     info = json.loads(out)
     repo, branch = info["nameWithOwner"], (info.get("defaultBranchRef") or {}).get("name", "main")
 
@@ -424,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     stored, bad = merge_method(policy), merge_method_problems(policy)
     if bad:
         print(f"governance/autonomy.yaml: {bad[0]}. Nothing was changed.", file=sys.stderr)
-        return 1
+        return unread
     if stored and args.merge_method and args.merge_method != stored:
         print(
             f"governance/autonomy.yaml says merge_method: {stored}, and --merge-method asks for "
@@ -447,6 +466,10 @@ def main(argv: list[str] | None = None) -> int:
         has_secret_scan(root),
         commit_format,
     )
+    if args.check:
+        import github_check  # the tool beside this one, needed only for --check
+
+        return github_check.check(repo, steps, unread_format)
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     # What could not be read is a failure, also when nothing else went wrong.
     failures = len(unread_format)

@@ -102,3 +102,6 @@ follow-up.
 - `doctor.py` again: show the score before → after and what is left.
 - Offer one commit per logical step (config, CI, docs/agent guide, ontology+wiki) so the
   PR is easy to review.
+- At level `team`, end with the work outside the repository: `python3 tools/outside.py status`,
+  as in step 7 of `/repo-setup:new`. An existing repository often has settings, variables and keys
+  already: add a row to `ops/outside.toml` for each one it uses, so `status` checks them.
