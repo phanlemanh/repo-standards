@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import textwrap
@@ -380,29 +379,41 @@ def team_ledger(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]],
         data = json.loads(done.stdout) if done.returncode in (0, 1) else None
         part = data["card"]
         called, machine = list(part["called"]), list(part["machine"])
-        ok_ids = [str(r.get("id", "")) for r in data.get("ok", [])]
+        ids = {
+            name: [str(r.get("id", "")) for r in data.get(name, [])]
+            for name in ("ok", "unknown", "apply", "unmerged")
+        }
     except (ValueError, KeyError, TypeError, AttributeError):
         lines = [ln for ln in done.stderr.strip().splitlines() if ln.strip()]
         reason = lines[-1] if lines else f"exit {done.returncode}, no JSON on standard output"
         return [_ledger_unknown(f"{OUTSIDE_TOOL} status gave no card ({reason})")], [], None
-    if shutil.which("gh") is None:
-        # The ledger's own row names only the first reason it could not answer; say this one too.
-        called.append(
-            row(
-                "Work on GitHub",
-                "find out why",
-                "unknown: gh is not installed or not on PATH, so GitHub cannot be asked",
-                "install gh and sign in: gh auth login",
-                "ops/outside.toml",
-                known=False,
-            )
-        )
-    return called, machine, ok_ids
+    return called, machine, ids
 
 
-def team_layers(root: Path, ok_ids: list[str] | None) -> list[dict[str, str]]:
+def _deploy_words(ids: dict[str, list[str]]) -> str:
+    """The staging deploy switch, as far as the ledger knows it."""
+
+    def holds(name: str) -> bool:
+        return any("DEPLOY_ENABLED" in ident for ident in ids.get(name, []))
+
+    if holds("ok"):
+        return "deploys to staging after each merge"
+    if holds("unknown"):
+        return "whether staging deploys run is not known: the DEPLOY_ENABLED row cannot be checked"
+    if holds("apply"):
+        return "staging deploys wait: the DEPLOY_ENABLED row is not applied yet"
+    if holds("unmerged"):
+        return "staging deploys wait: the DEPLOY_ENABLED row is not merged yet"
+    return (
+        "staging deploys are off: add a DEPLOY_ENABLED row to ops/outside.toml "
+        "once make deploy works"
+    )
+
+
+def team_layers(root: Path, ids: dict[str, list[str]] | None) -> list[dict[str, str]]:
     """What the layers that are on do alone (ruling 10). The deploy statement needs the ledger:
-    when it could not be read (`ok_ids` is None) the ledger's own unknown row stands for it."""
+    when it could not be read (`ids` is None) the ledger's own unknown row stands for it. A
+    DEPLOY_ENABLED row that is not known, still to apply or not merged is never "off"."""
     items = []
     try:
         caps = _read_json(root / MANIFEST).get("capabilities", [])
@@ -416,27 +427,18 @@ def team_layers(root: Path, ok_ids: list[str] | None) -> list[dict[str, str]]:
                 f"{MANIFEST}: capabilities",
             )
         )
-    if (root / DEPLOY_WORKFLOW).is_file() and ok_ids is not None:
-        if any("DEPLOY_ENABLED" in ident for ident in ok_ids):
-            items.append(machine_item("deploys to staging after each merge", DEPLOY_WORKFLOW))
-        else:
-            items.append(
-                machine_item(
-                    "staging deploys are off: add a DEPLOY_ENABLED row to ops/outside.toml "
-                    "once make deploy works",
-                    DEPLOY_WORKFLOW,
-                )
-            )
+    if (root / DEPLOY_WORKFLOW).is_file() and ids is not None:
+        items.append(machine_item(_deploy_words(ids), DEPLOY_WORKFLOW))
     return items
 
 
 def team_sources(root: Path) -> dict[str, Any]:
     """The team level's parts: the policy, the ledger and the layers."""
     policy_called, policy_machine = team_policy(root)
-    ledger_called, ledger_machine, ok_ids = team_ledger(root)
+    ledger_called, ledger_machine, ids = team_ledger(root)
     return {
         "called": policy_called + ledger_called,
-        "machine": policy_machine + team_layers(root, ok_ids) + ledger_machine,
+        "machine": policy_machine + team_layers(root, ids) + ledger_machine,
         "next_level": [],
     }
 

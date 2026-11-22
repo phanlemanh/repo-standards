@@ -406,7 +406,8 @@ def _called_by_list(lists: dict[str, list[Row]]) -> dict[str, list[dict[str, Any
     if lists["unknown"]:
         rows = lists["unknown"]
         when = _count(len(rows), "check cannot be answered", "checks cannot be answered")
-        why = f"unknown: {rows[0].why}"
+        reasons = list(dict.fromkeys(r.why for r in rows))  # each distinct reason, once
+        why = "unknown: " + "; ".join(reasons)
         row = _called(when, "find out why", why, STATUS_SWITCH, _ids(rows), known=False)
         groups["unknown"].append(row)
     if lists["refused"]:

@@ -247,6 +247,8 @@ assert any('an agent on GitHub' in m for m in mach), mach
 assert 'next_level' not in d, d
 " <<<"$acd_tj" 2>&1) || miss "autonomy card: the team card is wrong: $out"
 
+acd_bin="$TMP/acd-bin"; mkdir -p "$acd_bin"
+for acd_tool in python3 git make; do ln -sf "$(command -v "$acd_tool")" "$acd_bin/$acd_tool"; done
 acd_f="$TMP/acd-fastapi"; mkdir -p "$acd_f"; git -C "$acd_f" init -q -b main
 python3 "$S/apply.py" --target "$acd_f" --preset fastapi --level team --deploy container --var project_name=A --var description=x --var owner=acme >/dev/null
 acd_fj=$(acd_tcard "$acd_f" --json || true)
@@ -266,6 +268,16 @@ mach = [m['what'] for m in d['machine']]
 assert any('deploys to staging after each merge' in m for m in mach), mach
 assert not any('staging deploys are off' in m for m in mach), mach
 " <<<"$acd_fj" 2>&1) || miss "autonomy card: DEPLOY_ENABLED in place does not say deploys run: $out"
+
+# no gh: the DEPLOY_ENABLED row exists but cannot be checked: not known, never "off"
+acd_fj=$( ( cd "$acd_f" && PATH="$acd_bin" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) || true)
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+mach = [m['what'] for m in d['machine']]
+assert not any('staging deploys are off' in m for m in mach), mach
+assert any('not known' in m and 'DEPLOY_ENABLED' in m for m in mach), mach
+" <<<"$acd_fj" 2>&1) || miss "autonomy card: an unchecked DEPLOY_ENABLED row reads as deploys off: $out"
 
 # 54c. a policy that is changed in a copy of the repository: the card follows it
 acd_var() { # <name> <python edit of the policy text s>: the team card JSON of a changed copy
@@ -311,8 +323,6 @@ assert any('minor' in m['what'] for m in d['machine']), d['machine']
 " <<<"$acd_v" 2>&1) || miss "autonomy card: minor: low is still a row: $out"
 
 # 54d. a source that cannot be read is a known: false row with the reason, never silence
-acd_bin="$TMP/acd-bin"; mkdir -p "$acd_bin"
-for acd_tool in python3 git make; do ln -sf "$(command -v "$acd_tool")" "$acd_bin/$acd_tool"; done
 acd_before=$(git -C "$acd_o" status --porcelain)
 acd_rc=0; acd_ng=$( ( cd "$acd_o" && PATH="$acd_bin" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) ) || acd_rc=$?
 [ "$acd_rc" = 0 ] || miss "autonomy card: without gh the card exits $acd_rc: $acd_ng"
