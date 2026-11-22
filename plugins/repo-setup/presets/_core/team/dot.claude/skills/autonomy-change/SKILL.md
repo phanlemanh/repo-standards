@@ -18,29 +18,35 @@ A change to `governance/autonomy.yaml` changes the rules of the game: it is `hig
 | product code merges on its own | `default: low`, which needs `proof.check` |
 | check C proves that a change does what it should | `proof.check: "C"` |
 | check C must pass before anything merges | add C to `required_checks` |
-| who decides a change to the rules, or the rest | `owners.high`, `owners.medium` |
+| who decides a change to the rules, or the rest | `owners.high` (the rules), `owners.medium` (the rest); "make Lan a decider" is usually both |
 | dependency updates of one semver level | `rules.dependency_updates` |
 | one commit per pull request, or the branch's commits | `merge_method` |
 
-- One request is one key. When the words fit more than one key, or none, name the keys they could
-  mean and what each would do, and let the user say which: the intent is theirs.
+- One request is one change: one key, or both lists of `owners` for a new decider. When the words
+  fit more than one change, or none, name the keys they could mean and what each would do, and let
+  the user say which: the intent is theirs.
 - `high` is for the rules of the game only (policy, CI, agent config, quality gates). A product
   path that should wait for a person is `medium` already, the default: do not put it in `high`
   because its name sounds risky.
 - `tests/**` and the test patterns in `low` stay: the gate raises a deleted or weakened test on its
   own (`rules`).
 
-## 2. Draft it on a branch of its own
+## 2. Draft it on a branch of its own, in a worktree of its own
+
+The user's own checkout, its branch and anything not committed in it, stay as they are:
 
 ```bash
 git fetch origin
-git switch -c autonomy/<short-name> origin/HEAD
+wt="${TMPDIR:-/tmp}/autonomy-<short-name>"
+git worktree add "$wt" -b autonomy/<short-name> origin/HEAD
+cd "$wt"
 ```
 
 `origin/HEAD` is the default branch of the remote. Where it is not set (a repository pushed rather
 than cloned), `git remote set-head origin --auto` sets it.
 
-Change that one key, and nothing else in the repository. Keep the comments of the file.
+In the worktree, change that one key, and nothing else in the repository. Keep the comments of the
+file. Every command below runs in the worktree.
 
 ## 3. Run the policy check
 
@@ -51,9 +57,14 @@ make governance
 
 `make governance` refuses a policy that loosens a wall without a machine proof: `default: low`
 without `proof.check`, a proof that is one of the setup's own checks, a check name that is not a
-name. When it refuses, show its words to the user, open no pull request, and go back
-(`git switch -` and `git branch -D autonomy/<short-name>`): a person leaves only when a machine
-proof takes the place.
+name. When it refuses, show its words to the user and open no pull request: a person leaves only
+when a machine proof takes the place. Then drop the draft, from the user's checkout:
+
+```bash
+cd -
+git worktree remove --force "$wt"
+git branch -D autonomy/<short-name>
+```
 
 ## 4. Show before and after
 
@@ -66,8 +77,11 @@ proof takes the place.
   python3 tools/autonomy.py --files <path>
   ```
 
-- When the key is `proof.check`, `required_checks` or `merge_method`, it changes GitHub too: say
-  that `python3 tools/github_setup.py` shows what its next `--apply` sets, after the merge.
+- When the key is `proof.check`, `required_checks`, `merge_method` or `owners.high`, it changes
+  GitHub too: say that `python3 tools/github_setup.py` shows what its next `--apply` sets, after the
+  merge. For `owners.high`: one account means no code owner review (the owner's merge decides);
+  two or more bring the review back; the first is the `production` approver. Until that run, the
+  ruleset on GitHub stays as it was.
 - `.github/CODEOWNERS` changes with the policy; say which lines.
 
 ## 5. Open the pull request, then stop
@@ -77,6 +91,8 @@ git add governance/autonomy.yaml .github/CODEOWNERS
 git commit -m "chore(governance): <what changes, in the user's words>"
 git push -u origin autonomy/<short-name>
 gh pr create --title "<the commit title>" --body-file <the body>
+cd -
+git worktree remove "$wt"
 ```
 
 The body has the user's words, the before and after of step 4, and one line: "A code owner decides

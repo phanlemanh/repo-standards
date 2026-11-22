@@ -230,7 +230,9 @@ class Remote:
             checks = bool(data.get("required_status_checks"))
             if pull_request and owners and checks:
                 return "pass", f"{branch}: pull request + code owners + required checks"
-            one = "" if owners else self.sole_decider()
+            # The one decider cannot approve their own pull request: no approval may be asked.
+            approvals = int((reviews or {}).get("required_approving_review_count") or 0)
+            one = "" if owners or approvals else self.sole_decider()
             if pull_request and one and checks:
                 return "pass", (f"{branch}: pull request + required checks; {one}, the one "
                                 "decider, merges")
@@ -248,8 +250,11 @@ class Remote:
             checks = any(r.get("type") == "required_status_checks" for r in rules)
             if pull_request and owners and checks:
                 return "pass", f"{branch}: ruleset with pull request + code owners + required checks"
-            # With one decider the owner's merge is the decision: github_setup.py asks no review.
-            one = "" if owners else self.sole_decider()
+            # With one decider the owner's merge is the decision: github_setup.py asks no review,
+            # and no approval, which the owner could not give to their own pull request.
+            approvals = any((r.get("parameters") or {}).get("required_approving_review_count")
+                            for r in rules if r.get("type") == "pull_request")
+            one = "" if owners or approvals else self.sole_decider()
             if pull_request and one and checks:
                 return "pass", (f"{branch}: ruleset with pull request + required checks; {one}, "
                                 "the one decider, merges")

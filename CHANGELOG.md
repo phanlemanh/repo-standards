@@ -36,8 +36,11 @@ merges it itself. Part 5.3 of the design of 2026-11-22.
 - A one-owner repository: the next `python3 tools/github_setup.py --apply` turns code owner review
   off (the dry run and `--check` show it first). From then on "the machine does not merge a rule
   change itself" is kept by word only in that repository: GitHub cannot tell the owner's merge from
-  the agent's, since both are the same account. Recorded under "Chỗ còn hở" in
-  `docs/setup-principles.md`.
+  the agent's, since both are the same account. The review is off for every path CODEOWNERS
+  names, so "a person merges `medium`" is kept by word too; and with `github-agents`, the agents
+  on GitHub (`claude[bot]`, with write access) could merge such a pull request once the checks pass,
+  since the `gate` job only turns auto-merge off. Recorded under "Chỗ còn hở" in
+  `docs/setup-principles.md`, with a way to close it the owner may choose (`bypass_actors`).
 - `AGENTS.md` (team, and `github-agents`) and the comment at the top of `governance/autonomy.yaml`
   change wording; a team repository gets the new skill.
 

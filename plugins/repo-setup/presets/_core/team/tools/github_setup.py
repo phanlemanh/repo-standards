@@ -77,9 +77,11 @@ KEEP_MERGE = (
 ONE_DECIDER_HELP = (
     "governance/autonomy.yaml names one decider for the rules ({who}), and GitHub does not let the "
     "author of a pull request approve it: the machine opens pull requests as that account. So the "
-    "ruleset asks for no code owner review, and {who} merging a pull request is the decision. That "
-    "the machine never merges a rule change itself is kept by word (AGENTS.md). Name a second "
-    "decider under owners.high to ask for a code owner review again"
+    "ruleset asks for no code owner review on any path CODEOWNERS names, the rules and the medium "
+    "paths alike, and {who} merging a pull request is the decision. That the machine never merges "
+    "a medium or high pull request itself is then kept by word (AGENTS.md), also for the agents on "
+    "GitHub, which have write access. Name a second decider under owners.high to ask for a code "
+    "owner review again"
 )
 
 

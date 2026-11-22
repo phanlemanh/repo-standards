@@ -51,8 +51,10 @@ jobs:
             3. Otherwise fix the root cause on branch `agent/fix-main-${{ github.event.workflow_run.id }}`
                (never weaken or delete tests to get green), run `make check`, and open a PR titled
                "fix: <what broke>" that explains cause, fix and evidence. Add a log entry with `make log m="<what broke, link>"`.
-            4. If the fix needs a high-tier change or a human decision, open an issue labeled
-               `incident` with your diagnosis instead, and stop.
+            4. If the fix needs a change to the rules (high tier), open it as a pull request of
+               its own and never merge it: a code owner decides it. If it needs a human decision,
+               or GitHub refuses a workflow file from your token, open an issue labeled `incident`
+               with your diagnosis instead, and stop.
           claude_args: |
             --max-turns 60
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(make:*),Bash(npm:*),Bash(npx:*),Bash(uv:*),Bash(python3:*),Bash(git:*),Bash(gh run:*),Bash(gh pr:*),Bash(gh issue:*)"

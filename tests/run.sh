@@ -1913,6 +1913,20 @@ bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
 bp_verdict | grep '^pass' >/dev/null || miss "people decide: doctor fails a one-owner repository for the ruleset github_setup writes it: $(bp_verdict)"
 bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts no code owner review with two deciders: $(bp_two)"
+# one decider and an approval count: the owner cannot approve their own pull request, so nothing merges
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a one-owner ruleset that asks for an approval the owner cannot give: $(bp_verdict)"
+# a tools/autonomy.py from before the rule: its github_setup.py still asks for the review, and so does doctor
+pd_old="$TMP/people-decide-old"; rm -rf "$pd_old"; cp -R "$pd" "$pd_old"
+python3 - "$pd_old/tools/autonomy.py" <<'PY'
+import re, sys
+f = sys.argv[1]; t = open(f, encoding="utf-8").read()
+t, n = re.subn(r"(?ms)^def sole_decider\(.*?(?=^def )", "", t)
+assert n == 1; open(f, "w", encoding="utf-8").write(t)
+PY
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_old() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd_old" branch_protection '--level team --remote'; }
+bp_old | grep '^fail' >/dev/null || miss "people decide: doctor accepts no code owner review where the repository's tools predate the one-decider rule: $(bp_old)"
 # 43j. a ruleset from an earlier run is brought up to date, so an upgrade reaches the repository
 mkdir -p "$TMP/rsbin"
 cat > "$TMP/rsbin/gh" <<'SH'

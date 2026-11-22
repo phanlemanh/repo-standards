@@ -2,8 +2,8 @@ name: Agent — work an issue
 
 # The human edge is the issue: a person writes the intent (issue form "Intent") and adds a label.
 #   agent:spec       -> the agent writes the spec and posts it on the issue, then stops
-#   agent:implement  -> spec (if missing) + implementation + pull request;
-#                       the part that needs a change to the rules of the game is left to a person
+#   agent:implement  -> spec (if missing) + implementation + pull request; a change to the rules
+#                       of the game goes in a pull request of its own, which a code owner decides
 #   spec:approved    -> a human approved the posted spec: the agent implements it
 on:
   issues:
@@ -46,7 +46,9 @@ jobs:
             - agent:spec: write the spec only, post it on the issue, add label spec:needs-approval.
             - agent:implement: spec, then implement and open a pull request. If the spec needs a
               change to high-tier paths (the rules of the game, listed in governance/autonomy.yaml),
-              post the spec, add spec:needs-approval, and implement the part that does not.
+              open that change as a pull request of its own and never merge it: a code owner
+              decides it. When GitHub refuses a workflow file from your token, post the spec, add
+              spec:needs-approval, and implement the rest.
             - spec:approved: implement the approved spec from the issue comments.
             Open the pull request with `gh pr create`, linking "Closes #${{ github.event.issue.number }}".
             Never push to the default branch.

@@ -382,7 +382,9 @@ def choices_from_manifest(manifest: dict) -> Choices:
 # The two walls that keep a session from editing the rules (.claude/settings.json). A starter
 # repository keeps them: it has no branch rule and no code owner, so no review could carry the
 # decision. At team level the machine drafts such a change in a pull request of its own, and the
-# high tier and the ruleset hold it (docs/setup-principles.md, rule 3).
+# high tier and the ruleset hold it (docs/setup-principles.md, rule 3). The placeholder stays as long
+# as a release that wrote it may be the base of an upgrade: a later release renders that release's
+# templates with its own variables, and an unknown placeholder stops the run.
 EDIT_WALLS = ',\n      "Edit(./.github/workflows/**)",\n      "Edit(./governance/**)"'
 
 

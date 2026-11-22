@@ -78,7 +78,7 @@ for tool in sorted(set(re.findall(r"python3 (tools/[\w./-]+\.py)", text))):
 for target in sorted(set(re.findall(r"(?m)(?:^|`)make ([a-z][a-z0-9-]*)", text))):
     if target not in targets:
         bad.append(f"names make {target}, which no Makefile defines")
-for said in ("make governance", "git switch -c", "gh pr create", "governance/autonomy.yaml"):
+for said in ("make governance", "git worktree add", "gh pr create", "governance/autonomy.yaml"):
     if said not in text:
         bad.append(f"does not say {said}")
 for never in (r"gh pr merge", r"gh pr \w+[^\n]*--auto", r"--admin"):
@@ -250,5 +250,81 @@ print("\n".join(bad))
 sys.exit(1 if bad else 0)
 PY
 ) || miss "machine drafts: the pages: $out"
+
+# 53g. findings of the review of the whole branch, each pinned
+# (1) the skill drafts in a worktree of its own: a refusal leaves the user's branch and tree as
+#     they were, and so does a pull request. The flow below is the one the skill writes.
+ac_flow="$TMP/ac-flow"; rm -rf "$ac_flow" "$ac_flow.remote"; ac_install "$ac_flow" --preset python --level team
+git -C "$ac_flow" add -A && git -C "$ac_flow" -c user.name=t -c user.email=t@example.com commit -qm init
+git clone -q --bare "$ac_flow" "$ac_flow.remote" && git -C "$ac_flow" remote add origin "$ac_flow.remote"
+git -C "$ac_flow" fetch -q origin && git -C "$ac_flow" remote set-head origin --auto >/dev/null
+git -C "$ac_flow" switch -q -c feat/work; echo 'X = 1' > "$ac_flow/work.py"   # the user's own work, not committed
+out=$(cd "$ac_flow" && bash -e -c '
+  wt="${TMPDIR:-/tmp}/autonomy-ac-test"; rm -rf "$wt"
+  git worktree add -q "$wt" -b autonomy/ac-test origin/HEAD
+  cd "$wt"
+  sed "s/^default: medium$/default: low/" governance/autonomy.yaml > a.tmp && mv a.tmp governance/autonomy.yaml
+  make -s codeowners >/dev/null
+  if make -s governance >/dev/null 2>&1; then echo "accepted"; fi
+  cd - >/dev/null
+  git worktree remove --force "$wt"
+  git branch -D autonomy/ac-test >/dev/null' 2>&1) || miss "machine drafts: the refusal path of the skill fails: $out"
+[ "$out" = "" ] || miss "machine drafts: the refusal path of the skill: $out"
+[ "$(git -C "$ac_flow" branch --show-current)" = feat/work ] || miss "machine drafts: the refusal path left the user on another branch"
+[ "$(git -C "$ac_flow" status --porcelain)" = "?? work.py" ] || miss "machine drafts: the refusal path changed the user's tree: $(git -C "$ac_flow" status --porcelain | tr '\n' ' ')"
+if git -C "$ac_flow" rev-parse -q --verify autonomy/ac-test >/dev/null; then miss "machine drafts: the refusal path left its branch"; fi
+out=$(python3 - "$ac_t/$ac_skill" <<'PY' 2>&1
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+flat = " ".join(text.split())
+bad = []
+for said in ('git worktree add', 'git worktree remove --force', 'git branch -D autonomy/'):
+    if said not in text:
+        bad.append(f"the skill does not say {said}")
+if "git switch -" in text:
+    bad.append("the skill switches the user's own checkout")
+# (4) a change of owners.high changes GitHub too: one decider or several, and the production approver
+gh_bullet = next((b for b in (" ".join(b.split()) for b in text.split("\n- ")) if "changes GitHub too" in b), "")
+if "owners.high" not in gh_bullet:
+    bad.append("the skill does not say that owners.high changes GitHub")
+# (5) a new decider may be both lists of owners: not "one key" when the words mean two
+if "One request is one key." in flat:
+    bad.append("the skill says one request is one key, and its own example is two")
+print("\n".join(bad)); sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: the skill: $out"
+# (2) nothing generated still says a person must make a change to the rules, or that the agent may not
+out=$(python3 - "$ac_t" "$ROOT/plugins/repo-setup/skills/new/references/layers/governance.md" <<'PY' 2>&1
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+files = [root / "AGENTS.md", *sorted((root / ".github/workflows").glob("agent-*.yml")), pathlib.Path(sys.argv[2])]
+stale = (
+    "left to a person",
+    "is blocked for agents",
+    "a person edits `governance/",
+    "post the spec, add spec:needs-approval, and implement the part that does not",
+    "or the spec needs a change to the rules",
+    "If the fix needs a high-tier change or a human decision, open an issue",
+)
+bad = [f"{f.name}: {s}" for f in files for s in stale if s in " ".join(f.read_text(encoding="utf-8").split())]
+print("\n".join(bad)); sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: generated text still keeps the rules from the machine: $out"
+# (3) one decider: what is then kept by word is said whole, the merge of medium and the agents on GitHub
+grep -qF 'medium' <<<"$(cd "$ac_t" && python3 -B -c 'import sys; sys.path.insert(0, "tools"); import github_setup as g; print(g.ONE_DECIDER_HELP)')" \
+  || miss "machine drafts: the one-decider note does not say that medium loses its review too"
+out=$(python3 - "$ROOT" <<'PY' 2>&1
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+gaps = (root / "docs/setup-principles.md").read_text(encoding="utf-8").split("## Chỗ còn hở", 1)[-1]
+one = next((b for b in gaps.split("\n- ") if b.startswith("**Repo một chủ.**")), "")
+log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## ", 1)[0]
+entry = next((e for e in log.split("\n### ") if "the machine drafts a change to the rules" in e), "")
+bad = []
+for where, text, words in (("«Repo một chủ»", one, ("medium", "claude[bot]")), ("the CHANGELOG entry", entry, ("medium", "claude[bot]"))):
+    bad += [f"{where} does not say {w}" for w in words if w not in text]
+print("\n".join(bad)); sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: what one decider keeps by word: $out"
 
 echo "ok  the machine drafts, a person decides (or misses reported above)"

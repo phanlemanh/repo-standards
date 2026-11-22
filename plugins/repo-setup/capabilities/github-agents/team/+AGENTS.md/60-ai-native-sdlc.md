@@ -8,7 +8,7 @@ for when to stop.
 | Stage | Agent | Human edge |
 | --- | --- | --- |
 | Intent | Clarify in the issue; add testable acceptance criteria | Writes the intent issue, adds `agent:implement` / `agent:spec` |
-| Spec | `wiki/specs/NNNN-*.md`, in the `spec` format of `ontology/page-types.yaml` | Approves (`spec:approved`) when the issue asked for the spec only, or the spec needs a change to the rules |
+| Spec | `wiki/specs/NNNN-*.md`, in the `spec` format of `ontology/page-types.yaml` | Approves (`spec:approved`) when the issue asked for the spec only, or GitHub refused the agent a workflow file |
 | Build | Branch `agent/<issue>-<slug>`, tests first, `make check` green | — |
 | Verify | Independent reviewer agent (no edit rights) checks spec ↔ code ↔ tests | — |
 | Merge | `risk:low` merges itself when the required checks pass | Merges `risk:medium`; a code owner decides `risk:high` |

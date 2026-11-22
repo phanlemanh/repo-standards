@@ -62,7 +62,7 @@ Danh sách đóng, tính trong phần repo-setup sinh ra. Các cổng của vòn
 
 | Khi nào | Người làm gì | Vai |
 | --- | --- | --- |
-| Pull request đổi luật chơi (hạng high) | Code owner duyệt | Quyết |
+| Pull request đổi luật chơi (hạng high) | Code owner duyệt; kho một chủ: chủ kho gộp | Quyết |
 | Đưa ra production | Người duyệt môi trường `production` | Quyết |
 | Đặt secret, cài GitHub App | Tự làm một lần | Quyết |
 | Máy thấy rào bị nới: test bị bỏ, `agent:` nới ra | Gộp hoặc từ chối | Quyết |
@@ -121,10 +121,15 @@ Thêm một hàng vào bảng «Người xuất hiện ở đâu» là đổi ng
   người với agent dùng chung một danh tính. Chủ kho chốt ngày 2026-11-22: khi `owners.high` của
   `governance/autonomy.yaml` chỉ nêu một tài khoản, `tools/github_setup.py` ghi luật nhánh không đòi
   code owner duyệt và in lý do, ở cả lượt chạy thử; việc chủ kho bấm gộp là duyệt. Đúng cả khi kho
-  bật `github-agents`: phiên Claude ở máy vẫn mở pull request bằng danh tính chủ kho. Từ đó câu «máy
-  không tự gộp thay đổi luật» ở kho ấy chỉ giữ bằng lời (`AGENTS.md`): GitHub không phân biệt được
-  chủ kho bấm gộp với agent bấm gộp. Kho có từ hai người quyết, hay nêu một đội (`@org/team`), thì
-  luật nhánh đòi code owner duyệt như cũ. Chưa kiểm trên repo thật.
+  bật `github-agents`: phiên Claude ở máy vẫn mở pull request bằng danh tính chủ kho. Luật nhánh đòi
+  hay không đòi code owner duyệt cho mọi đường dẫn `CODEOWNERS` nêu, nên phần `medium` (dòng `*`)
+  cũng mất bước duyệt. Từ đó câu «máy không tự gộp một pull request `medium` hay `high`» ở kho ấy
+  chỉ giữ bằng lời (`AGENTS.md`): GitHub không phân biệt được chủ kho bấm gộp với agent bấm gộp. Các
+  agent trên GitHub (lớp `github-agents`, chạy bằng app Claude, `claude[bot]`, có quyền ghi) cũng
+  gộp được khi các check xanh; job `gate` chỉ tắt tự gộp. Một đường đóng, chưa dựng, để chủ kho
+  quyết: giữ code owner duyệt và cho vai admin vượt luật khi gộp pull request (`bypass_actors`).
+  Kho có từ hai người quyết, hay nêu một đội (`@org/team`), thì luật nhánh đòi code owner duyệt
+  như cũ. Chưa kiểm trên repo thật.
 - **Hạng medium không có tường phía GitHub khi đường dẫn không có chủ.** Khi đã có bằng chứng,
   dòng `*` trong CODEOWNERS mất đi; một pull request lên medium vì bỏ một bài test thì pipeline
   không tự gộp, nhưng ai có quyền ghi, kể cả một agent chạy `gh pr merge`, vẫn gộp được khi các
