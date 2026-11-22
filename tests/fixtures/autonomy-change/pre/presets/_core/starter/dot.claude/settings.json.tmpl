@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(python3 tools/:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.*.local)",
+      "Read(./.env.production)",
+      "Read(./.env.staging)",
+      "Read(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Edit(./.github/workflows/**)",
+      "Edit(./governance/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null; [ -f Makefile ] && command -v make >/dev/null 2>&1 && make -s derived 2>&1; exit 0"
+          }
+        ]
+      }
+    ]
+  }{{plugin_settings}}
+}

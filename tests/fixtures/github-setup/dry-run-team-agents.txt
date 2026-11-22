@@ -28,8 +28,10 @@ Dry run for acme/sample (default branch main)
       gh api -X PUT repos/acme/sample/environments/staging
   - environment production (human approval by @acme)
       gh api -X PUT repos/acme/sample/environments/production --input -
-  - ruleset on main: PR + code owner where CODEOWNERS names one + checks check, gate, secret-scan, conventional-title, conventional-commits
+  - ruleset on main: PR + no code owner review (one decider: @acme) + checks check, gate, secret-scan, conventional-title, conventional-commits
       gh api -X POST repos/acme/sample/rulesets --input -
+
+  ! governance/autonomy.yaml names one decider for the rules (@acme), and GitHub does not let the author of a pull request approve it: the machine opens pull requests as that account. So the ruleset asks for no code owner review on any path CODEOWNERS names, the rules and the medium paths alike, and @acme merging a pull request is the decision. That the machine never merges a medium or high pull request itself is then kept by word (AGENTS.md), also for the agents on GitHub, which have write access. Name a second decider under owners.high to ask for a code owner review again.
 
 Secrets (values are never read):
   ! missing ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.

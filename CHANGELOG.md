@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+### Changed: the machine drafts a change to the rules, a person decides it
+At team level a Claude session may now edit `.github/workflows/` and `governance/`. Such a change
+goes in a pull request of its own; it is `high`, so a code owner decides it, and the machine never
+merges it itself. Part 5.3 of the design of 2026-11-22.
+
+- The generated `.claude/settings.json` of a team-level repository no longer denies
+  `Edit(./.github/workflows/**)` and `Edit(./governance/**)`. The deny rules on reading secrets
+  stay. A starter repository keeps both lines: it has no branch rule and no code owner, so no
+  review could carry the decision. Both come from the one template.
+- `AGENTS.md` (team) says it in two rules: a change there is `high` and a code owner decides it
+  (held by the autonomy gate), and it goes in a pull request of its own that you never merge (kept
+  by word). The `github-agents` rules say the same, and keep the spec on the issue for when GitHub
+  refuses a workflow file from the agent's token.
+- A new skill, `.claude/skills/autonomy-change/SKILL.md` (team): the user says in words what they
+  want; it changes one key of `governance/autonomy.yaml` on a branch of its own, runs
+  `make governance` (a loosened wall without a machine proof is refused, and no pull request is
+  opened), shows before and after, opens the pull request and stops.
+- One-owner repositories (the owner decided on 2026-11-22): when `owners.high` in
+  `governance/autonomy.yaml` names one account, `tools/github_setup.py` writes the ruleset without
+  code owner review and says why, in the dry run too; merging the pull request is the decision.
+  This holds with `github-agents` on, since the session opens pull requests as the owner. With two
+  or more deciders, or a team handle (`@org/team`), the ruleset asks for a code owner review as
+  before. `doctor --remote` takes a ruleset without code owner review as protected when the
+  repository's own `tools/autonomy.py` names one decider.
+
+**What breaks on upgrade**:
+- A team-level repository: the two `Edit` deny lines leave `.claude/settings.json`. A file nobody
+  edited loses exactly those two lines; one edited next to them gets conflict markers. From then on
+  the session can edit the CI files and the policy; what holds such a change is the `high` tier and
+  the ruleset. A repository that has not run `python3 tools/github_setup.py --apply` has no ruleset:
+  nothing but the words of `AGENTS.md` holds the change there.
+- A one-owner repository: the next `python3 tools/github_setup.py --apply` turns code owner review
+  off (the dry run and `--check` show it first). From then on "the machine does not merge a rule
+  change itself" is kept by word only in that repository: GitHub cannot tell the owner's merge from
+  the agent's, since both are the same account. The review is off for every path CODEOWNERS
+  names, so "a person merges `medium`" is kept by word too; and with `github-agents`, the agents
+  on GitHub (`claude[bot]`, with write access) could merge such a pull request once the checks pass,
+  since the `gate` job only turns auto-merge off. Recorded under "Chỗ còn hở" in
+  `docs/setup-principles.md`, with a way to close it the owner may choose (`bypass_actors`).
+- `AGENTS.md` (team, and `github-agents`) and the comment at the top of `governance/autonomy.yaml`
+  change wording; a team repository gets the new skill. With `github-agents`, the prompts in
+  `.github/workflows/agent-implement.yml` and `agent-ci-fix.yml` change too: the agent opens a
+  change to the rules as a pull request of its own instead of leaving it to a person, and falls
+  back to the spec on the issue only when GitHub refuses a workflow file from its token. A
+  repository that edited those prompts gets them merged, or conflict markers where the lines meet.
+
 ### Added: work outside the repository goes through one tool
 A team-level repository gets a ledger of its work outside the repository (GitHub settings,
 variables, keys, the platform it runs on) and `tools/outside.py`, which checks it, applies what

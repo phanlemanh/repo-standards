@@ -157,6 +157,26 @@ def policy_problems(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -
     return problems
 
 
+def sole_decider(policy: dict[str, Any]) -> str:
+    """The one account that decides a change to the rules (`owners.high`), as "@name"; "" when
+    the policy names none, several, or a team.
+
+    GitHub does not let the author of a pull request approve it, and in a repository with one
+    owner the machine opens pull requests as that owner. There the owner's merge is the decision
+    (tools/github_setup.py writes the ruleset without code owner review). A team (@org/team) may
+    be many people, so it is never one account. Handles are compared without case or "@".
+    """
+    owners = policy.get("owners")
+    high = owners.get("high") if isinstance(owners, dict) else None
+    if not isinstance(high, list):
+        return ""
+    names = {str(h).strip().lstrip("@").lower() for h in high} - {""}
+    if len(names) != 1:
+        return ""
+    name = names.pop()
+    return "" if "/" in name else f"@{name}"
+
+
 def merge_method(policy: dict[str, Any]) -> str:
     """The stored merge method, or "" when the policy names none (a policy from before the key)."""
     value = policy.get("merge_method")

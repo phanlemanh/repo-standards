@@ -10,7 +10,8 @@ from before that key keeps the repository's merge settings, or takes --merge-met
 environments "staging"
 and "production" (production requires a human reviewer); a ruleset on the default branch (pull
 request + required checks; a code owner decides only where .github/CODEOWNERS names one, and
-nobody else has to approve). Required: `check`, `secret-scan`, the commit-format checks
+nobody else has to approve; where owners.high names one account, no code owner review either: that
+owner's merge is the decision). Required: `check`, `secret-scan`, the commit-format checks
 (`conventional-title`, `conventional-commits`) once the default branch defines them, the checks
 governance/autonomy.yaml names under required_checks, and its proof (proof.check) when it names
 one.
@@ -41,6 +42,7 @@ from autonomy import (
     own_checks,
     proof_check,
     required_checks,
+    sole_decider,
 )
 from repo_ontology import find_repo_root, load_yaml_file
 
@@ -71,6 +73,15 @@ MERGE_METHODS = {
 MERGE_SETTINGS = ("allow_squash_merge", "allow_merge_commit", "allow_rebase_merge")
 KEEP_MERGE = (
     "merge method left as it is (governance/autonomy.yaml names no merge_method: add one to choose)"
+)
+ONE_DECIDER_HELP = (
+    "governance/autonomy.yaml names one decider for the rules ({who}), and GitHub does not let the "
+    "author of a pull request approve it: the machine opens pull requests as that account. So the "
+    "ruleset asks for no code owner review on any path CODEOWNERS names, the rules and the medium "
+    "paths alike, and {who} merging a pull request is the decision. That the machine never merges "
+    "a medium or high pull request itself is then kept by word (AGENTS.md), also for the agents on "
+    "GitHub, which have write access. Name a second decider under owners.high to ask for a code "
+    "owner review again"
 )
 
 
@@ -211,7 +222,10 @@ def plan(
     extra: tuple[str, ...] | list[str] = (),
     secret_scan: bool = True,
     commit_format: tuple[str, ...] | list[str] = (),
+    one_decider: str = "",
 ) -> list[dict[str, Any]]:
+    """The steps of a run. `one_decider` is the one account that decides the rules (see
+    autonomy.sole_decider): then the ruleset asks for no code owner review."""
     # "" (a policy from before merge_method, and no option): the merge settings are left alone.
     merge_title, merge_allowed = MERGE_METHODS[merge_method] if merge_method else (KEEP_MERGE, "")
     merge_fields = [
@@ -299,9 +313,10 @@ def plan(
                 "type": "pull_request",
                 "parameters": {
                     # Nobody approves as a checker: the required checks are the proof. A
-                    # person decides only where CODEOWNERS names an owner.
+                    # person decides only where CODEOWNERS names an owner, and not by review
+                    # where that person is the one decider: the author cannot approve.
                     "required_approving_review_count": 0,
-                    "require_code_owner_review": True,
+                    "require_code_owner_review": not one_decider,
                     "dismiss_stale_reviews_on_push": True,
                     "require_last_push_approval": False,
                     "required_review_thread_resolution": False,
@@ -318,8 +333,13 @@ def plan(
     }
     steps.append(
         {
-            "what": f"ruleset on {branch}: PR + code owner where CODEOWNERS names one + checks "
-            f"{', '.join(checks)}",
+            "what": f"ruleset on {branch}: PR + "
+            + (
+                f"no code owner review (one decider: {one_decider})"
+                if one_decider
+                else "code owner where CODEOWNERS names one"
+            )
+            + f" + checks {', '.join(checks)}",
             "ruleset": ruleset,
             "args": ["api", "-X", "POST", f"repos/{repo}/rulesets", "--input", "-"],
         }
@@ -465,6 +485,7 @@ def run(args: argparse.Namespace) -> int:
         required_checks(policy, own),
         has_secret_scan(root),
         commit_format,
+        sole_decider(policy),
     )
     if args.check:
         import github_check  # the tool beside this one, needed only for --check
@@ -540,6 +561,8 @@ def run(args: argparse.Namespace) -> int:
         print(f"\n  ! {note}")
     for name in behind:
         print(f"\n  ! {name} is a required check that {BEHIND_HELP}.")
+    if sole_decider(policy):
+        print(f"\n  ! {ONE_DECIDER_HELP.format(who=sole_decider(policy))}.")
     names = secret_names(repo)
     print("\nSecrets (values are never read):")
     if names is None:

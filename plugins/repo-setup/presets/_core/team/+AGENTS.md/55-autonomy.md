@@ -7,7 +7,11 @@ needs a code owner.
 - A tier is never a reason to stop and ask before you work: when to stop is decided by the
   workflow that drives you. Do the work, open the pull request, and say in it what a person has to
   decide. `python3 tools/autonomy.py --base origin/main` shows the tier and the file behind it. <!-- kept: word -->
-- Do not edit `.github/workflows/` or `governance/`: humans own them. <!-- kept: autonomy-gate -->
+- A change to `.github/workflows/` or `governance/` changes the rules of the game: it is `high`,
+  and a code owner decides it. <!-- kept: autonomy-gate -->
+- When the work needs such a change, draft it in a pull request of its own, with nothing else in
+  it, and never merge it yourself. To change who decides a merge (`governance/autonomy.yaml`),
+  follow `.claude/skills/autonomy-change/SKILL.md`. <!-- kept: word -->
 - Do not merge a pull request yourself. A `low` one merges itself when the checks pass; any
   other merge is a person's decision. <!-- kept: word -->
 - Never delete or weaken a test to get green, and never loosen an `agent:` setting in `ontology/`

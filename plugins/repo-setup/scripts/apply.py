@@ -100,6 +100,7 @@ from apply_plan import (  # noqa: E402, F401
     derive_vars,
     layers_for,
     left_out_patterns,
+    level_variables,
     LEVELS,
     LICENSES,
     load_meta,
@@ -320,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
     meta = load_meta(preset, level, archetype, deploy, caps)
     for k, val in meta["vars"].items():
         variables.setdefault(k, str(val))
+    variables.update(level_variables(level))
     # Commands may start with a "[var=value]" condition, e.g. "[lang=ts] npm install x".
     for key in ("install", "verify"):
         kept = []

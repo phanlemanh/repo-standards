@@ -129,10 +129,12 @@ Two groups, with different strength:
   run: the ruleset (pull request, required checks, no force push), and CODEOWNERS for the files
   that are the rules. No approval is required for its own sake.
 - **Enforced per tool call, inside a Claude session**: `.claude/settings.json` deny rules on
-  secrets, workflows and `governance/`. They block silently and prevent mistakes, but are not a
-  security boundary. A deny rule on `.env` does not stop a script from reading it. Which commands
-  may run is left to Claude Code's own permission mode: the settings ask nothing and block no
-  Bash command by pattern.
+  reading secrets and, at starter level, on editing workflows and `governance/`. At team level the
+  machine may draft a change to those, in a pull request of its own that a code owner decides: the
+  `high` tier and the ruleset hold it. The deny rules block silently and prevent mistakes, but are
+  not a security boundary. A deny rule on `.env` does not stop a script from reading it. Which
+  commands may run is left to Claude Code's own permission mode: the settings ask nothing and
+  block no Bash command by pattern.
 
 `governance/autonomy.yaml` sorts changes by who decides the merge: `low` merges itself when the
 required checks pass, `medium` is merged by a person because nothing proves it yet, `high`

@@ -1867,13 +1867,16 @@ for phrase in 'get approval before you start' 'ask in the issue and stop' 'need 
   if grep -qiF "$phrase" "$pd/AGENTS.md" "$pd/CONTRIBUTING.md" "$pd/.github/pull_request_template.md" "$pd/ontology/README.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/+AGENTS.md/40-service-api.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/tools/api_compat.py"; then miss "people decide: generated text stops for a person: $phrase"; fi
 done
 grep -q 'never a reason to stop' "$pd/AGENTS.md" || miss "people decide: AGENTS.md does not say that a tier is no reason to stop"
-python3 - "$pd/.claude/settings.json" <<'PY' || miss "people decide: settings.json asks, blocks Bash by pattern, or lost a silent wall"
+# At team level the machine drafts a change to the rules in a pull request of its own (53a): the
+# two edit walls are gone there, and the wall on reading secrets stays.
+python3 - "$pd/.claude/settings.json" <<'PY' || miss "people decide: settings.json asks, blocks Bash by pattern, lost a silent wall, or still keeps the machine from drafting a rule change"
 import json, sys
 p = json.load(open(sys.argv[1], encoding="utf-8"))["permissions"]
 assert not p.get("ask"), p.get("ask")
 assert not [r for r in p["deny"] if r.startswith("Bash(")], p["deny"]
-for wall in ("Read(./.env)", "Edit(./.github/workflows/**)", "Edit(./governance/**)"):
-    assert wall in p["deny"], wall
+assert "Read(./.env)" in p["deny"], p["deny"]
+for wall in ("Edit(./.github/workflows/**)", "Edit(./governance/**)"):
+    assert wall not in p["deny"], wall
 PY
 if grep -q 'gate hook' "$ROOT/plugins/repo-setup/skills/explain/SKILL.md"; then miss "people decide: explain names a gate hook the plugin no longer ships"; fi
 # 43h. the principle is written down where the next change to the plugin will find it
@@ -1900,8 +1903,30 @@ echo '[{"type":"required_status_checks"}]' > "$TMP/rules.json"
 bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch that needs no pull request: $(bp_verdict)"
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":true}}]' > "$TMP/rules.json"
 bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts approvals in place of required checks: $(bp_verdict)"
+# with two deciders for the rules, a ruleset without code owner review has lost them (53d)
+pd2="$TMP/people-decide-two"; rm -rf "$pd2"; cp -R "$pd" "$pd2"
+subst 's|^  high: \[.*\]$|  high: ["@acme", "@lan"]|' "$pd2/governance/autonomy.yaml"
+bp_two() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd2" branch_protection '--level team --remote'; }
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
-bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch where the rules have lost their decider: $(bp_verdict)"
+bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch where the rules have lost their deciders: $(bp_two)"
+# with one decider the owner's merge is the decision: no code owner review is what github_setup writes
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep '^pass' >/dev/null || miss "people decide: doctor fails a one-owner repository for the ruleset github_setup writes it: $(bp_verdict)"
+bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts no code owner review with two deciders: $(bp_two)"
+# one decider and an approval count: the owner cannot approve their own pull request, so nothing merges
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a one-owner ruleset that asks for an approval the owner cannot give: $(bp_verdict)"
+# a tools/autonomy.py from before the rule: its github_setup.py still asks for the review, and so does doctor
+pd_old="$TMP/people-decide-old"; rm -rf "$pd_old"; cp -R "$pd" "$pd_old"
+python3 - "$pd_old/tools/autonomy.py" <<'PY'
+import re, sys
+f = sys.argv[1]; t = open(f, encoding="utf-8").read()
+t, n = re.subn(r"(?ms)^def sole_decider\(.*?(?=^def )", "", t)
+assert n == 1; open(f, "w", encoding="utf-8").write(t)
+PY
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_old() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd_old" branch_protection '--level team --remote'; }
+bp_old | grep '^fail' >/dev/null || miss "people decide: doctor accepts no code owner review where the repository's tools predate the one-decider rule: $(bp_old)"
 # 43j. a ruleset from an earlier run is brought up to date, so an upgrade reaches the repository
 mkdir -p "$TMP/rsbin"
 cat > "$TMP/rsbin/gh" <<'SH'
@@ -3911,6 +3936,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/outside.sh
 . "$ROOT/tests/outside.sh"
+
+# shellcheck source=tests/autonomy_change.sh
+. "$ROOT/tests/autonomy_change.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

@@ -62,7 +62,7 @@ Danh sách đóng, tính trong phần repo-setup sinh ra. Các cổng của vòn
 
 | Khi nào | Người làm gì | Vai |
 | --- | --- | --- |
-| Pull request đổi luật chơi (hạng high) | Code owner duyệt | Quyết |
+| Pull request đổi luật chơi (hạng high) | Code owner duyệt; kho một chủ: chủ kho gộp | Quyết |
 | Đưa ra production | Người duyệt môi trường `production` | Quyết |
 | Đặt secret, cài GitHub App | Tự làm một lần | Quyết |
 | Máy thấy rào bị nới: test bị bỏ, `agent:` nới ra | Gộp hoặc từ chối | Quyết |
@@ -74,9 +74,9 @@ Ngoài bảng này, mỗi lần người bị gọi là một lỗi của setup.
 
 | Luật | Nơi giữ | Bài kiểm (`tests/run.sh`, mục 43) |
 | --- | --- | --- |
-| 1 | `tools/github_setup.py`: ruleset không đòi approve nào; code owner chỉ ở file luật | 43b |
+| 1 | `tools/github_setup.py`: ruleset không đòi approve nào; code owner chỉ ở file luật; kho một chủ (`autonomy.sole_decider`) không đòi code owner, việc chủ kho gộp là duyệt | 43b, 53d |
 | 2 | `tools/autonomy.py`: `default: low` mà thiếu `proof.check` thì bị từ chối và tính là medium | 43c |
-| 3 | `settings.json.tmpl` không có `ask`; `+AGENTS.md/55-autonomy.md` | 43g |
+| 3 | `settings.json.tmpl` không có `ask`; ở bậc `team` không chặn sửa `.github/workflows/` hay `governance/`: máy soạn thành PR riêng, code owner quyết; `+AGENTS.md/55-autonomy.md` | 43g, 53a |
 | 4 | `pr-pipeline.yml`: luật nạp từ nhánh gốc; job `gate` không checkout, đỏ khi không biết hạng; settings không có deny dạng `Bash(` | mục 30, 43f, 43g |
 | 5 | `governance/autonomy.yaml.tmpl`: danh sách `high`; hai luật `*_raise_to`, so từng action với chính nó | 43a, 43d |
 | 6 | `pr-pipeline.yml`: việc `review` bỏ qua khi chính sách có `proof.check` | 43f |
@@ -118,8 +118,18 @@ Thêm một hàng vào bảng «Người xuất hiện ở đâu» là đổi ng
   đó không được tự bỏ qua. Bên giữ check là vòng làm việc, theo luật «phép kiểm nối hai sổ đặt ở
   bên đọc».
 - **Repo một chủ.** GitHub không cho tác giả tự duyệt pull request của mình, và không phân biệt
-  người với agent dùng chung một danh tính. Pull request đổi luật do chính chủ mở chưa có đường
-  gộp ngoài quyền quản trị. Chưa kiểm trên repo thật.
+  người với agent dùng chung một danh tính. Chủ kho chốt ngày 2026-11-22: khi `owners.high` của
+  `governance/autonomy.yaml` chỉ nêu một tài khoản, `tools/github_setup.py` ghi luật nhánh không đòi
+  code owner duyệt và in lý do, ở cả lượt chạy thử; việc chủ kho bấm gộp là duyệt. Đúng cả khi kho
+  bật `github-agents`: phiên Claude ở máy vẫn mở pull request bằng danh tính chủ kho. Luật nhánh đòi
+  hay không đòi code owner duyệt cho mọi đường dẫn `CODEOWNERS` nêu, nên phần `medium` (dòng `*`)
+  cũng mất bước duyệt. Từ đó câu «máy không tự gộp một pull request `medium` hay `high`» ở kho ấy
+  chỉ giữ bằng lời (`AGENTS.md`): GitHub không phân biệt được chủ kho bấm gộp với agent bấm gộp. Các
+  agent trên GitHub (lớp `github-agents`, chạy bằng app Claude, `claude[bot]`, có quyền ghi) cũng
+  gộp được khi các check xanh; job `gate` chỉ tắt tự gộp. Một đường đóng, chưa dựng, để chủ kho
+  quyết: giữ code owner duyệt và cho vai admin vượt luật khi gộp pull request (`bypass_actors`).
+  Kho có từ hai người quyết, hay nêu một đội (`@org/team`), thì luật nhánh đòi code owner duyệt
+  như cũ. Chưa kiểm trên repo thật.
 - **Hạng medium không có tường phía GitHub khi đường dẫn không có chủ.** Khi đã có bằng chứng,
   dòng `*` trong CODEOWNERS mất đi; một pull request lên medium vì bỏ một bài test thì pipeline
   không tự gộp, nhưng ai có quyền ghi, kể cả một agent chạy `gh pr merge`, vẫn gộp được khi các

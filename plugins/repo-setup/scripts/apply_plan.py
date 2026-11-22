@@ -379,6 +379,20 @@ def choices_from_manifest(manifest: dict) -> Choices:
     )
 
 
+# The two walls that keep a session from editing the rules (.claude/settings.json). A starter
+# repository keeps them: it has no branch rule and no code owner, so no review could carry the
+# decision. At team level the machine drafts such a change in a pull request of its own, and the
+# high tier and the ruleset hold it (docs/setup-principles.md, rule 3). The placeholder stays as long
+# as a release that wrote it may be the base of an upgrade: a later release renders that release's
+# templates with its own variables, and an unknown placeholder stops the run.
+EDIT_WALLS = ',\n      "Edit(./.github/workflows/**)",\n      "Edit(./governance/**)"'
+
+
+def level_variables(level: str) -> dict[str, str]:
+    """Variables that follow the level, for the one template both levels share."""
+    return {"settings_edit_walls": EDIT_WALLS if level == "starter" else ""}
+
+
 def render_variables(
     raw: dict[str, str], choices: Choices, root: Path = PLUGIN_ROOT
 ) -> dict[str, str]:
@@ -388,6 +402,7 @@ def render_variables(
                      list(choices.caps), root)
     for k, val in meta["vars"].items():
         variables.setdefault(k, str(val))
+    variables.update(level_variables(choices.level))
     return variables
 
 
