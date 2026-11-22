@@ -42,7 +42,11 @@ merges it itself. Part 5.3 of the design of 2026-11-22.
   since the `gate` job only turns auto-merge off. Recorded under "Chỗ còn hở" in
   `docs/setup-principles.md`, with a way to close it the owner may choose (`bypass_actors`).
 - `AGENTS.md` (team, and `github-agents`) and the comment at the top of `governance/autonomy.yaml`
-  change wording; a team repository gets the new skill.
+  change wording; a team repository gets the new skill. With `github-agents`, the prompts in
+  `.github/workflows/agent-implement.yml` and `agent-ci-fix.yml` change too: the agent opens a
+  change to the rules as a pull request of its own instead of leaving it to a person, and falls
+  back to the spec on the issue only when GitHub refuses a workflow file from its token. A
+  repository that edited those prompts gets them merged, or conflict markers where the lines meet.
 
 ### Added: work outside the repository goes through one tool
 A team-level repository gets a ledger of its work outside the repository (GitHub settings,
