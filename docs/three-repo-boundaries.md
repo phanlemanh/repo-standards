@@ -16,7 +16,9 @@ Vấn đề đang gặp và hướng đi chung của ba kho xem
 | Không làm      | Không giữ thứ gì thuộc thiết kế; chỉ gọi design-assembly | Không chấm từng vòng                                      | Không bê từ điển nghiệp vụ hay giá trị về mình |
 
 Chiều đọc đi một hướng: delivery-loop đọc cả hai; design-assembly đọc mô hình nghiệp vụ của Repo
-Standards; Repo Standards không đọc ai. Mỗi sổ chỉ có một bên được ghi.
+Standards; Repo Standards không đọc sổ của ai. Mỗi sổ chỉ có một bên được ghi. Từ ngày 2026-11-22
+Repo Standards gọi design-assembly (mục cuối «Việc đã làm»), và `doctor` chỉ xem sổ lúc ra đời có mặt
+không và dấu bản công cụ ghi bản nào, để chỉ tới lệnh của plugin; nó không đọc nội dung sổ.
 
 ## Phép thử khi đặt một việc mới
 
@@ -107,9 +109,15 @@ Khung khác xếp bằng phép thử ở trên.
 - Chưa làm: trạng thái của bản ghi và bước chuyển; luật khi xoá một đầu của quan hệ; dấu «dự kiến»
   cho thao tác; một thao tác xem nêu nhiều thực thể; đưa «của tôi» vào mã sinh ra; móc chạy phép
   kiểm sau mỗi lần sửa.
-- Sẽ chuyển đi khi design-assembly sẵn sàng nhận: sàn thiết kế (`capabilities/design`), câu hỏi màu
-  thương hiệu và loại bề mặt. Repo Standards khi đó chỉ còn một lời gọi. Không xây thêm lên phần
-  này.
+- Đã làm (ngày 2026-11-22, lát 3 của đề bài 0013 bên design-assembly): lời gọi. Kỹ năng `new` đặt bộ
+  sổ lúc ra đời qua `/design-assembly:adopt --starter` khi lớp `design` bật, rồi mời đi tiếp
+  `/design-assembly:new`; `adopt` gọi `audit` rồi `adopt` của plugin ở kho đã có; `doctor` nêu sổ lúc ra
+  đời thiếu và dấu bản công cụ tụt; `.claude/settings.json` của kho có lớp `design` bật plugin. Xem
+  [hợp đồng mối nối](seam-contracts.md), mục 6 đến 8. Chưa thử với hai plugin thật: đó là lượt thử cuối
+  của đề bài, bên design-assembly.
+- Sàn chưa chuyển: sàn thiết kế (`capabilities/design`), câu hỏi màu thương hiệu và loại bề mặt vẫn ở
+  đây, đúng như đề bài 0013 chốt (câu 5). Chúng sẽ chuyển đi khi design-assembly sẵn sàng nhận; khi đó
+  Repo Standards chỉ còn lời gọi. Không xây thêm lên phần này.
 
 Hai kho kia chưa nhận phần của mình: đây là đề xuất gửi sang, mỗi việc chờ chủ kho cho phép ở kho
 đó.

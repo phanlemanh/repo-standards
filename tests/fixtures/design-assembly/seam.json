@@ -1,0 +1,45 @@
+{
+  "about": "What this setup relies on in the design-assembly plugin, read from the plugin's own files at the version below. host-strings.json beside this file is a byte copy of the plugin's references/host-strings.json at that version. Tests in tests/seams.sh (51f to 51k) pin this side against these; nothing here runs the plugin. To read a newer version: copy the plugin's references/host-strings.json over the one here, read the contract's From birth column and the adopt skill again, and change version and read.",
+  "plugin": "design-assembly",
+  "marketplace": "phanlemanh/design-assembly",
+  "version": "0.35.0",
+  "read": "2026-11-22",
+  "from": [
+    "plugins/design-assembly/references/host-strings.json",
+    "plugins/design-assembly/references/contract.md, section From birth and the From birth column",
+    "plugins/design-assembly/skills/adopt/SKILL.md, section When a repository has only just been given its floor",
+    "plugins/design-assembly/scripts/stamp.mjs"
+  ],
+  "birth_ledgers": [
+    "design/decisions.yaml",
+    "design/tokens.json",
+    "design/component-registry.json",
+    "design/column-types.json",
+    "design/states.json",
+    "design/screen-sizes.json",
+    "design/screens.yaml"
+  ],
+  "tool_stamp": {
+    "file": "design/tool-stamp.json",
+    "keys": ["version", "tree"]
+  },
+  "adopt_starter": {
+    "skill": "/design-assembly:adopt",
+    "flag": "--starter",
+    "exit": {
+      "0": {
+        "means": "the ledgers are laid and nothing waits on a person",
+        "the setup says": "done"
+      },
+      "1": {
+        "means": "the ledgers are laid and answers wait on a person, on the waiting list the plugin's status prints",
+        "the setup says": "not a failure"
+      },
+      "2": {
+        "means": "a wrong call, or a repository with values of its own (a primary colour with a hue of its own, or values adopted before)",
+        "the setup says": "one line"
+      }
+    },
+    "flags_that_speak_for_a_person": ["--conformance-level", "--product-type", "--record", "--hold", "--replace"]
+  }
+}

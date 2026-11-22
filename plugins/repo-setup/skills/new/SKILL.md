@@ -81,14 +81,33 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
    If the `design` capability is on, translate the text in `src/lib/labels.ts`, `src/example/` and
    `design/behaviors.md` into `docs_language`. When you write the domain, record the synonyms to
    avoid in `design/terms.json`.
-4. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
+4. If the `design` capability is on, lay the design ledgers through the design-assembly plugin: it
+   writes them, this setup only calls it. On exit `0` or `1` the repository then has every ledger
+   it has from birth, and the verification below runs that plugin's gate too. It comes here because the components
+   and browser checks the plugin reads arrive with the install commands.
+   - When the plugin is available in this session (its `/design-assembly:` skills are listed), run
+     its adopt skill, `/design-assembly:adopt`, on this repository with `--starter`: the call for a
+     repository that has only just been given its floor. Pass no other flag. Every choice it leaves
+     open stays on its waiting list for a person: never answer its questions yourself. The exit
+     code of its script, as the plugin's adopt reports it:
+     - `0`: done. The ledgers from birth are laid and nothing waits.
+     - `1`: not a failure. The ledgers are laid and answers wait on a person; go on.
+     - `2`: say in one line what it printed on its error stream (a wrong call, or a repository
+       with values of its own, such as a brand colour) and that `/design-assembly:adopt` without
+       `--starter` keeps those values; then go on.
+   - When it is not available, say in one line what is missing and how to get it:
+     `/plugin marketplace add phanlemanh/design-assembly`, then
+     `/plugin install design-assembly@design-assembly`, or a new session in this repository, which
+     offers the plugins `.claude/settings.json` names. Then go on: `/repo-setup:doctor` names the
+     missing ledgers later.
+5. Run `next_commands.verify`. Formatting failures: `make format` and run again. Anything else: at
    most 2 fixes, then report exactly what fails.
-5. Run `doctor.py`. Explain what the score does and does not measure.
-6. For each decided layer with rejected options, add a record in `wiki/decisions/`. With "Hand it to
+6. Run `doctor.py`. Explain what the score does and does not measure.
+7. For each decided layer with rejected options, add a record in `wiki/decisions/`. With "Hand it to
    Claude", write one record for the whole setup. A repo without a wiki (`claude-plugin`) keeps
    these records in `docs/decisions/`.
-7. Set `status: applied`.
-8. Write the tour using `references/tour.md`.
+8. Set `status: applied`.
+9. Write the tour using `references/tour.md`.
 
 Ask once before creating a GitHub repository or pushing for the first time, and before
 `make eval`, which spends API credit.
@@ -118,6 +137,10 @@ say that the first session after the merge runs it.
 
 Offer one commit: `chore: set up repository (repo-setup <preset>/<level>)`. Then give a short
 summary: score and what it means, the three daily commands, what is not done, where the tour is.
+
+When design-assembly laid the ledgers in step 6, offer once to go on with its guide,
+`/design-assembly:new`, now or later: it asks the person, layer by layer, about what came from the
+floor. Either answer is fine; never answer its questions for them.
 
 ## Rules
 
