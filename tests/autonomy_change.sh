@@ -218,4 +218,37 @@ grep -qF '"Edit(./infra/**)"' "$TMP/ac-up-edited/.claude/settings.json" || miss 
 ac_up "$TMP/ac-up-starter" --preset python
 cmp -s "$TMP/ac-up-starter.before" "$TMP/ac-up-starter/.claude/settings.json" || miss "machine drafts: the upgrade changed a starter settings.json: $(diff "$TMP/ac-up-starter.before" "$TMP/ac-up-starter/.claude/settings.json" | head -4)"
 
+# 53f. what a one-owner repository then keeps by word is written down: the principles (Chỗ còn hở),
+#      the changelog, the GitHub skill; the rows of rules 1 and 3 name these tests
+out=$(python3 - "$ROOT" <<'PY' 2>&1
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+bad = []
+page = (root / "docs/setup-principles.md").read_text(encoding="utf-8")
+gaps = page.split("## Chỗ còn hở", 1)[-1].split("\n## ", 1)[0]
+one = next((b for b in gaps.split("\n- ") if b.startswith("**Repo một chủ.**")), "")
+for said in ("owners.high", "giữ bằng lời", "2026-11-22", "github-agents"):
+    if said not in one:
+        bad.append(f"docs/setup-principles.md, «Repo một chủ»: does not say {said}")
+table = page.split("## Luật nằm ở đâu trong mã", 1)[-1].split("\n## ", 1)[0]
+rows = dict(re.findall(r"(?m)^\| (\d+) \| (.*)$", table))
+if "53d" not in rows.get("1", ""):
+    bad.append("the row of rule 1 does not name 53d")
+if "53a" not in rows.get("3", ""):
+    bad.append("the row of rule 3 does not name 53a")
+log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## ", 1)[0]
+entry = next((e for e in log.split("\n### ") if "the machine drafts a change to the rules" in e), "")
+if not entry:
+    bad.append("CHANGELOG.md has no entry for part 5.3 under ## Unreleased")
+for said in ("**What breaks on upgrade**", "Edit(./governance/**)", "one account", "kept by word"):
+    if entry and said not in entry:
+        bad.append(f"the CHANGELOG entry does not say {said}")
+skill = (root / "plugins/repo-setup/skills/github/SKILL.md").read_text(encoding="utf-8")
+if "one decider" not in skill:
+    bad.append("skills/github/SKILL.md does not say what a one-owner repository gets")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: the pages: $out"
+
 echo "ok  the machine drafts, a person decides (or misses reported above)"

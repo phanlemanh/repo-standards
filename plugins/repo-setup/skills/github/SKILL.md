@@ -37,9 +37,13 @@ the choice. Where the policy names one, an option that differs is refused.
 Run `python3 tools/github_setup.py` and explain in plain words what it will do: the merge method, environments `staging` and
 `production` (production needs a human reviewer), and a ruleset on the default branch (PR
 required, required checks `check`, `secret-scan`, `conventional-title` and `conventional-commits`,
-a code owner only where `.github/CODEOWNERS` names one, and no other approval). Checks of the
-repository's own, a browser suite for example, become required when `governance/autonomy.yaml`
-names them under `required_checks`. The CI job `check` stands for every tier (`quick` and
+a code owner only where `.github/CODEOWNERS` names one, and no other approval). Where
+`owners.high` in `governance/autonomy.yaml` names one decider, the ruleset asks for no code owner
+review: GitHub does not let the author of a pull request approve it, and the machine opens pull
+requests as that owner, so the owner's merge is the decision. The dry run says so; say it in plain
+words, with what it means: that the machine never merges a rule change itself is then kept by word
+only. Checks of the repository's own, a browser suite for example, become required when
+`governance/autonomy.yaml` names them under `required_checks`. The CI job `check` stands for every tier (`quick` and
 `heavy`). When `heavy` or `e2e` is required too, the dry run says so: such a job is skipped when
 the light tier fails or the pull request is a draft, and GitHub counts a skipped check as green.
 
