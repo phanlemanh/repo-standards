@@ -199,6 +199,23 @@ class Remote:
             return False, str(exc)
         return p.returncode == 0, p.stdout if p.returncode == 0 else p.stderr
 
+    def sole_decider(self) -> str:
+        """The one account that decides the rules, as the repository's own tools/autonomy.py reads
+        governance/autonomy.yaml; "" when it names several, or the tool is older than that rule.
+        There tools/github_setup.py writes the ruleset without code owner review, since the author
+        of a pull request cannot approve it: the owner's merge is the decision."""
+        program = (
+            "import sys; from pathlib import Path; sys.path.insert(0, 'tools'); import autonomy; "
+            "rule = getattr(autonomy, 'sole_decider', None); "
+            "print(rule(autonomy.load_policy(Path('.'))) if rule else '')"
+        )
+        try:
+            p = subprocess.run([sys.executable, "-B", "-c", program], cwd=self.root,
+                               capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        return p.stdout.strip() if p.returncode == 0 else ""
+
     def branch_protection(self) -> tuple[str, str]:
         assert self.info
         repo, branch = self.info["repo"], self.info["branch"]
@@ -213,6 +230,10 @@ class Remote:
             checks = bool(data.get("required_status_checks"))
             if pull_request and owners and checks:
                 return "pass", f"{branch}: pull request + code owners + required checks"
+            one = "" if owners else self.sole_decider()
+            if pull_request and one and checks:
+                return "pass", (f"{branch}: pull request + required checks; {one}, the one "
+                                "decider, merges")
             return "fail", (f"{branch} protected but pull request required={pull_request}, "
                             f"code owner review={owners}, required checks={checks}")
         if "403" in out:
@@ -227,6 +248,11 @@ class Remote:
             checks = any(r.get("type") == "required_status_checks" for r in rules)
             if pull_request and owners and checks:
                 return "pass", f"{branch}: ruleset with pull request + code owners + required checks"
+            # With one decider the owner's merge is the decision: github_setup.py asks no review.
+            one = "" if owners else self.sole_decider()
+            if pull_request and one and checks:
+                return "pass", (f"{branch}: ruleset with pull request + required checks; {one}, "
+                                "the one decider, merges")
             return "fail", (f"{branch}: rules found but pull request required={pull_request}, "
                             f"code owner review={owners}, required checks={checks}")
         return "fail", f"{branch} has no branch protection or ruleset"

@@ -1903,8 +1903,16 @@ echo '[{"type":"required_status_checks"}]' > "$TMP/rules.json"
 bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch that needs no pull request: $(bp_verdict)"
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":true}}]' > "$TMP/rules.json"
 bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts approvals in place of required checks: $(bp_verdict)"
+# with two deciders for the rules, a ruleset without code owner review has lost them (53d)
+pd2="$TMP/people-decide-two"; rm -rf "$pd2"; cp -R "$pd" "$pd2"
+subst 's|^  high: \[.*\]$|  high: ["@acme", "@lan"]|' "$pd2/governance/autonomy.yaml"
+bp_two() { PATH="$TMP/bpbin:$PATH" FAKE_RULES="$TMP/rules.json" verdict "$pd2" branch_protection '--level team --remote'; }
 echo '[{"type":"pull_request","parameters":{"required_approving_review_count":1,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
-bp_verdict | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch where the rules have lost their decider: $(bp_verdict)"
+bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts a branch where the rules have lost their deciders: $(bp_two)"
+# with one decider the owner's merge is the decision: no code owner review is what github_setup writes
+echo '[{"type":"pull_request","parameters":{"required_approving_review_count":0,"require_code_owner_review":false}},{"type":"required_status_checks"}]' > "$TMP/rules.json"
+bp_verdict | grep '^pass' >/dev/null || miss "people decide: doctor fails a one-owner repository for the ruleset github_setup writes it: $(bp_verdict)"
+bp_two | grep '^fail' >/dev/null || miss "people decide: doctor accepts no code owner review with two deciders: $(bp_two)"
 # 43j. a ruleset from an earlier run is brought up to date, so an upgrade reaches the repository
 mkdir -p "$TMP/rsbin"
 cat > "$TMP/rsbin/gh" <<'SH'

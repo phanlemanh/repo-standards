@@ -92,4 +92,87 @@ for phrase in 'get approval before you start' 'ask in the issue and stop' 'need 
   if grep -qiF "$phrase" "$ac_t/$ac_skill" 2>/dev/null; then miss "machine drafts: the skill stops for a person: $phrase"; fi
 done
 
+# 53d. one decider for the rules (the owner, 2026-11-22): GitHub does not let the author of a pull
+#      request approve it, and the machine opens pull requests as the owner. So the ruleset asks for
+#      no code owner review there, and says why before --apply; with two deciders, or a team, it
+#      asks as before. Uses the stand-in GitHub of 52g ($ob_ghbin), which keeps its state.
+out=$(python3 -B - "$ac_t/tools" <<'PY' 2>&1
+import sys; sys.path.insert(0, sys.argv[1])
+from autonomy import sole_decider
+cases = [
+    ({"owners": {"high": ["@acme"]}}, "@acme"),
+    ({"owners": {"high": ["@Acme", " acme "]}}, "@acme"),
+    ({"owners": {"high": ["acme"]}}, "@acme"),
+    ({"owners": {"high": ["@acme", "@lan"]}}, ""),
+    ({"owners": {"high": ["@acme/core"]}}, ""),
+    ({"owners": {"high": []}}, ""),
+    ({"owners": {"high": "@acme"}}, ""),
+    ({"owners": {"medium": ["@acme"]}}, ""),
+    ({"owners": "x"}, ""),
+    ({}, ""),
+]
+bad = [f"{policy} gives {sole_decider(policy)!r}, want {want!r}" for policy, want in cases if sole_decider(policy) != want]
+print("\n".join(bad)); sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: sole_decider: $out"
+out=$( cd "$ac_t" && python3 -B - <<'PY' 2>&1
+import sys; sys.path.insert(0, "tools")
+import github_setup as g
+def pull_request(steps):
+    ruleset = [s for s in steps if "ruleset" in s][0]
+    return ruleset["what"], {r["type"]: r.get("parameters", {}) for r in ruleset["ruleset"]["rules"]}["pull_request"]
+bad = []
+for agents in (False, True):
+    what, pr = pull_request(g.plan("o/r", "main", "@acme", agents, one_decider="@acme"))
+    if pr["require_code_owner_review"] is not False or pr["required_approving_review_count"] != 0:
+        bad.append(f"one decider, agents={agents}: {pr}")
+    if "no code owner review (one decider: @acme)" not in what:
+        bad.append(f"one decider, agents={agents}: the step does not say so: {what}")
+    what, pr = pull_request(g.plan("o/r", "main", "@acme", agents))
+    if pr["require_code_owner_review"] is not True or "no code owner review" in what:
+        bad.append(f"more deciders, agents={agents}: {pr} {what}")
+print("\n".join(bad)); sys.exit(1 if bad else 0)
+PY
+) || miss "machine drafts: the plan of the ruleset: $out"
+# ac_gh <repo> <state dir> <github_setup arguments...>: run it against the stand-in GitHub
+ac_gh() { local repo="$1" state="$2"; shift 2
+  ( cd "$repo" && PATH="$ob_ghbin:$PATH" OB_GH="$state" OB_GH_FILES="$repo" OB_LOG="$TMP/ac-gh.log" \
+    python3 -B tools/github_setup.py "$@" </dev/null ) 2>&1; }
+ac_review() { python3 -c "
+import json, sys
+rs = json.load(open(sys.argv[1]))
+print([r for r in rs['rules'] if r['type'] == 'pull_request'][0]['parameters']['require_code_owner_review'])" "$1/ruleset.json" 2>&1; }
+ac_one="$TMP/ac-gh-one"; rm -rf "$ac_one"
+out=$(ac_gh "$ac_t" "$ac_one") || true
+grep -qF 'no code owner review (one decider: @acme)' <<<"$out" || miss "machine drafts: the dry run of a one-owner repository does not show the ruleset without code owner review"
+grep -qF 'GitHub does not let the author of a pull request approve it' <<<"$out" || miss "machine drafts: the dry run does not say why the code owner review is off: $(tail -5 <<<"$out")"
+grep -qF 'kept by word' <<<"$out" || miss "machine drafts: the dry run does not say what is then kept by word"
+[ ! -e "$ac_one/ruleset.json" ] || miss "machine drafts: the dry run wrote a ruleset"
+out=$(ac_gh "$ac_t" "$ac_one" --apply) || true
+grep -qF 'GitHub does not let the author of a pull request approve it' <<<"$out" || miss "machine drafts: --apply on a one-owner repository does not say why the code owner review is off"
+[ "$(ac_review "$ac_one")" = False ] || miss "machine drafts: --apply on a one-owner repository asks for a code owner review: $(ac_review "$ac_one")"
+# (the stand-in keeps no labels, so only the ruleset line is read here)
+out=$(ac_gh "$ac_t" "$ac_one" --check) || true
+grep -q '^= ruleset' <<<"$out" || miss "machine drafts: --check right after --apply on a one-owner repository sees the ruleset differ: $(grep ruleset <<<"$out")"
+# a ruleset from before this release asks for the review: --check sees it, --apply turns it off
+python3 - "$ac_one/ruleset.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f))
+for r in d["rules"]:
+    if r["type"] == "pull_request": r["parameters"]["require_code_owner_review"] = True
+json.dump(d, open(f, "w"))
+PY
+rc=0; out=$(ac_gh "$ac_t" "$ac_one" --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ ruleset.*pull_request' <<<"$out" || miss "machine drafts: --check does not see the code owner review an older run left on ($rc): $(grep ruleset <<<"$out")"
+ac_gh "$ac_t" "$ac_one" --apply >/dev/null || true
+[ "$(ac_review "$ac_one")" = False ] || miss "machine drafts: --apply does not turn off the code owner review an older run left on"
+# two deciders, and a team: the review stays
+for ac_owners in '"@acme", "@lan"' '"@acme/core"'; do
+  ac_two="$TMP/ac-two"; rm -rf "$ac_two" "$TMP/ac-gh-two"; cp -R "$ac_t" "$ac_two"
+  subst "s|^  high: \\[.*\\]$|  high: [$ac_owners]|" "$ac_two/governance/autonomy.yaml"
+  grep -qF "  high: [$ac_owners]" "$ac_two/governance/autonomy.yaml" || miss "machine drafts: the fixture could not set owners.high to $ac_owners"
+  out=$(ac_gh "$ac_two" "$TMP/ac-gh-two" --apply) || true
+  [ "$(ac_review "$TMP/ac-gh-two")" = True ] || miss "machine drafts: owners.high [$ac_owners] lost the code owner review"
+  if grep -qF 'one decider' <<<"$out"; then miss "machine drafts: owners.high [$ac_owners] is told it has one decider"; fi
+done
+
 echo "ok  the machine drafts, a person decides (or misses reported above)"
