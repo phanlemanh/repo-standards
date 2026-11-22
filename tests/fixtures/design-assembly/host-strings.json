@@ -1,0 +1,134 @@
+{
+  "about": "Every string this plugin and the tool it installs read in a repository's Makefile, its mk/ files and its workflows. The tool that lays a repository's gate holds these from its side; changing one is changing what it relies on. The module templates/tools/design-assembly/host-make.mjs reads them, and a test of the plugin fails when this file and that module differ, or when another module opens those files or matches their text itself. Kinds: pattern, a regular expression with its flags; target, a target name; word, a prerequisite read as a word; file, the whole file compared; substring, text looked for; variable, a variable of make the gate step reads or adds to.",
+  "workflows": "None: the plugin reads no workflow of a repository.",
+  "writes": [
+    {
+      "file": "mk/design-assembly.mk",
+      "text": "CHECK_TARGETS += design-assembly",
+      "why": "The gate step joins the gate's list of checks."
+    },
+    {
+      "file": "mk/design-assembly.mk",
+      "text": "DERIVED_TARGETS += design-derived",
+      "why": "The gate step joins the gate's shared list of targets that draw files kept out of git."
+    },
+    {
+      "file": "mk/design-assembly.mk",
+      "text": "DERIVED_FILES += <each file the tool data keeps out of git>",
+      "why": "The gate step names the files it draws in the shared list of derived files. A gate whose check of that list flags only files that carry a stamp of a drawn file does not flag these, which carry none: the tool's own check of files kept out of git is what catches a copy in git."
+    }
+  ],
+  "known_tools": {
+    "about": "The paths of tools a decision row's tool: check names, as this plugin writes or recognises them, each with the rows that point at it. Each is looked for as text in the Makefile, the mk files and the package scripts; moving the call out of all of them turns those rows FAILING with \"not run by the gate\".",
+    "tools": [
+      {
+        "path": "tools/design-assembly/check.mjs",
+        "rows": "every row the guide and adopting hold with this plugin's own tool",
+        "from": "templates/tools/design-assembly/ledger.mjs"
+      },
+      {
+        "path": "tools/design_guards.mjs",
+        "rows": ["lint-exceptions", "terms", "checks-in-gate"],
+        "from": "references/known-proofs.json"
+      }
+    ]
+  },
+  "reads": [
+    {
+      "id": "include-mk",
+      "kind": "pattern",
+      "text": "^-?include mk/\\*\\.mk",
+      "flags": "m",
+      "files": ["Makefile"],
+      "why": "The Makefile reads every mk file, so the gate step can join make check; without it the guide and adopting stop."
+    },
+    {
+      "id": "rule-line",
+      "kind": "pattern",
+      "text": "^([A-Za-z0-9_.-]+)\\s*::?(?!=)(.*)$",
+      "flags": "",
+      "files": ["Makefile"],
+      "why": "A line of the Makefile that is a rule: its target and its prerequisites, read to follow what make check runs."
+    },
+    {
+      "id": "check-target",
+      "kind": "target",
+      "text": "check",
+      "flags": "",
+      "files": ["Makefile"],
+      "why": "The target whose prerequisites, followed down, must reach the gate's list of checks."
+    },
+    {
+      "id": "check-runs-this",
+      "kind": "word",
+      "text": "design-assembly",
+      "flags": "",
+      "files": ["Makefile"],
+      "why": "A check target that names this tool's target among its prerequisites runs it as well."
+    },
+    {
+      "id": "check-targets-word",
+      "kind": "word",
+      "text": "$(CHECK_TARGETS)",
+      "flags": "",
+      "files": ["Makefile"],
+      "why": "The prerequisite that says a target runs every check the mk files add."
+    },
+    {
+      "id": "gate-joins-check",
+      "kind": "pattern",
+      "text": "^CHECK_TARGETS \\+= .*\\bdesign-assembly\\b",
+      "flags": "m",
+      "files": ["mk/design-assembly.mk"],
+      "why": "The gate step adds this tool's check to the gate's list of checks."
+    },
+    {
+      "id": "gate-runs-check",
+      "kind": "pattern",
+      "text": "^\\t@?node tools/design-assembly/check\\.mjs$",
+      "flags": "m",
+      "files": ["mk/design-assembly.mk"],
+      "why": "The gate step runs the check in a way that can fail."
+    },
+    {
+      "id": "gate-step-file",
+      "kind": "file",
+      "text": "mk/design-assembly.mk",
+      "flags": "",
+      "files": ["mk/design-assembly.mk"],
+      "why": "Upgrade compares the whole gate step with the installed plugin's and writes it again when they differ."
+    },
+    {
+      "id": "tool-pointer",
+      "kind": "substring",
+      "text": "the path a decision row's tool: check names",
+      "flags": "",
+      "files": ["Makefile", "mk/*.mk", "package.json"],
+      "why": "A decision held by a tool is held only while the gate names that tool: the Makefile, an mk file or a package script; the paths looked for today are listed under known_tools."
+    },
+    {
+      "id": "test-in-check-targets",
+      "kind": "variable",
+      "text": "test",
+      "flags": "",
+      "files": ["mk/*.mk"],
+      "why": "On a gate with no shared list of derived targets, the gate step makes the tests wait for the derived files when CHECK_TARGETS holds test."
+    },
+    {
+      "id": "derived-targets-defined",
+      "kind": "variable",
+      "text": "DERIVED_TARGETS",
+      "flags": "",
+      "files": ["mk/*.mk"],
+      "why": "The gate step adds its derived target to the shared list, and asks whether a file read before it defined that list."
+    },
+    {
+      "id": "derived-files",
+      "kind": "variable",
+      "text": "DERIVED_FILES",
+      "flags": "",
+      "files": ["mk/*.mk"],
+      "why": "The gate step adds the files this tool keeps out of git to the shared list of derived files."
+    }
+  ]
+}

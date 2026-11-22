@@ -16,6 +16,10 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
    The report says which kind of repo it scored (`preset`, `preset_source`): the preset in
    `.repo-setup.json`, or `claude-plugin` when the repo has Claude Code plugin manifests. If that
    is wrong, pass `--preset <name>`.
+   When the design-assembly plugin is installed, pass its version as `--design-assembly-version`:
+   the `version` of the `design-assembly@design-assembly` entry of `claude plugin list --json` that
+   applies to this repository (its `projectPath`, else the `user` scope). When no entry clearly
+   applies, pass nothing: doctor then says nothing about the stamp being behind.
 
 2. Report to the user, in their language, for a non-expert:
    - the score and what it means (90+: excellent, 70–89: good with gaps, <70: risky);
@@ -29,6 +33,13 @@ Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (or `scripts/` two levels above this S
      `gen`), each with its split command (`make split L=<ledger>`). It is a notice, never a score:
      say it in one line and leave the choice to the owner. Do not run a split unasked; each one is
      a pull request of its own.
+   - `design_ledgers` (a repository with the design floor, or one design-assembly wrote its tool
+     into): what that plugin left here, read from the files, never scored. `missing` lists the
+     ledgers a repository has from birth that are not there: design-assembly lays them
+     (`/design-assembly:adopt`, with `--starter` only on a repository that has nothing but its
+     floor). `behind` is true when the tool stamp (`design/tool-stamp.json`) names an older version
+     than the installed plugin: `/design-assembly:upgrade` brings it up. It is null when either
+     version is unknown. This setup runs nothing of the plugin.
 
 3. Offer fixes, then act only on the ones the user approves:
    - If the stack has a preset (`detect.py` → `suggested_preset`): run

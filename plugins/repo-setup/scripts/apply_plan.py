@@ -243,21 +243,46 @@ def derive_vars(raw: dict[str, str]) -> dict[str, str]:
     v.setdefault("brand_primary_foreground", blueprint.readable_on(brand) if brand else "")
     v.setdefault("html_lang", v.get("locale", "").split("-")[0] or "en")
     # Optional marketplace (owner/repo or git URL) so every clone gets the repo-setup plugin.
-    market = v.get("marketplace", "").strip()
+    # `plugin_settings` is what the templates of releases up to 0.10.4 read; see plugin_variables.
+    v["plugin_settings"] = plugin_settings(v.get("marketplace", "").strip(), design=False)
+    return v
+
+
+# design-assembly writes a repository's design ledgers; this setup only calls it
+# (docs/three-repo-boundaries.md). Every clone of a repository with the design floor gets it.
+DESIGN_ASSEMBLY_MARKETPLACE = "phanlemanh/design-assembly"
+DESIGN_ASSEMBLY_PLUGIN = "design-assembly@design-assembly"
+
+
+def plugin_settings(market: str, design: bool) -> str:
+    """The plugin keys .claude/settings.json ends with: the repo-standards marketplace when one is
+    given, and design-assembly when the repository has the design floor. Empty when neither."""
+    known: dict[str, dict] = {}
+    enabled: dict[str, bool] = {}
     if market:
         source = (
             {"source": "github", "repo": market}
             if re.fullmatch(r"[\w.-]+/[\w.-]+", market)
             else {"source": "git", "url": market}
         )
-        extra = {"repo-standards": {"source": source}}
-        v["plugin_settings"] = (
-            ',\n  "extraKnownMarketplaces": ' + json.dumps(extra)
-            + ',\n  "enabledPlugins": {"repo-setup@repo-standards": true}'
-        )
-    else:
-        v["plugin_settings"] = ""
-    return v
+        known["repo-standards"] = {"source": source}
+        enabled["repo-setup@repo-standards"] = True
+    if design:
+        known["design-assembly"] = {"source": {"source": "github", "repo": DESIGN_ASSEMBLY_MARKETPLACE}}
+        enabled[DESIGN_ASSEMBLY_PLUGIN] = True
+    if not known:
+        return ""
+    return (',\n  "extraKnownMarketplaces": ' + json.dumps(known)
+            + ',\n  "enabledPlugins": ' + json.dumps(enabled))
+
+
+def plugin_variables(variables: dict[str, str], caps: list[str]) -> dict[str, str]:
+    """`plugins_enabled`, the placeholder today's settings template reads: it knows the
+    capabilities. The earlier placeholder, `plugin_settings`, keeps the value the earlier releases
+    rendered, so that an upgrade still finds the base of a settings.json those releases wrote and
+    merges the new lines in (upgrade_base.py)."""
+    return {"plugins_enabled": plugin_settings(variables.get("marketplace", "").strip(),
+                                               "design" in caps)}
 
 
 def render(text: str, variables: dict[str, str], where: str) -> str:
@@ -403,6 +428,8 @@ def render_variables(
     for k, val in meta["vars"].items():
         variables.setdefault(k, str(val))
     variables.update(level_variables(choices.level))
+    variables.update(plugin_variables(variables, capabilities_for(choices.archetype,
+                                                                  list(choices.caps), root)))
     return variables
 
 

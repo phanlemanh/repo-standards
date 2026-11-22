@@ -69,6 +69,21 @@ Use the layers in `../new/references/layers/` for anything the user wants to dec
 record them in `setup-blueprint.yaml`. The `ai` layer is always `manual` here: do not add the `ai`
 capability, because it would add sample code. Guide the user through adding what they need.
 
+## 4c. Design ledgers (a web front end)
+
+The design-assembly plugin writes a repository's design ledgers; this setup only calls it. When the
+repository has a web front end and the plugin is available in this session (its
+`/design-assembly:` skills are listed), once the Makefile of step 4 reads `mk/*.mk`:
+
+1. Run its audit, `/design-assembly:audit`.
+2. Then its adopt, `/design-assembly:adopt`, without `--starter`: an existing repository keeps its
+   own values. What only a person can decide stays on the plugin's waiting list: never answer it
+   yourself, pass no flag on your own judgment, and go on.
+
+When the plugin is not available, say in one line what is missing and how to get it
+(`/plugin marketplace add phanlemanh/design-assembly`, then
+`/plugin install design-assembly@design-assembly`), and go on. Never write its ledgers yourself.
+
 ## 5. Seed the domain model from the real code
 Read the main models/schemas/types (ORM models, DB migrations, API schemas). Propose the
 3–7 core entities with definitions, properties and relations, confirm with the user, then

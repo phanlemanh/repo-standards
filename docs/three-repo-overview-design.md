@@ -170,7 +170,8 @@ Ba điều đi kèm:
 ## 6. Kiến trúc: kho nào giữ gì
 
 Chiều đọc giữ nguyên như trang ranh giới: delivery-loop đọc cả hai, design-assembly đọc Repo
-Standards, Repo Standards không đọc ai.
+Standards, Repo Standards không đọc sổ của ai (từ ngày 2026-11-22 nó gọi design-assembly; xem trang
+ranh giới).
 
 |                    | Repo Standards                                                          | design-assembly                                   | delivery-loop                                                            |
 | ------------------ | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------ |

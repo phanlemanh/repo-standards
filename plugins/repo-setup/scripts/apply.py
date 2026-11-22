@@ -109,6 +109,7 @@ from apply_plan import (  # noqa: E402, F401
     PLACEHOLDER,
     planned_files,
     PLUGIN_ROOT,
+    plugin_variables,
     plugin_version,
     PLUGIN_VERSIONING,
     preset_chain,
@@ -322,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     for k, val in meta["vars"].items():
         variables.setdefault(k, str(val))
     variables.update(level_variables(level))
+    variables.update(plugin_variables(variables, capabilities_for(archetype, caps)))
     # Commands may start with a "[var=value]" condition, e.g. "[lang=ts] npm install x".
     for key in ("install", "verify"):
         kept = []

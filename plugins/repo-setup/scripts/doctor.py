@@ -31,6 +31,7 @@ import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import design_ledgers  # noqa: E402
 import upgrade_report  # noqa: E402
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -511,6 +512,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Also check GitHub (branch protection, CI status) with the gh CLI")
     ap.add_argument("--preset", default=None,
                     help="Score as this kind of repository (default: .repo-setup.json, else detected)")
+    ap.add_argument("--design-assembly-version", default=None,
+                    help="The installed design-assembly plugin's version: the tool stamp is "
+                         "compared with it (claude plugin list --json)")
     args = ap.parse_args(argv)
 
     root = Path(args.target).resolve()
@@ -600,6 +604,9 @@ def main(argv: list[str] | None = None) -> int:
         # Ledgers still kept as one file: a notice with the command to split them, never scored.
         "ledgers_split": ledgers_split_report(root),
         "upgrade": upgrade_report.report(root, setup).as_dict() if setup.get("files") else None,
+        # What design-assembly left here: birth ledgers missing, a tool stamp behind. Never scored.
+        "design_ledgers": design_ledgers.report(root, args.design_assembly_version)
+        if design_ledgers.applies(root, caps) else None,
     }
 
     if args.json:
@@ -650,6 +657,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  edited in place ({len(drift['edited'])}): {', '.join(drift['edited'])}")
             if drift["removed"]:
                 print(f"  deleted here ({len(drift['removed'])}): {', '.join(drift['removed'])}")
+        design = design_ledgers.lines(report["design_ledgers"]) if report["design_ledgers"] else []
+        if design:
+            print("\nDesign ledgers, written by design-assembly (not scored):")
+            for line in design:
+                print(f"  - {line}")
         if set_aside:
             print(f"\nNot applicable to a {preset} repository (not scored):")
             for item in set_aside:
