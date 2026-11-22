@@ -364,7 +364,7 @@ for acd_d in "$acd_s" "$acd_t"; do
   acd_ag=$(cat "$acd_d/AGENTS.md")
   case "$acd_ag" in *'row of the autonomy card'*'make autonomy'*|*'make autonomy'*'row of the autonomy card'*) ;; *) miss "autonomy card: $(basename "$acd_d") AGENTS.md lacks the rule (make autonomy, row of the autonomy card)" ;; esac
   acd_hits=$(printf '%s\n' "$acd_ag" | awk '/^## /{sec=$0} /row of the autonomy card/{print sec}')
-  [ -n "$acd_hits" ] || miss "autonomy card: $(basename "$acd_d") rule is in no section"
+  [ "$acd_hits" = "## The autonomy card" ] || miss "autonomy card: $(basename "$acd_d") rule is not under the heading The autonomy card: $acd_hits"
 done
 acd_pl="$ROOT/plugins/repo-setup"
 for acd_f in "$acd_pl/presets/_core/starter/dot.claude/skills/review-change/SKILL.md" "$acd_pl/presets/claude-plugin/starter/dot.claude/skills/review-change/SKILL.md"; do
@@ -373,11 +373,15 @@ for acd_f in "$acd_pl/presets/_core/starter/dot.claude/skills/review-change/SKIL
 done
 acd_tour=$(cat "$acd_pl/skills/new/references/tour.md")
 case "$acd_tour" in *'make autonomy'*) ;; *) miss "autonomy card: tour.md does not name make autonomy" ;; esac
-case "$acd_tour" in *'docs/START-HERE.md'*'not copy'*|*'not copy'*'docs/START-HERE.md'*|*'never copy'*) ;; *) miss "autonomy card: tour.md does not say the table is not copied into START-HERE.md" ;; esac
+case "$acd_tour" in *'START-HERE'*'make autonomy'*|*'make autonomy'*'START-HERE'*) ;; *) miss "autonomy card: tour.md does not tie make autonomy to START-HERE" ;; esac
+case "$acd_tour" in *'not copy the table into `docs/START-HERE.md`'*) ;; *) miss "autonomy card: tour.md does not say the table is not copied into START-HERE.md" ;; esac
 acd_ex=$(grep 'autonomy_card.py' "$acd_pl/skills/explain/SKILL.md" || true)
 [ -n "$acd_ex" ] || miss "autonomy card: the explain table lacks tools/autonomy_card.py"
 acd_cl=$(awk '/^## Unreleased/{f=1;next} /^## /{f=0} f' "$ROOT/CHANGELOG.md")
 case "$acd_cl" in *'make autonomy'*) ;; *) miss "autonomy card: the changelog does not name make autonomy under Unreleased" ;; esac
+for acd_w in 'tools/autonomy_card.py' 'mk/autonomy.mk' '`card`'; do
+  case "$acd_cl" in *"$acd_w"*) ;; *) miss "autonomy card: the changelog does not name $acd_w under Unreleased" ;; esac
+done
 case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the changelog has no What breaks on upgrade line under Unreleased" ;; esac
 
 echo "ok  the autonomy card: the gate names the row (or misses reported above)"

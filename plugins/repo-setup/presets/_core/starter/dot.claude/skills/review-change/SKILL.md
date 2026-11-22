@@ -46,9 +46,9 @@ do not report tests as passing.
    and the conventions in `AGENTS.md`.
 10. **Tier**: if `tools/autonomy.py` exists, run `python3 tools/autonomy.py --base origin/<base>`
     and report the tier with the file behind it. Its JSON has a `card` key: the row of the
-    autonomy card (`make autonomy`) that calls a person for this change, with that row's switch.
-    A removed or switched-off test, or a looser
-    `agent:` setting, that the gate did not raise is blocking.
+    autonomy card (`make autonomy`) that calls a person for this change, with that row's
+    switch. A removed or switched-off test, or a looser `agent:` setting, that the gate did not
+    raise is blocking.
 11. **Records**: `wiki/` is updated when the change has a lasting why, and the PR's "Human decisions
     needed" is honest.
 

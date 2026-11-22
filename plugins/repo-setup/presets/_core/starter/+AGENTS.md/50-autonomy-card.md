@@ -4,5 +4,6 @@
 would call them less.
 
 - When you hand work to a person, name the row of the autonomy card that causes the call, and that
-  row's switch, in the words you were already writing for them (the pull request, the `Yours`
-  list). Do not add a step for it. <!-- kept: word -->
+  row's switch, in the words you were already writing for them: the pull request, or the `Yours`
+  list where `make outside` exists. The row comes from `make autonomy`, or from the `card` key of
+  `tools/autonomy.py`. Do not add a step for it. <!-- kept: word -->
