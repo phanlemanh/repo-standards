@@ -8,7 +8,8 @@
 # A tier says who decides the merge. It is never a reason to stop and ask before working.
 # The highest tier of any changed file decides the tier of the pull request.
 # Patterns are repo-relative globs ("**/" matches any folder depth).
-# Changing this file is itself "high" and must be done by a human.
+# Changing this file is itself "high": the machine drafts the change in a pull request of its own
+# (.claude/skills/autonomy-change), and a code owner decides it.
 version: 1
 default: medium
 

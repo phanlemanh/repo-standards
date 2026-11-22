@@ -36,4 +36,22 @@ Edit(./governance/**)'
 $ac_edits" ] || miss "machine drafts: the starter settings lost a wall: $(ac_walls "$ac_s" | tr '\n' ' ')"
 [ "$(find "$ROOT/plugins/repo-setup" -name 'settings.json.tmpl' | wc -l | tr -d ' ')" = 1 ] || miss "machine drafts: the settings come from more than one template"
 
+# 53b. the rules say what the walls now are: a rule change is a pull request of its own, high, never
+#      merged by the machine; nothing still says the session may not edit those folders
+ac_rules="$ac_t/AGENTS.md"
+for said in 'a pull request of its own' 'never merge it yourself' 'a code owner decides' '.claude/skills/autonomy-change/SKILL.md'; do
+  grep -qF "$said" "$ac_rules" || miss "machine drafts: the team AGENTS.md does not say: $said"
+done
+if grep -qiE 'do not edit `\.github/workflows|never\*\* edit `\.github/workflows|blocked in `\.claude/settings\.json`|humans own them' "$ac_rules"; then
+  miss "machine drafts: the team AGENTS.md still forbids editing the rules: $(grep -iE 'do not edit|never\*\* edit|humans own them' "$ac_rules" | head -2)"
+fi
+if grep -q 'must be done by a human' "$ac_t/governance/autonomy.yaml"; then miss "machine drafts: the policy still says a person must make its changes"; fi
+grep -q 'drafts' "$ac_t/governance/autonomy.yaml" || miss "machine drafts: the policy does not say the machine drafts its changes"
+python3 - "$ROOT/plugins/repo-setup/README.md" <<'PY' || miss "machine drafts: the plugin README says the settings deny editing workflows at every level"
+import sys
+text = " ".join(open(sys.argv[1], encoding="utf-8").read().split())
+assert "deny rules on secrets, workflows and `governance/`" not in text
+assert "at starter level, on editing workflows and `governance/`" in text
+PY
+
 echo "ok  the machine drafts, a person decides (or misses reported above)"
