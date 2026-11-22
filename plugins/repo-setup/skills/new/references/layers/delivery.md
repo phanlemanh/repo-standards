@@ -22,6 +22,11 @@ recommend it. Say when each option would be wrong.
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and
 the manual steps are listed), `manual` (only recorded, with guidance; `doctor` does not score it).
 
+**`container` by level.** At level `starter` it gives the image and a local run: `Dockerfile`,
+`compose.yaml`, `make image`, `make up`. The image push and the rollout from CI, staging first and
+production after a person approves the GitHub environment, come with level `team`. When the level
+is `starter`, tell the user that, and do not say a rollout is set up.
+
 **Recommendation when the user hands this to Claude:** nothing yet for a tool; `container` when it runs on a server.
 
 ## Recording
