@@ -324,6 +324,10 @@ assert any('minor' in m['what'] for m in d['machine']), d['machine']
 " <<<"$acd_v" 2>&1) || miss "autonomy card: minor: low is still a row: $out"
 
 # 54d. a source that cannot be read is a known: false row with the reason, never silence
+# The steps above run tools/outside.py and tools/autonomy.py in this repository directly, and
+# without PYTHONDONTWRITEBYTECODE (as on CI) they leave a cache; clear it so the check below
+# measures the card's runs only.
+find "$acd_o" -name __pycache__ -type d -prune -exec rm -rf {} +
 acd_before=$(git -C "$acd_o" status --porcelain)
 acd_rc=0; acd_ng=$( ( cd "$acd_o" && PATH="$acd_bin" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) ) || acd_rc=$?
 [ "$acd_rc" = 0 ] || miss "autonomy card: without gh the card exits $acd_rc: $acd_ng"
