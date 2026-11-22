@@ -75,7 +75,7 @@ for tool in sorted(set(re.findall(r"python3 (tools/[\w./-]+\.py)", text))):
     if not (root / tool).is_file():
         bad.append(f"names {tool}, which the repository does not have")
 # a command is a line of a code block, or code in backticks; prose may say "make" too
-for target in sorted(set(re.findall(r"(?m)(?:^|`)make ([a-z][a-z0-9-]*)", text))):
+for target in sorted(set(re.findall(r"(?m)(?:^|\x60)make ([a-z][a-z0-9-]*)", text))):  # \x60, a backtick: bash 3.2 reads a lone one inside $( ) as a command
     if target not in targets:
         bad.append(f"names make {target}, which no Makefile defines")
 for said in ("make governance", "git worktree add", "gh pr create", "governance/autonomy.yaml"):
@@ -301,7 +301,7 @@ files = [root / "AGENTS.md", *sorted((root / ".github/workflows").glob("agent-*.
 stale = (
     "left to a person",
     "is blocked for agents",
-    "a person edits `governance/",
+    "a person edits \x60governance/",  # \x60, a backtick, as above
     "post the spec, add spec:needs-approval, and implement the part that does not",
     "or the spec needs a change to the rules",
     "If the fix needs a high-tier change or a human decision, open an issue",
