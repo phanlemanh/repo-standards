@@ -282,6 +282,63 @@ def changed_files(root: Path, base: str, head: str) -> list[dict[str, Any]]:
     return files
 
 
+POLICY_FILE = "governance/autonomy.yaml"
+DEPENDENCY_REASON = re.compile(r"^dependency update \((\w+)\)$")
+
+
+def card_row(
+    policy: dict[str, Any], tier: str, reason: str, own: tuple[str, ...] = OWN_CHECKS
+) -> dict[str, Any] | None:
+    """The row of the autonomy card for one tier and the reason `classify` gave it: when a person
+    is called, what they do, why, and the switch to be called less. None for `low`: no person.
+
+    The one place these words are written: `make autonomy` (tools/autonomy_card.py) calls this
+    function, so the card and the gate say the same thing. It stays in this file because the CI
+    job copies only this file, repo_ontology.py and the policy from the base branch.
+    """
+    if tier == "low":
+        return None
+    sole = sole_decider(policy)
+    when, why, switch, keys = "A change merges", reason, "-", f"{POLICY_FILE}:"
+    dependency = DEPENDENCY_REASON.match(reason)
+    if reason == "protected path":
+        when, why = "The rules change", "always yours"
+        if sole:
+            why += "; one owner: kept by word, the machine opens pull requests as you"
+        keys += " high, owners.high"
+    elif reason == "default":
+        when = "Product code merges"
+        if proof_check(policy, own):
+            why, switch = f"default: {tier}", "default: low"
+        else:
+            why = "no machine proof yet"
+            switch = "name a proof check (proof.check), then default: low"
+        keys += " default, proof.check"
+    elif reason == "removes, rewrites or disables test code":
+        when, why = "A change removes, rewrites or disables test code", "a guard was loosened"
+        keys += " rules.test_deletions_raise_to"
+    elif reason == "loosens what agents may do":
+        when, why = "A change lets agents do more in the product", "a guard was loosened"
+        keys += " rules.agent_guard_removals_raise_to"
+    elif dependency:
+        level = dependency.group(1)
+        when, why = f"A dependency update ({level})", f"rules.dependency_updates: {level} is {tier}"
+        switch = f"rules.dependency_updates.{level}: low"
+        keys += f" rules.dependency_updates.{level}"
+    if tier == "high":
+        you_do = "merge the pull request" if sole else "approve the pull request (code owner)"
+    else:
+        you_do = "merge"
+    return {
+        "when": when,
+        "you_do": you_do,
+        "why": why,
+        "switch": switch,
+        "keys": keys,
+        "known": True,
+    }
+
+
 def classify(
     policy: dict[str, Any],
     files: list[dict[str, Any]],
@@ -322,7 +379,9 @@ def classify(
             r["tier"], r["reason"] = tier, f"dependency update ({level})"
 
     overall = max((r["tier"] for r in results), key=TIERS.index, default="low")
-    return {"tier": overall, "proof": proof_check(policy, own), "files": results}
+    first = next((r for r in results if r["tier"] == overall), None)
+    card = card_row(policy, overall, first["reason"], own) if first else None
+    return {"tier": overall, "proof": proof_check(policy, own), "files": results, "card": card}
 
 
 def render_codeowners(policy: dict[str, Any], own: tuple[str, ...] = OWN_CHECKS) -> str:
@@ -375,6 +434,12 @@ def write_github(result: dict[str, Any]) -> None:
                 f"## Autonomy tier: **{result['tier']}**\n\n"
                 "| File | Tier | Why |\n| --- | --- | --- |\n" + rows + "\n"
             )
+            card = result.get("card")
+            if card:
+                fh.write(
+                    f"\nYou are called: {card['when']}. You do: {card['you_do']}. "
+                    f"Why: {card['why']}. To be called less: {card['switch']}.\n"
+                )
 
 
 def main(argv: list[str] | None = None) -> int:

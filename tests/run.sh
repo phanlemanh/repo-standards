@@ -3940,5 +3940,8 @@ echo "ok  derived (or misses reported above)"
 # shellcheck source=tests/autonomy_change.sh
 . "$ROOT/tests/autonomy_change.sh"
 
+# shellcheck source=tests/autonomy_card.sh
+. "$ROOT/tests/autonomy_card.sh"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
