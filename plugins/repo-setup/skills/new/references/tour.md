@@ -20,6 +20,9 @@ Keep the file name in English. Sections:
    - What this level does not include, for example pre-commit and secret scanning at `starter`.
 6. **Not done yet**: features, GitHub repo, deployment, and every `manual_steps` entry. At level
    `team`, point to `make outside` for what is in place outside the repository and what is left.
+   Also point to `make autonomy`: the card of when a person is called, what they do, why, and the
+   switch that would call them less. Do not copy the table into `docs/START-HERE.md`; it would
+   go stale, and the command prints it from the repository as it is.
 7. **Next steps**: a first thing to ask Claude, and how to ask about a file you do not understand.
 
 For a professional, add **Decisions**: one line per layer, pointing to `setup-blueprint.yaml`.

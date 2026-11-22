@@ -51,6 +51,7 @@ The person asking is probably not an expert. Explain like a patient senior colle
 | `wiki/log/`, `ontology/glossary/`, `make derived` | One small file per log entry and per glossary term (`make log m="..."`, `ledgers.py add-term`). `make derived` draws `wiki/log.md`, `wiki/index.md` and `ontology/glossary.md` from them; in a new repository those are not in git and are never edited by hand; an old repository keeps them in git, and edits them in place, until it runs `make split L=<ledger>` |
 | `.repo-setup.json` | Remembers how the repo was set up and which release wrote each file, so an upgrade can merge its fixes into files you edited |
 | `governance/autonomy.yaml` | Who decides that a change may merge: the checks alone (low), a person (medium), a code owner (high). `proof.check` names the check that proves a change, so a person need not |
+| `tools/autonomy_card.py` / `make autonomy` | Prints the autonomy card: when a person is called, what they do, why, and which switch would call them less. It reads the repository and writes nothing |
 | `risk:low/medium/high` label | The tier the PR pipeline computed for this PR from the files it changes |
 | A pull request waits although CI is green | Its tier is medium or high. The `risk:` label and the summary of the `gate` job name the file behind it |
 | `wiki/specs/` | Agent-written plan of a change, with acceptance criteria; humans approve risky ones |

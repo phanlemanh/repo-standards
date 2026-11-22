@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-### Added: `make autonomy` fills the card at the team level
-At `team`, `tools/autonomy_card.py` reads the merge policy through `tools/autonomy.py` (the gate's own words) and the work outside the repository through `python3 tools/outside.py status --json`, and adds the layers that are on (agents on GitHub, deploys). A source it cannot read, such as no `gh` or no `governance/outside.toml`, is a row with `known: false` and the reason, never silence. It writes nothing. Nothing breaks on upgrade: `autonomy_card.py` is a starter file that changes in place.
-
-### Added: `make autonomy` prints the autonomy card at the starter level
-`tools/autonomy_card.py` and `mk/autonomy.mk` join the starter level of every preset: when a person is called, what they do, why, and the switch to be called less. It reads the repository and writes nothing; it is not part of `make check`. Nothing breaks on upgrade: two new files, and an adopted `claude-plugin` repository gets them too.
+### Added: `make autonomy` prints the autonomy card, and an agent names its row
+`make autonomy` answers four questions: when a person is called, what they do, why, and which switch would call them less. Two new files at the starter level of every preset, `tools/autonomy_card.py` and `mk/autonomy.mk`; an adopted `claude-plugin` repository gets them too. At `starter` it reads the repository. At `team` it also reads the merge policy through `tools/autonomy.py` (the gate's own words), the work outside the repository through `python3 tools/outside.py status --json`, and the layers that are on (agents on GitHub, deploys). A source it cannot read, such as no `gh` or no `governance/outside.toml`, is a row with `known: false` and the reason, never silence. It writes nothing and is not part of `make check`.
+- `AGENTS.md`, at both levels, has one new rule in a section of its own: when you hand work to a person, name the row of the autonomy card that causes the call, and that row's switch. It words a call that already exists; it adds no stop and no approval.
+- The JSON of `tools/autonomy.py` and of `outside.py status --json` gains a `card` key, the row of the card behind the call. It adds a key and removes none.
+- The two `review-change` skills name the `card` key at their tier step, the tour points to `make autonomy` without copying the table into `docs/START-HERE.md`, and the `explain` table lists `tools/autonomy_card.py`.
+- What breaks on upgrade: no file you edited is overwritten, since the new files and the new rule come in as additions. A consumer of your own that asserts the exact key set of `outside.py status --json` (or of the gate's JSON) now sees `card` and fails; read the keys you need instead. This repository's own section 52 had to change for that reason.
 
 ### Changed: the machine drafts a change to the rules, a person decides it
 At team level a Claude session may now edit `.github/workflows/` and `governance/`. Such a change

@@ -358,4 +358,26 @@ r = [r for r in d['called'] if r['when'] == 'An agent runs a product action']
 assert len(r) == 1 and r[0]['known'] is False, d['called']
 " <<<"$acd_dj" 2>&1) || miss "autonomy card: a damaged actions.yaml is not a known: false row: $out"
 
+# 54h. the rule and the words around it: AGENTS.md at both levels, the two review-change skills,
+#      the tour, the explain table and the changelog
+for acd_d in "$acd_s" "$acd_t"; do
+  acd_ag=$(cat "$acd_d/AGENTS.md")
+  case "$acd_ag" in *'row of the autonomy card'*'make autonomy'*|*'make autonomy'*'row of the autonomy card'*) ;; *) miss "autonomy card: $(basename "$acd_d") AGENTS.md lacks the rule (make autonomy, row of the autonomy card)" ;; esac
+  acd_hits=$(printf '%s\n' "$acd_ag" | awk '/^## /{sec=$0} /row of the autonomy card/{print sec}')
+  [ -n "$acd_hits" ] || miss "autonomy card: $(basename "$acd_d") rule is in no section"
+done
+acd_pl="$ROOT/plugins/repo-setup"
+for acd_f in "$acd_pl/presets/_core/starter/dot.claude/skills/review-change/SKILL.md" "$acd_pl/presets/claude-plugin/starter/dot.claude/skills/review-change/SKILL.md"; do
+  acd_tier_step=$(grep -A4 'Tier\*\*' "$acd_f")
+  case "$acd_tier_step" in *'`card`'*) ;; *) miss "autonomy card: the tier step of ${acd_f#"$acd_pl/"} does not name the card key" ;; esac
+done
+acd_tour=$(cat "$acd_pl/skills/new/references/tour.md")
+case "$acd_tour" in *'make autonomy'*) ;; *) miss "autonomy card: tour.md does not name make autonomy" ;; esac
+case "$acd_tour" in *'docs/START-HERE.md'*'not copy'*|*'not copy'*'docs/START-HERE.md'*|*'never copy'*) ;; *) miss "autonomy card: tour.md does not say the table is not copied into START-HERE.md" ;; esac
+acd_ex=$(grep 'autonomy_card.py' "$acd_pl/skills/explain/SKILL.md" || true)
+[ -n "$acd_ex" ] || miss "autonomy card: the explain table lacks tools/autonomy_card.py"
+acd_cl=$(awk '/^## Unreleased/{f=1;next} /^## /{f=0} f' "$ROOT/CHANGELOG.md")
+case "$acd_cl" in *'make autonomy'*) ;; *) miss "autonomy card: the changelog does not name make autonomy under Unreleased" ;; esac
+case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the changelog has no What breaks on upgrade line under Unreleased" ;; esac
+
 echo "ok  the autonomy card: the gate names the row (or misses reported above)"
