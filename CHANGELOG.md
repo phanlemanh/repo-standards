@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added: `make autonomy` prints the autonomy card at the starter level
+`tools/autonomy_card.py` and `mk/autonomy.mk` join the starter level of every preset: when a person is called, what they do, why, and the switch to be called less. It reads the repository and writes nothing; it is not part of `make check`. Nothing breaks on upgrade: two new files, and an adopted `claude-plugin` repository gets them too.
+
 ### Changed: the machine drafts a change to the rules, a person decides it
 At team level a Claude session may now edit `.github/workflows/` and `governance/`. Such a change
 goes in a pull request of its own; it is `high`, so a code owner decides it, and the machine never

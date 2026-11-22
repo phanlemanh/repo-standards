@@ -15,6 +15,115 @@ acd_save() { # <repo> <message>: record what is staged, as a throwaway author
   git -C "$1" -c user.name=t -c user.email=t@t commit -q -m "$2"
 }
 
+# 54a. `make autonomy` at the starter level (a python repo and a claude-plugin repo): the card of
+#      ruling 7, six keys on every row, nothing written, no traceback
+acd_starter() { # <dir> <preset>: a committed starter repo
+  mkdir -p "$1"; git -C "$1" init -q -b main
+  python3 "$S/apply.py" --target "$1" --preset "$2" --level starter --var project_name=A --var description=x --var owner=acme >/dev/null
+  git -C "$1" add -A; acd_save "$1" init
+}
+acd_s="$TMP/acd-starter"; acd_starter "$acd_s" python
+acd_p="$TMP/acd-starter-plugin"; acd_starter "$acd_p" claude-plugin
+
+acd_rc=0; acd_make=$(cd "$acd_s" && make autonomy 2>&1) || acd_rc=$?
+[ "$acd_rc" = 0 ] || miss "autonomy card: make autonomy exits $acd_rc: $acd_make"
+case "$acd_make" in *"Autonomy card"*) ;; *) miss "autonomy card: make autonomy prints no Autonomy card: $acd_make" ;; esac
+case "$acd_make" in *"You are called when"*) ;; *) miss "autonomy card: make autonomy prints no You are called when: $acd_make" ;; esac
+
+acd_card() { python3 "$1/tools/autonomy_card.py" --root "$1" "${@:2}"; }
+acd_card_json=$(acd_card "$acd_s" --json 2>&1 || true)
+out=$(printf '%s' "$acd_card_json" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+assert d['level'] == 'starter', d
+keys = {'when', 'you_do', 'why', 'switch', 'keys', 'known'}
+assert all(set(r) == keys for r in d['called']), d['called']
+any_row = [r for r in d['called'] if r['when'] == 'Any change merges']
+assert len(any_row) == 1 and '--level team' in any_row[0]['switch'], d['called']
+assert any_row[0]['you_do'] == 'merge' and any_row[0]['known'] is True, any_row
+walls = [r for r in d['called'] if '.github/workflows/' in r['when']]
+assert len(walls) == 1 and walls[0]['you_do'] == 'you edit it', d['called']
+assert any('ci.yml' in m['what'] or 'ci.yml' in m['keys'] for m in d['machine']), d['machine']
+assert len(d['next_level']) == 3, d['next_level']
+assert 'not_allowed' not in d, d
+" 2>&1) || miss "autonomy card: the starter card is wrong: $out"
+
+acd_keys=$(acd_card "$acd_s" --keys 2>&1 || true)
+out=$(printf '%s\n' "$acd_keys" | python3 -c "
+import sys
+lines = sys.stdin.read().splitlines()
+ks = [i for i, l in enumerate(lines) if l.lstrip().startswith('keys: ')]
+assert len(ks) >= 2, lines
+for i in ks:
+    assert lines[i - 1].strip() != '' and not lines[i - 1].lstrip().startswith('keys: '), (i, lines[i - 1])
+" 2>&1) || miss "autonomy card: --keys does not put a keys: line under each row: $out"
+acd_plain=$(acd_card "$acd_s" 2>&1 || true)
+case "$acd_plain" in *"keys: "*) miss "autonomy card: keys: lines show without --keys" ;; esac
+
+acd_before=$(git -C "$acd_s" status --porcelain)
+acd_card "$acd_s" --json >/dev/null 2>&1; acd_card "$acd_s" >/dev/null 2>&1
+[ "$acd_before" = "$(git -C "$acd_s" status --porcelain)" ] || miss "autonomy card: a run changed the repository"
+acd_ign=$(git -C "$acd_s" status --porcelain --ignored)
+case "$acd_ign" in *__pycache__*) miss "autonomy card: a run left a cache folder" ;; esac
+
+rm -f "$acd_s/.repo-setup.json"
+acd_before=$(git -C "$acd_s" status --porcelain)
+acd_guess=$(acd_card "$acd_s" --json 2>&1 || true)
+[ "$acd_before" = "$(git -C "$acd_s" status --porcelain)" ] || miss "autonomy card: a run without .repo-setup.json changed the repository"
+out=$(printf '%s' "$acd_guess" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+assert d['level'] == 'starter', d
+assert any('guess' in m['what'] and '.repo-setup.json' in m['what'] for m in d['machine']), d['machine']
+" 2>&1) || miss "autonomy card: the level guessed from files is wrong: $out"
+
+acd_rc=0; acd_pj=$(acd_card "$acd_p" --json 2>"$TMP/acd-plugin.err") || acd_rc=$?
+[ "$acd_rc" = 0 ] || miss "autonomy card: the claude-plugin card exits $acd_rc"
+acd_err=$(cat "$TMP/acd-plugin.err")
+[ -z "$acd_err" ] || miss "autonomy card: the claude-plugin card wrote to stderr: $acd_err"
+out=$(printf '%s' "$acd_pj" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+assert d['level'] == 'starter' and 'not_allowed' not in d, d
+" 2>&1) || miss "autonomy card: the claude-plugin card has a not_allowed part: $out"
+
+acd_plain_rc=0; acd_card "$TMP" >/dev/null 2>&1 || acd_plain_rc=$?
+[ "$acd_plain_rc" = 2 ] || miss "autonomy card: outside a git repository exits $acd_plain_rc, not 2"
+
+# 54g. the actions of ontology/ an agent may not run freely (ruling 8)
+mkdir -p "$acd_s/ontology"
+cat > "$acd_s/ontology/actions.yaml" <<'YAML'
+actions:
+  - name: placeOrder
+    description: A customer places an order.
+    kind: create
+    agent: confirm
+  - name: dropOrders
+    description: Remove every order.
+    kind: delete
+    agent: forbidden
+  - name: listOrders
+    description: List orders.
+    kind: query
+YAML
+acd_og=$(acd_card "$acd_s" --json 2>&1 || true)
+out=$(printf '%s' "$acd_og" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+row = [r for r in d['called'] if r['when'] == 'An agent runs one of 1 product actions marked confirm']
+assert len(row) == 1 and row[0]['switch'] == 'agent: allowed on that action', d['called']
+# a missing agent counts as forbidden, as ontology_actions reads it
+assert len(d['not_allowed']) == 1 and '2' in d['not_allowed'][0]['what'], d['not_allowed']
+" 2>&1) || miss "autonomy card: the ontology actions are wrong: $out"
+rm -rf "$acd_s/ontology/actions.yaml"
+acd_on=$(acd_card "$acd_s" --json 2>&1 || true)
+out=$(printf '%s' "$acd_on" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+assert not any('product actions' in r['when'] for r in d['called']), d['called']
+assert 'not_allowed' not in d, d
+" 2>&1) || miss "autonomy card: no actions.yaml still gives an ontology part: $out"
+
 # 54e. the gate names the row: the words of ruling 3, six keys, None where nothing calls a person
 out=$(acd_tier "$acd_t" "" --files src/a/x.py 2>&1 | python3 -c "
 import json, sys
