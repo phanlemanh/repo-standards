@@ -1,0 +1,6 @@
+
+[[item]]
+recipe = "github-secret"
+name = "RELEASE_PLEASE_TOKEN"
+source = "person"
+how = "GitHub Actions may not open pull requests with its own token: create a fine-grained token (or a GitHub App token) that may write contents and pull requests on this repository"

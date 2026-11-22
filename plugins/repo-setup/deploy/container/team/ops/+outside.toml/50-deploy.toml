@@ -1,0 +1,6 @@
+
+# DEPLOY_ENABLED is not seeded: `make deploy` works only once it is edited for the platform.
+# Add it as a github-variable row then.
+[[item]]
+decision = "approve-production"
+when = "each deploy to production: the production environment waits for you"

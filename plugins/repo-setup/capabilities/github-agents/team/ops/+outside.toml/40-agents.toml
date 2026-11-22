@@ -1,0 +1,11 @@
+
+# The agent workflows read one of two keys. With ANTHROPIC_API_KEY instead, change the name.
+[[item]]
+recipe = "github-secret"
+name = "CLAUDE_CODE_OAUTH_TOKEN"
+source = "person"
+how = "in Claude Code run `claude setup-token`, or /install-github-app, which also stores it"
+
+[[item]]
+action = "install-claude-github-app"
+how = "https://github.com/apps/claude: install it on this repository, then set done = \"<date>\" on this row"

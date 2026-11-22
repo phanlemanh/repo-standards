@@ -479,4 +479,54 @@ rm -f "$TMP/ob-gh/down-rulesets"
 : > "$OB_LOG"; rc=0; ob_setup --check --apply >/dev/null || rc=$?
 [ "$rc" = 2 ] && [ ! -s "$OB_LOG" ] || miss "outside: --check and --apply together are accepted ($rc)"
 
+# 52f. what the kit seeds: every row names a recipe that exists, by layer
+ob_new() { # <name> <apply.py options...>: a new repository; prints its path
+  local d="$TMP/ob-new-$1"; shift
+  mkdir -p "$d" && git -C "$d" init -q -b main
+  python3 "$S/apply.py" --target "$d" --var project_name=O --var description=x --var owner=acme "$@" >/dev/null
+  printf '%s' "$d"
+}
+ob_seed_problems() { # <repo>: prints every refused row and recipe; exits 1 when there is one
+  python3 - "$1" "$ob_tools" <<'PY'
+import sys; sys.path.insert(0, sys.argv[2])
+from pathlib import Path
+import outside_ledger as L
+root = Path(sys.argv[1])
+try:
+    recipes = L.parse_recipes((root / L.RECIPES_PATH).read_text(encoding="utf-8"))
+    _, refused = L.parse_items((root / L.ITEMS_PATH).read_text(encoding="utf-8"), recipes)
+except (OSError, L.LedgerError) as exc:
+    refused = [str(exc)]
+print("\n".join(refused))
+sys.exit(1 if refused else 0)
+PY
+}
+ob_seed_ids() { python3 "$1/tools/outside.py" --root "$1" status --draft --json 2>/dev/null | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)["all"]))'; }
+ob_team=$(ob_new team --preset ts-node --level team)
+ob_agents=$(ob_new agents --preset ts-api --level team --with github-agents --deploy container)
+ob_plugin=$(ob_new plugin --preset claude-plugin --level team)
+ob_start=$(ob_new start --preset ts-node)
+[ ! -e "$ob_start/tools/outside.py" ] && [ ! -e "$ob_start/ops/outside.toml" ] && [ ! -e "$ob_start/governance/outside.toml" ] \
+  || miss "outside: a starter repository got the ledger"
+for d in "$ob_team" "$ob_agents" "$ob_plugin"; do
+  out=$(ob_seed_problems "$d") || miss "outside: the seeded ledger of ${d##*/} does not hold: $out"
+done
+ob_ids_team=" $(ob_seed_ids "$ob_team" || true) "
+ob_ids_agents=" $(ob_seed_ids "$ob_agents" || true) "
+ob_ids_plugin=" $(ob_seed_ids "$ob_plugin" || true) "
+[ "$ob_ids_team" = " github-setup:repository github-secret:RELEASE_PLEASE_TOKEN " ] \
+  || miss "outside: a team repository is not seeded with the setup row and the release key:$ob_ids_team"
+for want in github-setup:repository github-secret:RELEASE_PLEASE_TOKEN github-secret:CLAUDE_CODE_OAUTH_TOKEN action:install-claude-github-app decision:approve-production; do
+  case "$ob_ids_agents" in *" $want "*) ;; *) miss "outside: the agent and deploy layers do not seed $want:$ob_ids_agents" ;; esac
+done
+[ "$ob_ids_plugin" = " github-setup:repository " ] || miss "outside: a plugin repository, which has no release-please, is seeded with more than the setup row:$ob_ids_plugin"
+if grep -q '^name = "DEPLOY_ENABLED"' "$ob_agents/ops/outside.toml"; then miss "outside: DEPLOY_ENABLED is seeded"; fi
+grep -q '^outside:.*## ' "$ob_team/mk/outside.mk" 2>/dev/null || miss "outside: no make target with a description"
+for f in tools/outside.py tools/outside_ledger.py tools/github_check.py; do
+  [ -f "$ob_team/$f" ] || miss "outside: a team repository lacks $f"
+done
+ob_tier() { ( cd "$1" && python3 tools/autonomy.py --files "$2" | json 'd["tier"]' ); }
+[ "$(ob_tier "$ob_team" governance/outside.toml || true)" = high ] || miss "outside: the recipes file is not a rule of the game"
+[ "$(ob_tier "$ob_team" ops/outside.toml || echo high)" != high ] || miss "outside: a row of the ledger is a rule of the game"
+
 echo "ok  work outside the repository (or misses reported above)"
