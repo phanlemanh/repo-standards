@@ -413,14 +413,25 @@ def main(argv: list[str] | None = None) -> int:
         "governance/autonomy.yaml does not name (default: stop and say which)",
     )
     args = ap.parse_args(argv)
+    if not args.check:
+        return run(args)
+    # --check reads only: a state it could not read is 2, never 1 ("--apply would change it").
+    try:
+        return run(args)
+    except Exception as exc:  # anything unexpected while reading is a state not read
+        print(f"--check could not read the state: {exc}", file=sys.stderr)
+        return 2
 
+
+def run(args: argparse.Namespace) -> int:
+    unread = 2 if args.check else 1
     if not shutil.which("gh"):
         print("gh CLI not found: https://cli.github.com", file=sys.stderr)
-        return 1
+        return unread
     ok, out = gh(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"])
     if not ok:
         print(f"Not a GitHub repository or not logged in (gh auth login): {out}", file=sys.stderr)
-        return 1
+        return unread
     info = json.loads(out)
     repo, branch = info["nameWithOwner"], (info.get("defaultBranchRef") or {}).get("name", "main")
 
@@ -432,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     stored, bad = merge_method(policy), merge_method_problems(policy)
     if bad:
         print(f"governance/autonomy.yaml: {bad[0]}. Nothing was changed.", file=sys.stderr)
-        return 1
+        return unread
     if stored and args.merge_method and args.merge_method != stored:
         print(
             f"governance/autonomy.yaml says merge_method: {stored}, and --merge-method asks for "

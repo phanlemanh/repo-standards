@@ -160,6 +160,24 @@ def render(argv: Sequence[str], fields: Mapping[str, str]) -> list[str]:
     return [render_text(arg, fields) for arg in argv]
 
 
+def _no_flags(recipe: Recipe, fields: Mapping[str, str]) -> None:
+    """A value put in a command never becomes one of its flags (`name = "--env-file=.env"`).
+
+    An argument the recipe writes as a placeholder may start with "-" only right after an option
+    of the recipe's own, which takes it as its value (`--body {value}` with value "-1").
+    """
+    for argv in (recipe.check, recipe.apply, recipe.store):
+        for i, arg in enumerate(argv):
+            out = render_text(arg, fields)
+            if arg.startswith("-") or not out.startswith("-"):
+                continue
+            if i > 0 and argv[i - 1].startswith("-"):
+                continue
+            raise LedgerError(
+                f"recipe {recipe.name}: the value {out!r} would become a flag of the command"
+            )
+
+
 def _label(row: Mapping[str, Any], number: int) -> str:
     for key in ("name", "decision", "action"):
         if isinstance(row.get(key), str) and row[key]:
@@ -218,6 +236,8 @@ def _item(row: Mapping[str, Any], recipes: Mapping[str, Recipe]) -> Item:
             raise LedgerError(
                 f"recipe {name} uses the key {lacking[0]} and the row does not have it"
             )
+    for name in names:
+        _no_flags(recipes[name], fields)
     return Item(
         id=ident,
         kind=kind,

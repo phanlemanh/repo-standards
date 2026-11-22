@@ -548,4 +548,106 @@ grep -q 'references/outside.md' "$ROOT/plugins/repo-setup/skills/new/references/
 grep -q '^11\. \*\*Việc ngoài kho: máy làm\.\*\*' "$ROOT/docs/setup-principles.md" || miss "outside: rule 11 is not on the principles page"
 grep -q '^| 11 | .*| 52b, 52c, 52d, 52e |$' "$ROOT/docs/setup-principles.md" || miss "outside: rule 11 has no row naming its tests"
 
+# 52i. findings of the review of the whole branch, each pinned
+# (1) a field cannot become a flag of the command: a row is refused when a value it puts in a
+#     command starts with "-" where no option takes it
+out=$(ob_py <<'PY' 2>&1 || true
+import sys; sys.path.insert(0, sys.argv[1])
+import outside_ledger as L
+R = L.parse_recipes('''
+[recipe.key]
+where = "github"
+kind = "secret"
+check = ["keys"]
+expect_line = "{name}"
+store = ["gh", "secret", "set", "{name}"]
+[recipe.var]
+where = "github"
+kind = "setting"
+check = ["probe", "{name}"]
+apply = ["gh", "variable", "set", "{name}", "--body", "{value}"]
+''')
+items, refused = L.parse_items('''
+[[item]]
+recipe = "key"
+name = "--env-file=.env"
+source = "generated"
+[[item]]
+recipe = "var"
+name = "OFFSET"
+value = "-1"
+[[item]]
+recipe = "var"
+name = "-n"
+value = "1"
+''', R)
+assert [i.id for i in items] == ["var:OFFSET"], [i.id for i in items]
+assert len(refused) == 2 and all("flag" in r for r in refused), refused
+print("ok")
+PY
+)
+[ "$out" = ok ] || miss "outside: a row can turn a field into a flag of the command: $(tail -2 <<<"$out")"
+
+# (2) --check that cannot read GitHub, or the policy, exits 2, never 1 ("not in place")
+cat > "$ob_ghbin/gh-out" <<'SH'
+#!/bin/sh
+echo "To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4
+SH
+chmod +x "$ob_ghbin/gh-out"
+ob_loggedout="$TMP/ob-loggedout-bin"; mkdir -p "$ob_loggedout"; cp "$ob_ghbin/gh-out" "$ob_loggedout/gh"
+rc=0; ( cd "$ob_t" && PATH="$ob_loggedout:$PATH" python3 -B tools/github_setup.py --check </dev/null ) >/dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] || miss "outside: --check when gh is not logged in does not exit 2 ($rc)"
+cp "$ob_t/governance/autonomy.yaml" "$TMP/ob-policy.orig"
+subst 's/^merge_method: .*/merge_method: rebase/' "$ob_t/governance/autonomy.yaml"
+rc=0; ob_setup --check >/dev/null || rc=$?
+[ "$rc" = 2 ] || miss "outside: --check with a policy it cannot read does not exit 2 ($rc)"
+cp "$TMP/ob-policy.orig" "$ob_t/governance/autonomy.yaml"
+
+# (3) what --check compares: the branches a ruleset covers, the reviewers of production, labels
+rm -rf "$TMP/ob-gh"; ob_setup --apply >/dev/null || true
+python3 - "$TMP/ob-gh/ruleset.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f)); d["conditions"]["ref_name"]["include"] = ["refs/heads/nothing"]; json.dump(d, open(f, "w"))
+PY
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ ruleset' <<<"$ob_out" || miss "outside: --check does not see a ruleset that no longer covers the default branch ($rc)"
+ob_setup --apply >/dev/null || true
+python3 - "$TMP/ob-gh/envs.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f))
+d["production"]["protection_rules"][0]["reviewers"].append({"type": "User", "reviewer": {"id": 99}})
+d["production"]["deployment_branch_policy"] = {"protected_branches": False, "custom_branch_policies": True}
+json.dump(d, open(f, "w"))
+PY
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ environment production' <<<"$ob_out" || miss "outside: --check does not see production with other reviewers or a branch policy ($rc)"
+out=$(ob_py "$ob_t/tools" <<'PY' 2>&1 || true
+import sys; sys.path.insert(0, sys.argv[2])
+import github_check as C
+step = {"what": "label risk:low", "args": ["label", "create", "risk:low", "--color", "0e8a16", "--description", "merges itself", "--force"]}
+assert C.compare("acme/sample", step, {"risk:low": ("0E8A16", "merges itself")})[0] == "=", "same label"
+assert C.compare("acme/sample", step, {"risk:low": ("ffffff", "merges itself")})[0] == "~", "other colour"
+assert C.compare("acme/sample", step, {"risk:low": ("0e8a16", "other")})[0] == "~", "other description"
+assert C.compare("acme/sample", step, {})[0] == "~", "missing"
+print("ok")
+PY
+)
+[ "$out" = ok ] || miss "outside: --check compares labels by name only: $(tail -2 <<<"$out")"
+
+# (4) a ledger that is not on the default branch yet (the setup is not merged): not merged, exit 1
+ob_fresh=$(ob_repo fresh "" "" trunk)
+cp "$ob_a/governance/outside.toml" "$ob_fresh/governance/outside.toml"
+cp "$ob_a/ops/outside.toml" "$ob_fresh/ops/outside.toml"
+ob_reset; rc=0; j=$(ob_status "$ob_fresh" --json 2>/dev/null) || rc=$?
+[ "$rc" = 1 ] || miss "outside: a ledger not merged yet does not exit 1 ($rc)"
+[ "$(ob_ids unmerged)" = "var:PRESENT var:ABSENT var:BROKEN var:SLOW key:GENERATED key:PERSON watch:DRIFT action:install-app decision:approve-production" ] \
+  || miss "outside: a ledger not merged yet does not list its rows as not merged: $(ob_ids unmerged)"
+[ ! -s "$OB_LOG" ] || miss "outside: a check of a ledger that is not merged ran"
+ob_stage=$(awk '/^## 7\. Outside the repository$/{f=1;next} /^## 8\./{f=0} f' "$ROOT/plugins/repo-setup/skills/new/SKILL.md")
+grep -q 'not merged' <<<"$ob_stage" \
+  || miss "outside: the outside stage does not say what to do while the setup is not merged"
+
+# (5) the rule says what it does not hold: the tools run from the working tree
+ob_gaps=$(awk '/^## Chỗ còn hở$/{f=1;next} /^## /{f=0} f' "$ROOT/docs/setup-principles.md")
+grep -q 'tools/outside.py' <<<"$ob_gaps" \
+  || miss "outside: the principles page does not list where rule 11 is kept by word"
+
 echo "ok  work outside the repository (or misses reported above)"

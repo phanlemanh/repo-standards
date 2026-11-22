@@ -41,6 +41,11 @@ approves) and 5.2 (the autonomy card) of the design are not in this release.
 `AGENTS.md`, `ci.yml`, `tools/ci_inputs.py` and `tools/github_setup.py` updated, and the five
 seeded rows read.
 
+**Kept by word**: only the two files of the ledger come from the default branch. The tools run
+from the working tree (`tools/outside.py`, and `tools/github_setup.py` with the working tree's
+policy), so a branch that changes them can change what counts as in place. Recorded under "Chỗ
+còn hở" in `docs/setup-principles.md`.
+
 **Not yet run**: the recipes against a real GitHub repository; `gh secret set` taking a value
 on standard input for an environment secret.
 

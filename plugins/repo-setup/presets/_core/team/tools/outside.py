@@ -303,8 +303,29 @@ def _load(
     return ref, recipes, items, refused
 
 
+def _not_merged_yet(root: Path, ref: str) -> dict[str, list[Row]] | None:
+    """The lists while the default branch has no ledger yet: the working tree's rows, not merged.
+
+    None when the default branch has the recipes file. Nothing runs either way here.
+    """
+    if read_ledger(root, ref)[0].strip():
+        return None
+    if not read_ledger(root, None)[0].strip():
+        raise CallError(f"{ledger.RECIPES_PATH} is not on {ref}: there is nothing to check")
+    _say(f"{ledger.RECIPES_PATH} is not on {ref} yet: its rows are listed as not merged")
+    lists: dict[str, list[Row]] = {name: [] for name in LISTS}
+    lists["unmerged"] = _unmerged(root, set())
+    return lists
+
+
 def status(root: Path) -> tuple[str | None, dict[str, list[Row]]]:
     timeout = _timeout()
+    ref = base_ref(root)
+    if ref is not None:
+        _fetch(root, ref)
+        waiting = _not_merged_yet(root, ref)
+        if waiting is not None:
+            return ref, waiting
     ref, recipes, items, refused = _load(root)
     lists = classify(items, recipes, root, timeout)
     lists["refused"] = _refused_rows(refused)
@@ -343,8 +364,11 @@ def print_text(ref: str | None, lists: dict[str, list[Row]]) -> None:
             if row.how and name != "ok":
                 print(f"      how: {row.how}")
     counts = {name: len(lists[name]) for name in LEFT}
-    if not any(counts.values()):
+    if not left(lists):
         print("\nNothing left to do.")
+        return
+    if not any(counts.values()):
+        print("\nNothing runs until the ledger is merged into the default branch.")
         return
     print(
         f"\nLeft: {counts['apply']} for the machine, {counts['yours']} for you, "
@@ -386,7 +410,15 @@ def _status_command(root: Path, as_json: bool, show_draft: bool) -> int:
         print(json.dumps(out, indent=2))
     else:
         print_text(ref, lists)
-    return 1 if any(lists[name] for name in LEFT) else 0
+    return 1 if left(lists) else 0
+
+
+def left(lists: dict[str, list[Row]]) -> bool:
+    """Work is left: the machine's, yours, unknown or refused; or rows that wait for a merge
+    while nothing of the ledger is on the default branch yet."""
+    if any(lists[name] for name in LEFT):
+        return True
+    return bool(lists["unmerged"]) and not any(lists[name] for name in ("ok", "decisions"))
 
 
 def _store(recipe: ledger.Recipe, item: ledger.Item, value: str, root: Path, timeout: float) -> str:

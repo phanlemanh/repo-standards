@@ -99,6 +99,11 @@ At level `team`, once the repository has a GitHub remote: the work outside the r
 listed in `ops/outside.toml` and done with `tools/outside.py`. Skip this stage at `starter`, and
 say in one line that the level has no such tool.
 
+The tool reads the ledger from the default branch of the remote. While the setup is not merged
+there, `status` lists every row as not merged and runs nothing: offer the setup commit and the
+push first (the one question of step 8), then run this stage; or, when the user wants to wait,
+say that the first session after the merge runs it.
+
 1. Run `python3 tools/outside.py status` and say in plain words what the machine will apply.
    Follow `/repo-setup:github` for the GitHub part: the dry run of `tools/github_setup.py`, then
    one go-ahead for its `--apply`.

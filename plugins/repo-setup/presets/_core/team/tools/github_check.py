@@ -71,8 +71,11 @@ def _environment(repo: str, step: Mapping[str, Any]) -> tuple[str, str]:
         if rule.get("type") == "required_reviewers"
         for r in rule.get("reviewers") or []
     ]
-    found = (entity["type"], entity["id"]) in reviewers
-    return (SAME, "") if found else (CHANGE, "the reviewer is not required")
+    if set(reviewers) != {(entity["type"], entity["id"])}:
+        return CHANGE, "the required reviewers differ"
+    if env.get("deployment_branch_policy") is not None:
+        return CHANGE, "a deployment branch policy is set"
+    return SAME, ""
 
 
 def _rules(ruleset: Mapping[str, Any]) -> dict[str, Any]:
@@ -104,17 +107,41 @@ def _ruleset(repo: str, step: Mapping[str, Any]) -> tuple[str, str]:
         for kind, params in need.items()
         if kind not in have or any(have[kind].get(k) != v for k, v in params.items())
     ]
-    differ += ["enforcement"] if now.get("enforcement") != want["enforcement"] else []
+    differ += [
+        key for key in ("enforcement", "target", "conditions") if now.get(key) != want.get(key)
+    ]
     differ += [kind for kind in have if kind not in need]
     return (CHANGE, "differs: " + ", ".join(differ)) if differ else (SAME, "")
 
 
-def _labels() -> set[str] | None:
-    ok, out = setup.gh(["label", "list", "--limit", "500", "--json", "name", "--jq", ".[].name"])
-    return set(out.splitlines()) if ok else None
+def _labels() -> dict[str, tuple[str, str]] | None:
+    """name -> (colour, description) of the repository's labels; None when not listed."""
+    ok, out = setup.gh(["label", "list", "--limit", "500", "--json", "name,color,description"])
+    if not ok:
+        return None
+    try:
+        rows = json.loads(out or "[]")
+    except json.JSONDecodeError:
+        return None
+    return {r.get("name", ""): (r.get("color") or "", r.get("description") or "") for r in rows}
 
 
-def compare(repo: str, step: Mapping[str, Any], labels: set[str] | None) -> tuple[str, str]:
+def _label(args: list[str], labels: Mapping[str, tuple[str, str]]) -> tuple[str, str]:
+    name = args[2]
+    if name not in labels:
+        return CHANGE, "missing"
+    want = dict(zip(args[3::2], args[4::2], strict=False))
+    colour, description = labels[name]
+    if colour.lower() != want.get("--color", colour).lower():
+        return CHANGE, "another colour"
+    if description != want.get("--description", description):
+        return CHANGE, "another description"
+    return SAME, ""
+
+
+def compare(
+    repo: str, step: Mapping[str, Any], labels: Mapping[str, tuple[str, str]] | None
+) -> tuple[str, str]:
     """(mark, why) for one step of github_setup.plan()."""
     args = step["args"]
     if "ruleset" in step:
@@ -122,7 +149,7 @@ def compare(repo: str, step: Mapping[str, Any], labels: set[str] | None) -> tupl
     if args[0] == "label":
         if labels is None:
             return UNREAD, "the labels could not be listed"
-        return (SAME, "") if args[2] in labels else (CHANGE, "missing")
+        return _label(args, labels)
     target = args[3] if len(args) > 3 and args[0] == "api" else ""
     if target.startswith(f"repos/{repo}/environments/"):
         return _environment(repo, step)
@@ -134,7 +161,7 @@ def compare(repo: str, step: Mapping[str, Any], labels: set[str] | None) -> tupl
 def check(repo: str, steps: list[dict[str, Any]], unread: list[str]) -> int:
     """Prints one line per step and returns the exit code."""
     print(f"Check for {repo}: would --apply change anything?\n")
-    labels = _labels() if any(s["args"][0] == "label" for s in steps) else set()
+    labels = _labels() if any(s["args"][0] == "label" for s in steps) else {}
     marks = [UNREAD for _ in unread]
     for name in unread:
         print(

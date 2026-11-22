@@ -54,7 +54,7 @@ kéo người vào để tăng độ tin cậy.
 11. **Việc ngoài kho: máy làm.** Người tạo khoá, nhập khoá và quyết. Cài đặt, biến và nơi chạy ứng dụng
     đi qua một công cụ; khoá chỉ nhập ở Terminal của người, không qua cuộc trò chuyện. Loại lệnh máy
     được chạy ngoài kho nằm trong `governance/` và nạp từ nhánh gốc, nên một lệnh chỉ chạy sau khi PR
-    của nó đã gộp.
+    của nó đã gộp. Mã của chính công cụ thì chạy từ cây làm việc: xem «Chỗ còn hở».
 
 ## Người xuất hiện ở đâu
 
@@ -131,6 +131,12 @@ Thêm một hàng vào bảng «Người xuất hiện ở đâu» là đổi ng
 - **`conftest.py` và các tệp cấu hình kiểm tra** vẫn ở hạng high. Tính năng Python chạm
   `conftest.py` khá thường. Chưa có máy phân biệt thêm fixture với tắt bài test.
 - **Lớp agent trên GitHub chưa chạy với một phiên Claude thật.**
+- **Luật 11 nạp dữ liệu từ nhánh gốc, còn mã thì chạy từ cây làm việc.** `tools/outside.py`,
+  `tools/github_setup.py` và `tools/github_check.py` chạy bản trong cây làm việc, và hai công cụ sau
+  đọc `governance/autonomy.yaml` của cây làm việc. Một nhánh sửa các tệp đó có thể đổi điều gì được
+  tính là «đã đủ», và phiên chạy chúng không hiện hộp xin quyền (`Bash(python3 tools/:*)`). Hạng
+  high của `tools/**` và `governance/**` giữ việc gộp, không giữ việc chạy trên nhánh: phần này giữ
+  bằng lời.
 
 ## Nguồn
 
