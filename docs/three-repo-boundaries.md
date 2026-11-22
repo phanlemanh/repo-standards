@@ -111,7 +111,8 @@ Khung khác xếp bằng phép thử ở trên.
   kiểm sau mỗi lần sửa.
 - Đã làm (ngày 2026-11-22, lát 3 của đề bài 0013 bên design-assembly): lời gọi. Kỹ năng `new` đặt bộ
   sổ lúc ra đời qua `/design-assembly:adopt --starter` khi lớp `design` bật, rồi mời đi tiếp
-  `/design-assembly:new`; `adopt` gọi `audit` rồi `adopt` của plugin ở kho đã có; `doctor` nêu sổ lúc ra
+  (`/design-assembly:adopt` khi kho dựng với màu thương hiệu, `/design-assembly:new` ở các kho khác);
+  `adopt` gọi `audit` rồi `adopt` của plugin ở kho đã có; `doctor` nêu sổ lúc ra
   đời thiếu và dấu bản công cụ tụt; `.claude/settings.json` của kho có lớp `design` bật plugin. Xem
   [hợp đồng mối nối](seam-contracts.md), mục 6 đến 8. Chưa thử với hai plugin thật: đó là lượt thử cuối
   của đề bài, bên design-assembly.

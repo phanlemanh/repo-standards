@@ -359,11 +359,21 @@ fi
 for word in --starter 'never answer' "$da_m" design-assembly@design-assembly; do
   case "$da_step" in *"$word"*) ;; *) miss "seams: step 6 of /repo-setup:new lacks: $word" ;; esac
 done
-# The one new place a person appears (spec 0013 of design-assembly, question 2): an offer, at the end.
-da_end=$(awk '/^## 8\./{f=1;next} /^## /{f=0} f' "$da_sk/new/SKILL.md")
-for word in /design-assembly:new 'now or later' 'never answer'; do
-  case "$da_end" in *"$word"*) ;; *) miss "seams: the finish of /repo-setup:new does not offer the guide of design-assembly once: $word" ;; esac
+# Exit 2 is a wrong call or a repository the plugin cannot read. A brand colour is not a reason for it:
+# from its decision 0087 the plugin lays the birth ledgers there too and records the values as the
+# repository's own, so the step never tells the person to adopt again without --starter.
+for word in 'brand colour' 'keeps those values'; do
+  case "$da_step" in *"$word"*) miss "seams: step 6 of /repo-setup:new still ties exit 2 to: $word" ;; esac
 done
+# The one new place a person appears (spec 0013 of design-assembly, question 2): an offer, at the end.
+# Which step it offers follows the brand_primary answer this setup holds: the plugin's adopt where the
+# repository was set up with a brand colour (its status says the guide is not for such a repository),
+# its guide otherwise. The plugin's `next:` line does not tell the two apart, so it decides nothing.
+da_end=$(awk '/^## 8\./{f=1;next} /^## /{f=0} f' "$da_sk/new/SKILL.md")
+for word in brand_primary /design-assembly:adopt /design-assembly:new 'now or later' 'never answer'; do
+  case "$da_end" in *"$word"*) ;; *) miss "seams: the finish of /repo-setup:new does not offer, once, the right step of design-assembly: $word" ;; esac
+done
+case "$da_end" in *'next:'*) miss "seams: the finish of /repo-setup:new lets the plugin's next: line choose the step" ;; esac
 for code in 0 1 2; do
   says=$(da_fx "d['adopt_starter']['exit']['$code']['the setup says']")
   printf '%s\n' "$da_step" | grep -F "\`$code\`" | grep -F "$says" >/dev/null || miss "seams: step 6 of /repo-setup:new does not treat exit $code as: $says"

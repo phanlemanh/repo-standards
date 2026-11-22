@@ -99,7 +99,7 @@ liệu đọc ở design-assembly 0.35.0, ngày 2026-11-22: `tests/fixtures/desi
 | Chỗ gọi | Gọi gì | Khi nào |
 | --- | --- | --- |
 | `/repo-setup:new`, chặng 6, bước 4 | `/design-assembly:adopt` với `--starter` | Lớp `design` bật và phiên có plugin; sau các lệnh cài và bước viết miền, trước `next_commands.verify` |
-| `/repo-setup:new`, chặng 8 | Mời một lần đi tiếp `/design-assembly:new`, ngay hay để sau | Khi bước 4 đã đặt sổ |
+| `/repo-setup:new`, chặng 8 | Mời một lần đi tiếp, ngay hay để sau: `/design-assembly:adopt` khi kho dựng với màu thương hiệu (câu trả lời `brand_primary`), `/design-assembly:new` ở các kho khác | Khi bước 4 đã đặt sổ |
 | `/repo-setup:adopt`, bước 4c | `/design-assembly:audit`, rồi `/design-assembly:adopt` không `--starter` | Kho có giao diện web, phiên có plugin, Makefile đã đọc `mk/*.mk` |
 | `/repo-setup:doctor` | Chỉ tới `/design-assembly:adopt` hay `/design-assembly:upgrade` | Mục 7 |
 
@@ -115,7 +115,17 @@ Mã thoát của `adopt --starter`, như kỹ năng xử lý:
 | --- | --- | --- |
 | 0 | Đã đặt bộ sổ lúc ra đời, không gì chờ người | Đi tiếp |
 | 1 | Đã đặt, còn câu chờ người trên hàng chờ | Không phải lỗi; đi tiếp |
-| 2 | Gọi sai, hoặc kho có giá trị của riêng nó (màu chính có sắc riêng, hay đã nhận giá trị trước đó) | Nói một dòng điều plugin in ra và rằng `adopt` không `--starter` giữ các giá trị ấy; đi tiếp |
+| 2 | Gọi sai, hoặc kho plugin không đọc được | Nói một dòng điều plugin in ra; đi tiếp |
+
+Màu thương hiệu không phải lý do của mã 2. Từ quyết định 0087 của design-assembly (bản 0.36.0, vào
+nhánh chính của plugin ngày 2026-11-22), `adopt --starter` đặt bộ sổ lúc ra đời cả ở kho mà vai màu chính có sắc riêng hay đã nhận giá trị
+trước đó, ghi mọi giá trị là của kho, và thoát 1 khi còn câu chờ. Bản 0.35.0 còn từ chối kho ấy bằng mã 2;
+mẫu dữ liệu `seam.json` vẫn ghi nghĩa của bản đó, vì nó đọc ở 0.35.0.
+
+Lời mời ở chặng 8 chọn theo câu trả lời `brand_primary` mà kho này giữ, không theo dòng `next:` của
+plugin: sau `adopt --starter`, dòng ấy nêu `/design-assembly:adopt` ở cả kho sàn xám lẫn kho có màu thương
+hiệu. Điều khác nhau là dòng «kho ra đời» trong `status` của plugin: kho có màu thương hiệu được nói là
+bộ hướng dẫn không dành cho nó, nên lời mời là `adopt`, nơi người xác nhận màu ấy và các câu còn chờ.
 
 Phiên không có plugin thì kỹ năng nói một dòng thiếu gì và cách cài, rồi đi tiếp; không dừng.
 

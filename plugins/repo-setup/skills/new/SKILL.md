@@ -92,9 +92,8 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
      code of its script, as the plugin's adopt reports it:
      - `0`: done. The ledgers from birth are laid and nothing waits.
      - `1`: not a failure. The ledgers are laid and answers wait on a person; go on.
-     - `2`: say in one line what it printed on its error stream (a wrong call, or a repository
-       with values of its own, such as a brand colour) and that `/design-assembly:adopt` without
-       `--starter` keeps those values; then go on.
+     - `2`: a wrong call, or a repository the plugin cannot read. Say in one line what it printed
+       on its error stream, then go on.
    - When it is not available, say in one line what is missing and how to get it:
      `/plugin marketplace add phanlemanh/design-assembly`, then
      `/plugin install design-assembly@design-assembly`, or a new session in this repository, which
@@ -138,9 +137,14 @@ say that the first session after the merge runs it.
 Offer one commit: `chore: set up repository (repo-setup <preset>/<level>)`. Then give a short
 summary: score and what it means, the three daily commands, what is not done, where the tour is.
 
-When design-assembly laid the ledgers in step 6, offer once to go on with its guide,
-`/design-assembly:new`, now or later: it asks the person, layer by layer, about what came from the
-floor. Either answer is fine; never answer its questions for them.
+When design-assembly laid the ledgers in step 6, offer once to go on with it, now or later:
+- Where the repository was set up with a brand colour (the `brand_primary` answer), offer its adopt
+  skill, `/design-assembly:adopt`: it asks the person to confirm that colour and the other answers
+  that wait. Its status says of such a repository that the guide is not for it.
+- Otherwise offer its guide, `/design-assembly:new`: it asks the person, layer by layer, about what
+  came from the floor.
+
+Either answer is fine; never answer its questions for them.
 
 ## Rules
 
