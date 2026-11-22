@@ -76,4 +76,35 @@ import json, sys
 assert json.load(sys.stdin)['card']['when'] == 'Product code merges'
 " 2>&1) || miss "autonomy card: the gate copied alone (as in CI) has no card: $out"
 
+# 54f. the outside ledger names the row behind each person's step (status --json "card", and a
+#      card: line in the text), the words of ruling 5
+acd_o="$TMP/acd-outside"; mkdir -p "$acd_o"; git -C "$acd_o" init -q -b main
+python3 "$S/apply.py" --target "$acd_o" --preset python --level team --with github-agents --var project_name=A --var description=x --var owner=acme >/dev/null
+printf '\n[[item]]\ndecision = "approve-production"\nwhen = "each deploy to production"\n' >> "$acd_o/ops/outside.toml"
+acd_gh="$TMP/acd-gh"; mkdir -p "$acd_gh"; printf '#!/bin/sh\nexit 0\n' > "$acd_gh/gh"; chmod +x "$acd_gh/gh"
+acd_status() { ( cd "$acd_o" && PATH="$acd_gh:$PATH" OUTSIDE_TIMEOUT=1 python3 tools/outside.py status "$@" 2>/dev/null ); }
+acd_json=$(acd_status --json || true); acd_text=$(acd_status || true)
+out=$(printf '%s' "$acd_json" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for k in ('base', 'ok', 'apply', 'yours', 'decisions', 'unknown', 'unmerged', 'refused'):
+    assert k in d, k
+called = d['card']['called']
+keys = {'when', 'you_do', 'why', 'switch', 'keys', 'known'}
+assert all(set(r) == keys for r in called), called
+miss_row = [r for r in called if r['when'] == '2 keys are missing']
+assert len(miss_row) == 1, called
+assert miss_row[0]['switch'] == 'python3 tools/outside.py secrets', miss_row
+assert 'RELEASE_PLEASE_TOKEN' in miss_row[0]['keys'] and 'CLAUDE_CODE_OAUTH_TOKEN' in miss_row[0]['keys'], miss_row
+dec = [r for r in called if r['when'] == 'each deploy to production']
+assert len(dec) == 1 and dec[0]['why'] == 'always yours' and dec[0]['switch'] == '-', called
+once = [r for r in called if r['you_do'] == 'do once']
+assert len(once) == 1 and 'install-claude-github-app' in once[0]['keys'], called
+unk = [r for r in called if r['known'] is False]
+assert len(unk) == 1 and unk[0]['switch'] == 'python3 tools/outside.py status', called
+assert all(set(m) == {'what', 'keys'} for m in d['card']['machine']), d['card']['machine']
+" 2>&1) || miss "autonomy card: outside.py status --json has no right card: $out"
+acd_line=$(printf '%s\n' "$acd_text" | grep -A1 '^Yours (' | tail -1)
+case "$acd_line" in "  card: "*"2 keys are missing"*) ;; *) miss "autonomy card: no card: line under Yours: $acd_line" ;; esac
+
 echo "ok  the autonomy card: the gate names the row (or misses reported above)"

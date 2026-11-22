@@ -224,7 +224,7 @@ rc=0; j=$(ob_status "$ob_a" --json 2>/dev/null) || rc=$?
 [ "$(ob_ids decisions)" = "decision:approve-production" ] || miss "outside: a decision is not listed as one: $(ob_ids decisions)"
 [ "$(ob_ids unknown)" = "var:BROKEN var:SLOW" ] || miss "outside: a check that fails or hangs is not unknown: $(ob_ids unknown)"
 [ "$(ob_ids refused)$(ob_ids unmerged)" = "" ] || miss "outside: refused or unmerged rows where there are none"
-python3 -c 'import json,sys; d=json.load(sys.stdin); assert sorted(d) == sorted("base ok apply yours decisions unknown unmerged refused".split()), sorted(d); assert d["base"] == "origin/trunk", d["base"]; assert all(sorted(e) == ["how","id","kind","where","why"] for k in d if k != "base" for e in d[k])' <<<"$j" 2>/dev/null \
+python3 -c 'import json,sys; d=json.load(sys.stdin); assert sorted(d) == sorted("base ok apply yours decisions unknown unmerged refused card".split()), sorted(d); assert d["base"] == "origin/trunk", d["base"]; assert all(sorted(e) == ["how","id","kind","where","why"] for k in d if k not in ("base", "card") for e in d[k])' <<<"$j" 2>/dev/null \
   || miss "outside: status --json does not have exactly the agreed keys, or the base is not origin/trunk"
 ob_text=$(ob_status "$ob_a" 2>/dev/null || true)
 for title in 'In place (1)' 'The machine will apply (2)' 'Yours (3)' 'Unknown (2)'; do
