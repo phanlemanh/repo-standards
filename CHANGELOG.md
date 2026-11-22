@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added: `make autonomy` fills the card at the team level
+At `team`, `tools/autonomy_card.py` reads the merge policy through `tools/autonomy.py` (the gate's own words) and the work outside the repository through `python3 tools/outside.py status --json`, and adds the layers that are on (agents on GitHub, deploys). A source it cannot read, such as no `gh` or no `governance/outside.toml`, is a row with `known: false` and the reason, never silence. It writes nothing. Nothing breaks on upgrade: `autonomy_card.py` is a starter file that changes in place.
+
 ### Added: `make autonomy` prints the autonomy card at the starter level
 `tools/autonomy_card.py` and `mk/autonomy.mk` join the starter level of every preset: when a person is called, what they do, why, and the switch to be called less. It reads the repository and writes nothing; it is not part of `make check`. Nothing breaks on upgrade: two new files, and an adopted `claude-plugin` repository gets them too.
 

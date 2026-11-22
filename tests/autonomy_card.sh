@@ -216,4 +216,136 @@ assert all(set(m) == {'what', 'keys'} for m in d['card']['machine']), d['card'][
 acd_line=$(printf '%s\n' "$acd_text" | grep -A1 '^Yours (' | tail -1)
 case "$acd_line" in "  card: "*"2 keys are missing"*) ;; *) miss "autonomy card: no card: line under Yours: $acd_line" ;; esac
 
+# 54b. `make autonomy` at the team level: the policy through autonomy.card_row, the ledger through
+#      outside.py status --json, the layers that are on (rulings 4, 6, 10). Reuses 54f's repo.
+acd_tcard() { # <repo> <args...>: the team card, with the stand-in gh in front
+  local repo="$1"; shift
+  ( cd "$repo" && PATH="$acd_gh:$PATH" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --root "$repo" "$@" 2>&1 )
+}
+acd_rules_row=$(acd_tier "$acd_o" "" --files governance/autonomy.yaml 2>&1 || true)
+acd_tj=$(acd_tcard "$acd_o" --json || true)
+out=$(ACD_RULES="$acd_rules_row" python3 -c "
+import json, os, sys
+d = json.loads(sys.stdin.read())
+gate = json.loads(os.environ['ACD_RULES'])['card']
+assert d['level'] == 'team', d['level']
+keys = {'when', 'you_do', 'why', 'switch', 'keys', 'known'}
+assert all(set(r) == keys for r in d['called']), d['called']
+rules = [r for r in d['called'] if r['when'] == 'The rules change']
+assert rules == [gate], (rules, gate)
+assert len([r for r in d['called'] if r['when'] == 'Product code merges']) == 1, d['called']
+assert len([r for r in d['called'] if r['when'] == '2 keys are missing']) == 1, d['called']
+assert len([r for r in d['called'] if r['when'] == 'each deploy to production']) == 1, d['called']
+assert d['called'], 'a fresh team repository calls nobody'
+assert [r for r in d['called'] if r['when'] == 'A dependency update (minor)'], d['called']
+assert [r for r in d['called'] if r['when'] == 'A dependency update (major)'], d['called']
+assert not [r for r in d['called'] if r['when'] == 'A dependency update (patch)'], d['called']
+mach = [m['what'] for m in d['machine']]
+assert any('patch' in m for m in mach), mach
+assert any('docs/**' in m for m in mach), mach
+assert any('an agent on GitHub' in m for m in mach), mach
+assert 'next_level' not in d, d
+" <<<"$acd_tj" 2>&1) || miss "autonomy card: the team card is wrong: $out"
+
+acd_f="$TMP/acd-fastapi"; mkdir -p "$acd_f"; git -C "$acd_f" init -q -b main
+python3 "$S/apply.py" --target "$acd_f" --preset fastapi --level team --deploy container --var project_name=A --var description=x --var owner=acme >/dev/null
+acd_fj=$(acd_tcard "$acd_f" --json || true)
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+mach = [m['what'] for m in d['machine']]
+assert any('staging deploys are off' in m for m in mach), mach
+" <<<"$acd_fj" 2>&1) || miss "autonomy card: a deploy repository without DEPLOY_ENABLED does not say deploys are off: $out"
+printf '\n[[item]]\nrecipe = "github-variable"\nname = "DEPLOY_ENABLED"\nvalue = "true"\n' >> "$acd_f/ops/outside.toml"
+acd_gh2="$TMP/acd-gh2"; mkdir -p "$acd_gh2"; printf '#!/bin/sh\necho DEPLOY_ENABLED=true\n' > "$acd_gh2/gh"; chmod +x "$acd_gh2/gh"
+acd_fj=$( ( cd "$acd_f" && PATH="$acd_gh2:$PATH" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) || true)
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+mach = [m['what'] for m in d['machine']]
+assert any('deploys to staging after each merge' in m for m in mach), mach
+assert not any('staging deploys are off' in m for m in mach), mach
+" <<<"$acd_fj" 2>&1) || miss "autonomy card: DEPLOY_ENABLED in place does not say deploys run: $out"
+
+# 54c. a policy that is changed in a copy of the repository: the card follows it
+acd_var() { # <name> <python edit of the policy text s>: the team card JSON of a changed copy
+  local d="$TMP/acd-var-$1"; rm -rf "$d"; cp -R "$acd_o" "$d"
+  python3 -c "
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / 'governance' / 'autonomy.yaml'
+s = p.read_text()
+$2
+p.write_text(s)
+" "$d"
+  acd_tcard "$d" --json || true
+}
+acd_v=$(acd_var proof "
+s = s.replace('default: medium', 'default: low').replace('check: \"\"', 'check: \"evidence\"')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert not [r for r in d['called'] if r['when'] == 'Product code merges'], d['called']
+assert any('evidence' in m['what'] for m in d['machine']), d['machine']
+" <<<"$acd_v" 2>&1) || miss "autonomy card: a policy with a proof still calls a person for product code: $out"
+acd_v=$(acd_var refused "s = s.replace('default: medium', 'default: low')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'Product code merges']
+assert len(r) == 1 and r[0]['why'] == 'no machine proof yet', d['called']
+assert not any('product code' in m['what'].lower() and 'merge' in m['what'].lower() for m in d['machine']), d['machine']
+" <<<"$acd_v" 2>&1) || miss "autonomy card: a refused default: low is shown as a machine merge: $out"
+acd_v=$(acd_var owners "s = s.replace('high: [\"@acme\"]', 'high: [\"@acme\", \"@lan\"]')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'The rules change']
+assert len(r) == 1 and r[0]['you_do'] == 'approve the pull request (code owner)', d['called']
+" <<<"$acd_v" 2>&1) || miss "autonomy card: two owners do not make the rules row a code owner approval: $out"
+acd_v=$(acd_var minor "s = s.replace('minor: medium', 'minor: low')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert not [r for r in d['called'] if r['when'] == 'A dependency update (minor)'], d['called']
+assert any('minor' in m['what'] for m in d['machine']), d['machine']
+" <<<"$acd_v" 2>&1) || miss "autonomy card: minor: low is still a row: $out"
+
+# 54d. a source that cannot be read is a known: false row with the reason, never silence
+acd_bin="$TMP/acd-bin"; mkdir -p "$acd_bin"
+for acd_tool in python3 git make; do ln -sf "$(command -v "$acd_tool")" "$acd_bin/$acd_tool"; done
+acd_before=$(git -C "$acd_o" status --porcelain)
+acd_rc=0; acd_ng=$( ( cd "$acd_o" && PATH="$acd_bin" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) ) || acd_rc=$?
+[ "$acd_rc" = 0 ] || miss "autonomy card: without gh the card exits $acd_rc: $acd_ng"
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert [r for r in d['called'] if r['when'] == 'The rules change'], d['called']
+unk = [r for r in d['called'] if r['known'] is False]
+assert unk and any('gh' in r['why'] for r in unk), d['called']
+" <<<"$acd_ng" 2>&1) || miss "autonomy card: without gh a part of the card reads as nothing: $out"
+acd_nl="$TMP/acd-noledger"; rm -rf "$acd_nl"; cp -R "$acd_o" "$acd_nl"; rm -f "$acd_nl/governance/outside.toml"
+acd_rc=0; acd_nj=$(acd_tcard "$acd_nl" --json) || acd_rc=$?
+[ "$acd_rc" = 0 ] || miss "autonomy card: without governance/outside.toml the card exits $acd_rc: $acd_nj"
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'Work outside the repository']
+assert len(r) == 1 and r[0]['known'] is False and r[0]['why'].startswith('unknown: '), d['called']
+assert [r for r in d['called'] if r['when'] == 'The rules change'], d['called']
+" <<<"$acd_nj" 2>&1) || miss "autonomy card: a missing ledger is not a known: false row: $out"
+[ "$acd_before" = "$(git -C "$acd_o" status --porcelain)" ] || miss "autonomy card: a team run changed the repository"
+acd_ign=$(git -C "$acd_o" status --porcelain --ignored)
+case "$acd_ign" in *__pycache__*) miss "autonomy card: a team run left a cache folder" ;; esac
+# a damaged actions.yaml: an item that is not a mapping, and `agent: null`
+mkdir -p "$acd_nl/ontology"
+printf 'actions:\n  - just a string\n  - name: x\n    agent: null\n' > "$acd_nl/ontology/actions.yaml"
+acd_rc=0; acd_dj=$(acd_card "$acd_nl" --json 2>&1) || acd_rc=$?
+[ "$acd_rc" = 0 ] || miss "autonomy card: a damaged actions.yaml gives exit $acd_rc: $acd_dj"
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'An agent runs a product action']
+assert len(r) == 1 and r[0]['known'] is False, d['called']
+" <<<"$acd_dj" 2>&1) || miss "autonomy card: a damaged actions.yaml is not a known: false row: $out"
+
 echo "ok  the autonomy card: the gate names the row (or misses reported above)"
