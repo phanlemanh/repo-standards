@@ -54,6 +54,7 @@ import outside_ledger as ledger
 LISTS = ("ok", "apply", "yours", "decisions", "unknown", "unmerged", "refused")
 LEFT = ("apply", "yours", "unknown", "refused")
 DEFAULT_TIMEOUT = 30.0
+BY_HAND = "recorded by hand"  # the start of the reason of a row nothing checks
 NO_REMOTE = "no default branch on a remote: reading the working tree"
 
 
@@ -68,6 +69,7 @@ class Row:
     where: str
     why: str
     how: str
+    value: str = ""  # a setting's declared value (public, never a secret's); "" for other rows
 
 
 def _say(text: str) -> None:
@@ -200,7 +202,7 @@ def assess(
     """("ok" | "missing" | "partial" | "unknown", why) of a row that is not a decision."""
     if not item.recipes:
         if item.done:
-            return "ok", f"recorded by hand on {item.done}, not checked"
+            return "ok", f"{BY_HAND} on {item.done}, not checked"
         return "missing", "not done yet"
     states = [(n, *_check_one(recipes[n], item.fields, root, timeout)) for n in item.recipes]
     unknown = [why for _, state, why in states if state == "unknown"]
@@ -240,7 +242,7 @@ def _place(
     if item.kind == "secret" and item.source == "generated":
         return "apply", "missing: the machine generates it and stores it"
     if item.kind == "secret":
-        return "yours", "missing: a machine cannot create it"
+        return "yours", MISSING_KEY
     return "yours", f"{why}: a person does it once"
 
 
@@ -254,7 +256,8 @@ def classify(
             continue
         state, why = assess(item, recipes, root, timeout)
         name, reason = _place(item, state, why, recipes)
-        lists[name].append(Row(item.id, item.kind, _where(item, recipes), reason, item.how))
+        value = item.fields.get("value", "") if item.kind == "setting" else ""
+        lists[name].append(Row(item.id, item.kind, _where(item, recipes), reason, item.how, value))
     return lists
 
 
@@ -422,16 +425,21 @@ def card(lists: dict[str, list[Row]]) -> dict[str, list[dict[str, Any]]]:
     what they do, why, and the switch to be called less (python3 tools/autonomy_card.py)."""
     groups = _called_by_list(lists)
     called = [row for name in ("decisions", "yours", "unknown", "refused") for row in groups[name]]
-    words = {
-        "apply": ("row the machine applies", "rows the machine applies"),
-        "ok": ("row in place", "rows in place"),
-        "unmerged": ("row waits for its pull request", "rows wait for their pull request"),
-    }
-    machine = [
-        _machine(_count(len(lists[name]), *words[name]), lists[name])
-        for name in ("apply", "ok", "unmerged")
-        if lists[name]
+    # A row a person recorded as done is not machine work and no machine checked it: it never
+    # counts as "in place".
+    by_hand = [r for r in lists["ok"] if r.why.startswith(BY_HAND)]
+    checked = [r for r in lists["ok"] if r not in by_hand]
+    parts = [
+        ("row the machine applies", "rows the machine applies", lists["apply"]),
+        ("row in place", "rows in place", checked),
+        (
+            "row a person recorded as done; no machine checks it",
+            "rows a person recorded as done; no machine checks them",
+            by_hand,
+        ),
+        ("row waits for its pull request", "rows wait for their pull request", lists["unmerged"]),
     ]
+    machine = [_machine(_count(len(rows), one, many), rows) for one, many, rows in parts if rows]
     return {"called": called, "machine": machine}
 
 

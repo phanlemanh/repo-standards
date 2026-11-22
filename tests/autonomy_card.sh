@@ -304,7 +304,8 @@ out=$(python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 r = [r for r in d['called'] if r['when'] == 'Product code merges']
-assert len(r) == 1 and r[0]['why'] == 'no machine proof yet', d['called']
+assert len(r) == 1 and r[0]['why'].startswith('default: low lets code merge'), d['called']
+assert r[0]['switch'] == 'fix governance/autonomy.yaml', r
 assert not any('product code' in m['what'].lower() and 'merge' in m['what'].lower() for m in d['machine']), d['machine']
 " <<<"$acd_v" 2>&1) || miss "autonomy card: a refused default: low is shown as a machine merge: $out"
 acd_v=$(acd_var owners "s = s.replace('high: [\"@acme\"]', 'high: [\"@acme\", \"@lan\"]')")
@@ -357,6 +358,121 @@ d = json.loads(sys.stdin.read())
 r = [r for r in d['called'] if r['when'] == 'An agent runs a product action']
 assert len(r) == 1 and r[0]['known'] is False, d['called']
 " <<<"$acd_dj" 2>&1) || miss "autonomy card: a damaged actions.yaml is not a known: false row: $out"
+
+# 54i. final review: the card never shows unchecked work as done
+# (1) a row a person recorded by hand is not machine work "in place"
+acd_hr="$TMP/acd-hand"; rm -rf "$acd_hr"; cp -R "$acd_o" "$acd_hr"
+printf '\n[[item]]\naction = "sign-the-dpa"\ndone = "2026-11-01"\n' >> "$acd_hr/ops/outside.toml"
+acd_hj=$( ( cd "$acd_hr" && PATH="$acd_gh:$PATH" OUTSIDE_TIMEOUT=1 python3 tools/outside.py status --json 2>/dev/null ) || true)
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert [r['id'] for r in d['ok']] == ['action:sign-the-dpa'], d['ok']
+what = [m['what'] for m in d['card']['machine']]
+assert not any('in place' in w for w in what), what
+hand = [m for m in d['card']['machine'] if 'recorded as done' in m['what']]
+assert len(hand) == 1 and 'no machine checks it' in hand[0]['what'] and 'sign-the-dpa' in hand[0]['keys'], what
+" <<<"$acd_hj" 2>&1) || miss "autonomy card: a row recorded by hand counts as in place: $out"
+out=$(cd "$acd_t/tools" && python3 -c "
+import outside
+R = outside.Row
+lists = {n: [] for n in outside.LISTS}
+lists['ok'] = [R('a:one', 'setting', 'x', 'checked: in place', ''), R('action:two', 'action', '', 'recorded by hand on 2026-11-01, not checked', '')]
+what = [m['what'] for m in outside.card(lists)['machine']]
+assert what == ['1 row in place', '1 row a person recorded as done; no machine checks it'], what
+" 2>&1) || miss "autonomy card: checked and hand-recorded rows are not told apart: $out"
+
+# (2) the deploy line is never false: the id is read in every list, and the value counts
+acd_dep() { # <name> <ledger rows> <gh output>: the team card JSON of a deploy repository
+  local d="$TMP/acd-dep-$1" g="$TMP/acd-depgh-$1"; rm -rf "$d" "$g"; cp -R "$acd_f" "$d"; mkdir -p "$g"
+  python3 -c "
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / 'ops' / 'outside.toml'
+s = p.read_text().replace('\n[[item]]\nrecipe = \"github-variable\"\nname = \"DEPLOY_ENABLED\"\nvalue = \"true\"\n', sys.argv[2].replace('\\\\n', '\\n'))
+p.write_text(s)
+" "$d" "$2"
+  printf '#!/bin/sh\n%s\n' "$3" > "$g/gh"; chmod +x "$g/gh"
+  ( cd "$d" && PATH="$g:$PATH" OUTSIDE_TIMEOUT=1 python3 tools/autonomy_card.py --json 2>&1 ) || true
+}
+acd_deploy_line() { python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+print(' | '.join(m['what'] for m in d['machine'] if 'staging' in m['what']))
+"; }
+acd_dj=$(acd_dep refused '\n[[item]]\nrecipe = "github-variable"\nname = "DEPLOY_ENABLED"\n' 'echo DEPLOY_ENABLED=true')
+acd_line=$(acd_deploy_line <<<"$acd_dj")
+case "$acd_line" in *"not known"*) ;; *) miss "autonomy card: a refused DEPLOY_ENABLED row does not read not known: $acd_line" ;; esac
+case "$acd_line" in *"are off"*|*"add a "*|*"deploys to staging after"*) miss "autonomy card: a refused DEPLOY_ENABLED row reads as off or on: $acd_line" ;; esac
+acd_dj=$(acd_dep false '\n[[item]]\nrecipe = "github-variable"\nname = "DEPLOY_ENABLED"\nvalue = "false"\n' 'echo DEPLOY_ENABLED=false')
+acd_line=$(acd_deploy_line <<<"$acd_dj")
+case "$acd_line" in *"deploys to staging after each merge"*) miss "autonomy card: DEPLOY_ENABLED = false reads as deploying: $acd_line" ;; esac
+case "$acd_line" in *"paused"*"false"*) ;; *) miss "autonomy card: DEPLOY_ENABLED = false does not read paused by its value: $acd_line" ;; esac
+case "$acd_line" in *"add a "*) miss "autonomy card: DEPLOY_ENABLED = false says add a row: $acd_line" ;; esac
+acd_dj=$(acd_dep hand '\n[[item]]\naction = "set-DEPLOY_ENABLED"\ndone = "2026-11-01"\n' 'echo nothing')
+acd_line=$(acd_deploy_line <<<"$acd_dj")
+case "$acd_line" in *"not known"*) ;; *) miss "autonomy card: a DEPLOY_ENABLED row recorded by hand does not read not known: $acd_line" ;; esac
+case "$acd_line" in *"deploys to staging after"*|*"are off"*) miss "autonomy card: a hand-recorded DEPLOY_ENABLED row reads as on or off: $acd_line" ;; esac
+acd_dj=$(acd_dep apply '\n[[item]]\nrecipe = "github-variable"\nname = "DEPLOY_ENABLED"\nvalue = "true"\n' 'echo nothing')
+acd_line=$(acd_deploy_line <<<"$acd_dj")
+case "$acd_line" in *"wait"*) ;; *) miss "autonomy card: an unapplied DEPLOY_ENABLED row does not wait: $acd_line" ;; esac
+
+# (3) a policy refused for any reason names the file, not a switch it already has
+acd_v=$(acd_var lowcheck "
+s = s.replace('default: medium', 'default: low').replace('check: \"\"', 'check: \"evidence\"').replace('required_checks: []', 'required_checks: [\"check\"]')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'Product code merges']
+assert len(r) == 1, d['called']
+assert r[0]['switch'] == 'fix governance/autonomy.yaml', r
+assert r[0]['why'].startswith('required_checks: check is one of the setup'), r
+" <<<"$acd_v" 2>&1) || miss "autonomy card: a refused required_checks policy names the wrong switch: $out"
+acd_v=$(acd_var typo "s = s.replace('default: medium', 'default: lwo')")
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'] == 'Product code merges']
+assert len(r) == 1, d['called']
+assert r[0]['switch'] == 'fix governance/autonomy.yaml', r
+assert r[0]['why'].startswith('default: lwo is not one of'), r
+" <<<"$acd_v" 2>&1) || miss "autonomy card: a mistyped default says no machine proof yet: $out"
+out=$(acd_tier "$acd_t" "" --files src/a/x.py 2>&1 | python3 -c "
+import json, sys
+c = json.load(sys.stdin)['card']
+assert c['why'] == 'no machine proof yet' and 'proof.check' in c['switch'], c
+" 2>&1) || miss "autonomy card: a valid policy without a proof lost its words: $out"
+
+# 54j. final review, Important 4: "merge once the checks are green" is said only where the agent
+#      pipeline (github-agents) can merge; without it, or when the record cannot say, no merge is claimed
+acd_merge_lines() { python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+print(' | '.join(m['what'] for m in d['machine'] if 'merge' in m['what'] and 'an agent on GitHub' not in m['what']))
+"; }
+acd_ml=$(acd_merge_lines <<<"$acd_tj")
+case "$acd_ml" in *"changes to "*" merge once the checks are green"*) ;; *) miss "autonomy card: with github-agents the low merge wording is gone: $acd_ml" ;; esac
+case "$acd_ml" in *"nothing merges it for you"*) miss "autonomy card: with github-agents the card says nothing merges: $acd_ml" ;; esac
+acd_na="$TMP/acd-noagents"; rm -rf "$acd_na"; mkdir -p "$acd_na"; git -C "$acd_na" init -q -b main
+python3 "$S/apply.py" --target "$acd_na" --preset python --level team --var project_name=A --var description=x --var owner=acme >/dev/null
+acd_naj=$(acd_tcard "$acd_na" --json || true)
+acd_ml=$(acd_merge_lines <<<"$acd_naj")
+case "$acd_ml" in *"once the checks are green; nothing merges it for you"*) ;; *) miss "autonomy card: without github-agents the card does not say nothing merges it: $acd_ml" ;; esac
+case "$acd_ml" in *" merge once the checks"*) miss "autonomy card: without github-agents a machine item claims the merge: $acd_ml" ;; esac
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert not [r for r in d['called'] if r['known'] is False and r['when'].startswith('A pull request that needs no person')], d['called']
+" <<<"$acd_naj" 2>&1) || miss "autonomy card: a known record gives an unknown merge row: $out"
+rm -f "$acd_na/.repo-setup.json"
+acd_nuj=$(acd_tcard "$acd_na" --json || true)
+acd_ml=$(acd_merge_lines <<<"$acd_nuj")
+case "$acd_ml" in *" merge once the checks"*) miss "autonomy card: an unreadable record still claims the merge: $acd_ml" ;; esac
+out=$(python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+r = [r for r in d['called'] if r['when'].startswith('A pull request that needs no person')]
+assert len(r) == 1 and r[0]['known'] is False and 'github-agents' in r[0]['why'] and r[0]['why'].startswith('unknown: '), d['called']
+" <<<"$acd_nuj" 2>&1) || miss "autonomy card: an unreadable record is not a known: false merge row: $out"
 
 # 54h. the rule and the words around it: AGENTS.md at both levels, the two review-change skills,
 #      the tour, the explain table and the changelog

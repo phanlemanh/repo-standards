@@ -73,8 +73,10 @@ mục 1 («Xong là», gạch thứ ba), 2, 5.2, 6 (gạch «Bảng tự chủ»
    once`, `a machine cannot create them`, switch `python3 tools/outside.py secrets`), khoá chỉ có ở một
    nơi (`decide`), `action` (`do once`, `no machine can do it`), `setting` chỉ kiểm, tức các bức tường
    (`say go after the dry run`, `the walls change only with your go-ahead`, switch `-`); «Unknown» gom
-   thành một dòng `known: false`, `why` là lý do đầu, switch `python3 tools/outside.py status`;
-   «Refused» một dòng. `apply`, `ok`, `unmerged` thành mục `machine`, có đếm.
+   thành một dòng `known: false`, `why` là `unknown: ` + mọi lý do khác nhau, mỗi lý do một lần, nối bằng `; `, switch `python3 tools/outside.py status`;
+   «Refused» một dòng. `apply`, `ok`, `unmerged` thành mục `machine`, có đếm; riêng `ok` tách đôi: dòng
+   đã kiểm thì «N rows in place», dòng người ghi tay (`done`, `why` mở bằng `recorded by hand`) thì «N rows a person
+   recorded as done; no machine checks them», không bao giờ tính vào «in place».
 6. **Khi `tools/outside.py` không trả JSON** (thoát 2, không có tệp, quá `OUTSIDE_CARD_TIMEOUT = 120`
    giây): một dòng `known: false`, `when` = `Work outside the repository`, `why` = `unknown: ` + dòng
    cuối của stderr hay lý do. Bảng vẫn thoát 0.
@@ -93,10 +95,17 @@ mục 1 («Xong là», gạch thứ ba), 2, 5.2, 6 (gạch «Bảng tự chủ»
    trong một kho git hay gọi sai.
 10. **Các lớp đang bật** (`capabilities`, `deploy` của `.repo-setup.json`), bậc `team`:
     `github-agents` → mục `machine` `an agent on GitHub works on issues and pull requests; its merges
-    follow the same tiers`. Có `.github/workflows/deploy.yml`: khi danh sách `ok` của
-    `outside.py status --json` có một `id` chứa `DEPLOY_ENABLED` → mục `machine` `deploys to staging
-    after each merge`; không thì mục `machine` `staging deploys are off: add a DEPLOY_ENABLED row to
-    ops/outside.toml once make deploy works` (thiết kế 5.1: kit không gieo dòng đó).
+    follow the same tiers`. Có `.github/workflows/deploy.yml`, câu về deploy staging đọc `id` ở MỌI danh
+    sách của `outside.py status --json` (cả `value` mà sổ đã đọc, không đọc TOML lần hai):
+    `deploys to staging after each merge` chỉ khi một dòng ở `ok` có `id` đúng `github-variable:DEPLOY_ENABLED`
+    (có thể kèm `@env`), phép kiểm đã chạy (không phải «not checked») và `value` là `"true"` (deploy.yml chỉ
+    chạy khi `vars.DEPLOY_ENABLED == 'true'`); `value` khác (như `"false"`) → `staging deploys are paused`; dòng ở
+    `refused`, `unknown` hay ở `ok` mà không phải biến đã kiểm → `not known`; ở `apply`, `yours`, `decisions`,
+    `unmerged` → `wait`; `staging deploys are off: add a DEPLOY_ENABLED row ...` chỉ khi không danh sách nào có
+    dòng đó (thiết kế 5.1: kit không gieo dòng đó).
+11. **Câu «gộp khi check xanh»** chỉ nói máy gộp khi kho có `github-agents` (chỉ khi đó có auto-merge). Không có
+    thì mục nói `may merge with no approval once the checks are green; nothing merges it for you`; không đọc
+    được `.repo-setup.json` thì dùng câu đó và thêm một dòng `known: false`, không bao giờ khẳng định việc gộp.
 
 ## Review Focus
 

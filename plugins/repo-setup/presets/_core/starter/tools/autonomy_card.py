@@ -39,6 +39,9 @@ OUTSIDE_TOOL = "tools/outside.py"
 DEPENDABOT = ".github/dependabot.yml"
 DEPLOY_WORKFLOW = ".github/workflows/deploy.yml"
 OUTSIDE_CARD_TIMEOUT = 120  # seconds the ledger may take to answer
+LEDGER_LISTS = ("ok", "apply", "yours", "decisions", "unknown", "unmerged", "refused")
+DEPLOY_ROW = "github-variable:DEPLOY_ENABLED"
+DEPLOY_NAME = "DEPLOY_ENABLED"
 AGENT_MODES = ("allowed", "confirm", "forbidden")
 
 LEVEL_STARTER = "starter"
@@ -270,41 +273,75 @@ def _policy_pairs(policy: dict[str, Any], autonomy: Any, own: tuple[str, ...], r
     """The (tier, reason, keys) pairs the policy can give a change (ruling 4)."""
     rules = policy.get("rules") if isinstance(policy.get("rules"), dict) else {}
     pairs = [
-        ("high", "protected path", "high"),
-        (autonomy.default_tier(policy, own), "default", "default"),
+        ("high", autonomy.REASON_PROTECTED, "high"),
+        (autonomy.default_tier(policy, own), autonomy.REASON_DEFAULT, "default"),
         (
-            str(rules.get("test_deletions_raise_to", "medium")),
-            "removes, rewrites or disables test code",
+            str(rules.get("test_deletions_raise_to", autonomy.TEST_RAISE_TIER)),
+            autonomy.REASON_TESTS,
             "rules.test_deletions_raise_to",
         ),
         (
-            str(rules.get("agent_guard_removals_raise_to", "high")),
-            "loosens what agents may do",
+            str(rules.get("agent_guard_removals_raise_to", autonomy.GUARD_RAISE_TIER)),
+            autonomy.REASON_AGENTS,
             "rules.agent_guard_removals_raise_to",
         ),
     ]
     updates = rules.get("dependency_updates")
     if (root / DEPENDABOT).is_file() and isinstance(updates, dict):
         pairs += [
-            (str(tier), f"dependency update ({level})", f"rules.dependency_updates.{level}")
+            (
+                str(tier),
+                autonomy.REASON_DEPENDENCY.format(level),
+                f"rules.dependency_updates.{level}",
+            )
             for level, tier in updates.items()
         ]
     return pairs
 
 
-def _machine_words(reason: str, policy: dict[str, Any], autonomy: Any, own: tuple[str, ...]) -> str:
+def _merge_words(merges: bool, checks: str = "the checks are") -> str:
+    """The end of a machine item: the merge itself only where the agent pipeline's auto-merge
+    exists; without it a person or the session merges, and no merge is claimed."""
+    if merges:
+        return f"merge once {checks} green"
+    return f"may merge with no approval once {checks} green; nothing merges it for you"
+
+
+def _machine_words(
+    reason: str, policy: dict[str, Any], autonomy: Any, own: tuple[str, ...], merges: bool
+) -> str:
     """What the machine does alone when `reason` lands on the low tier."""
-    if reason == "default":
+    if reason == autonomy.REASON_DEFAULT:
         proof = autonomy.proof_check(policy, own)
-        return f"product code merges once the checks and the proof ({proof}) are green"
-    if reason == "removes, rewrites or disables test code":
-        return (
-            "a change that removes, rewrites or disables test code merges once the checks are green"
-        )
-    if reason == "loosens what agents may do":
-        return "a change that lets agents do more in the product merges once the checks are green"
-    level = reason[reason.index("(") + 1 : -1]
-    return f"a dependency update ({level}) merges once the checks are green"
+        return "product code " + _merge_words(merges, f"the checks and the proof ({proof}) are")
+    tail = _merge_words(merges)
+    if reason == autonomy.REASON_TESTS:
+        return f"a change that removes, rewrites or disables test code {tail}"
+    if reason == autonomy.REASON_AGENTS:
+        return f"a change that lets agents do more in the product {tail}"
+    level = autonomy.DEPENDENCY_REASON.match(reason).group(1)
+    return f"a dependency update ({level}) {tail}"
+
+
+def agent_pipeline(root: Path) -> bool | None:
+    """Whether the repository has `github-agents` (the pipeline whose auto-merge merges a low pull
+    request), from `.repo-setup.json`; None when the record cannot say."""
+    try:
+        caps = _read_json(root / MANIFEST).get("capabilities")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return ("github-agents" in caps) if isinstance(caps, list) else None
+
+
+def _merge_unknown() -> dict[str, Any]:
+    return row(
+        "A pull request that needs no person is ready",
+        "find out who merges it",
+        f"unknown: {MANIFEST} does not say whether github-agents is on",
+        "-",
+        f"{MANIFEST}: capabilities",
+        known=False,
+    )
 
 
 def team_policy(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -314,6 +351,8 @@ def team_policy(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]
         policy = autonomy.load_policy(root)
         own = autonomy.own_checks(root)
         pairs = _policy_pairs(policy, autonomy, own, root)
+        pipeline = agent_pipeline(root)
+        merges = pipeline is True
         called: list[dict[str, Any]] = []
         machine: list[dict[str, str]] = []
         for tier, reason, key in pairs:
@@ -323,19 +362,20 @@ def team_policy(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]
             found = autonomy.card_row(policy, tier, reason, own)
             if found is not None:
                 called.append(found)
-            elif reason != "protected path":
-                machine.append(
-                    machine_item(_machine_words(reason, policy, autonomy, own), f"{POLICY}: {key}")
-                )
+            elif reason != autonomy.REASON_PROTECTED:
+                words = _machine_words(reason, policy, autonomy, own, merges)
+                machine.append(machine_item(words, f"{POLICY}: {key}"))
         low = policy.get("low")
         if isinstance(low, list) and low:
             machine.insert(
                 0,
                 machine_item(
-                    "changes to " + ", ".join(map(str, low)) + " merge once the checks are green",
+                    "changes to " + ", ".join(map(str, low)) + " " + _merge_words(merges),
                     f"{POLICY}: low",
                 ),
             )
+        if pipeline is None and machine:
+            called.append(_merge_unknown())
         return called, machine
     except (Exception, SystemExit) as err:  # a damaged or missing policy: unknown, not silence
         return [_policy_unknown(f"{POLICY} cannot be read ({err})")], []
@@ -352,9 +392,11 @@ def _ledger_unknown(why: str) -> dict[str, Any]:
     )
 
 
-def team_ledger(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[str] | None]:
-    """(called rows, machine items, ids in place) from `tools/outside.py status --json`; the ids
-    are None when the ledger could not be read."""
+def team_ledger(
+    root: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, list[dict[str, Any]]] | None]:
+    """(called rows, machine items, the rows of every list) from `tools/outside.py status --json`;
+    the rows are None when the ledger could not be read."""
     if not (root / OUTSIDE_TOOL).is_file():
         return [_ledger_unknown(f"{OUTSIDE_TOOL} is missing")], [], None
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}  # the child writes no cache either
@@ -379,40 +421,55 @@ def team_ledger(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]],
         data = json.loads(done.stdout) if done.returncode in (0, 1) else None
         part = data["card"]
         called, machine = list(part["called"]), list(part["machine"])
-        ids = {
-            name: [str(r.get("id", "")) for r in data.get(name, [])]
-            for name in ("ok", "unknown", "apply", "unmerged")
-        }
+        found = {name: list(data.get(name, [])) for name in LEDGER_LISTS}
     except (ValueError, KeyError, TypeError, AttributeError):
         lines = [ln for ln in done.stderr.strip().splitlines() if ln.strip()]
         reason = lines[-1] if lines else f"exit {done.returncode}, no JSON on standard output"
         return [_ledger_unknown(f"{OUTSIDE_TOOL} status gave no card ({reason})")], [], None
-    return called, machine, ids
+    return called, machine, found
 
 
-def _deploy_words(ids: dict[str, list[str]]) -> str:
-    """The staging deploy switch, as far as the ledger knows it."""
+def _is_deploy_row(ident: str) -> bool:
+    """The one row that is the staging deploy switch: the GitHub variable, on any environment."""
+    return ident == DEPLOY_ROW or ident.startswith(DEPLOY_ROW + "@")
 
-    def holds(name: str) -> bool:
-        return any("DEPLOY_ENABLED" in ident for ident in ids.get(name, []))
 
-    if holds("ok"):
+def _deploy_words(rows: dict[str, list[dict[str, Any]]]) -> str:
+    """The staging deploy switch, as far as the ledger knows it. It reads the row in every list
+    and the value the ledger parsed (deploy.yml runs only on DEPLOY_ENABLED == 'true')."""
+
+    def named(name: str) -> list[dict[str, Any]]:
+        return [r for r in rows.get(name, []) if DEPLOY_NAME in str(r.get("id", ""))]
+
+    checked = [
+        r
+        for r in named("ok")
+        if _is_deploy_row(str(r["id"])) and "not checked" not in str(r.get("why", ""))
+    ]
+    values = {str(r.get("value", "")) for r in checked}
+    if "true" in values:
         return "deploys to staging after each merge"
-    if holds("unknown"):
-        return "whether staging deploys run is not known: the DEPLOY_ENABLED row cannot be checked"
-    if holds("apply"):
-        return "staging deploys wait: the DEPLOY_ENABLED row is not applied yet"
-    if holds("unmerged"):
-        return "staging deploys wait: the DEPLOY_ENABLED row is not merged yet"
+    if values - {""}:
+        shown = ", ".join(sorted(values - {""}))
+        return f"staging deploys are paused: {DEPLOY_NAME} is {shown}, not true"
+    if named("ok") or named("unknown") or named("refused"):
+        return (
+            "whether staging deploys run is not known: "
+            f"the {DEPLOY_NAME} row is refused, cannot be checked or is not a checked variable"
+        )
+    if named("apply") or named("yours") or named("decisions"):
+        return f"staging deploys wait: the {DEPLOY_NAME} row is not applied yet"
+    if named("unmerged"):
+        return f"staging deploys wait: the {DEPLOY_NAME} row is not merged yet"
     return (
-        "staging deploys are off: add a DEPLOY_ENABLED row to ops/outside.toml "
+        f"staging deploys are off: add a {DEPLOY_NAME} row to ops/outside.toml "
         "once make deploy works"
     )
 
 
-def team_layers(root: Path, ids: dict[str, list[str]] | None) -> list[dict[str, str]]:
+def team_layers(root: Path, rows: dict[str, list[dict[str, Any]]] | None) -> list[dict[str, str]]:
     """What the layers that are on do alone (ruling 10). The deploy statement needs the ledger:
-    when it could not be read (`ids` is None) the ledger's own unknown row stands for it. A
+    when it could not be read (`rows` is None) the ledger's own unknown row stands for it. A
     DEPLOY_ENABLED row that is not known, still to apply or not merged is never "off"."""
     items = []
     try:
@@ -427,18 +484,18 @@ def team_layers(root: Path, ids: dict[str, list[str]] | None) -> list[dict[str, 
                 f"{MANIFEST}: capabilities",
             )
         )
-    if (root / DEPLOY_WORKFLOW).is_file() and ids is not None:
-        items.append(machine_item(_deploy_words(ids), DEPLOY_WORKFLOW))
+    if (root / DEPLOY_WORKFLOW).is_file() and rows is not None:
+        items.append(machine_item(_deploy_words(rows), DEPLOY_WORKFLOW))
     return items
 
 
 def team_sources(root: Path) -> dict[str, Any]:
     """The team level's parts: the policy, the ledger and the layers."""
     policy_called, policy_machine = team_policy(root)
-    ledger_called, ledger_machine, ids = team_ledger(root)
+    ledger_called, ledger_machine, rows = team_ledger(root)
     return {
         "called": policy_called + ledger_called,
-        "machine": policy_machine + team_layers(root, ids) + ledger_machine,
+        "machine": policy_machine + team_layers(root, rows) + ledger_machine,
         "next_level": [],
     }
 
