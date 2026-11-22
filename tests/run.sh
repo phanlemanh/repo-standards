@@ -6,8 +6,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/plugins/repo-setup/scripts"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-fail() { echo "FAIL: $*" >&2; exit 1; }
+# bash 3.2 (macOS) leaves a sourced file that does not parse with exit code 0 once this trap has
+# run, so a run that stops before its last line fails here instead of passing in silence.
+reached_end=
+trap 'rm -rf "$TMP"; [ -n "$reached_end" ] || { echo "FAIL: tests/run.sh stopped before its last check" >&2; exit 1; }' EXIT
+fail() { echo "FAIL: $*" >&2; reached_end=1; exit 1; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 # Portable in-place edit: `sed -i` differs between GNU and BSD (macOS).
 subst() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
@@ -3942,3 +3945,4 @@ echo "ok  derived (or misses reported above)"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
+reached_end=1
