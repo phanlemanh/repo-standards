@@ -136,11 +136,12 @@ Two groups, with different strength:
   commands may run is left to Claude Code's own permission mode: the settings ask nothing and
   block no Bash command by pattern.
 
-`governance/autonomy.yaml` sorts changes by who decides the merge: `low` merges itself when the
-required checks pass, `medium` is merged by a person because nothing proves it yet, `high`
-changes the rules and needs a code owner. Product code starts at `medium`. Name the status check
-that proves a change (`proof.check`, for example the evidence re-check of a feature loop) and it
-can be `low`: the check becomes required and the person leaves.
+`governance/autonomy.yaml` sorts changes by who decides the merge: `low` needs no approval once
+the required checks pass (with `github-agents`, auto-merge merges it), `medium` is merged by a
+person because nothing proves it yet, `high` changes the rules and needs a code owner. Product
+code starts at `medium`. Name the status check that proves a change (`proof.check`, for example
+the evidence re-check of a feature loop) and it can be `low`: the check becomes required and the
+person leaves.
 
 The risk gate in `pr-pipeline.yml` reads its rules from the base branch. The `doctor` score covers
 local files unless you pass `--remote`, and it measures whether checks are in place, not whether the

@@ -1,7 +1,8 @@
 # Autonomy policy: who decides that a change may merge. People decide; machines check.
 # Source of truth for tools/autonomy.py (CI gate + CODEOWNERS) and for agents.
 #
-#   low     merges itself once the required checks are green
+#   low     needs no approval once the required checks are green (with agent workflows,
+#           auto-merge merges it; otherwise a person presses merge)
 #   medium  nothing proves this change yet, or a guard was loosened: a person merges it
 #   high    changes the rules of the game: a code owner decides
 #

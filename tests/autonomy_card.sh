@@ -500,4 +500,11 @@ for acd_w in 'tools/autonomy_card.py' 'mk/autonomy.mk' '`card`'; do
 done
 case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the changelog has no What breaks on upgrade line under Unreleased" ;; esac
 
+# 54k. the owner's ruling "say what is true": a low pull request merges by itself only where the
+# agent pipeline is installed (its auto-merge). Outside capabilities/github-agents, no template,
+# label or doc says it merges itself; it needs no approval once the checks pass.
+acd_self=$(grep -rn -E 'merges itself|can merge itself' "$acd_pl" "$acd_pl/README.md" 2>/dev/null \
+  | grep -v '/capabilities/github-agents/' | sort -u || true)
+[ -z "$acd_self" ] || miss "autonomy card: an unconditional 'merges itself' claim outside github-agents: $acd_self"
+
 echo "ok  the autonomy card: the gate names the row (or misses reported above)"

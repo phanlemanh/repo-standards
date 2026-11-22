@@ -97,8 +97,8 @@ feature loop, a person edits `governance/autonomy.yaml` (agents may not): `proof
 that status check, and `default` may then be `low`. Before suggesting it, confirm the check
 runs and reports on **every** pull request, including dependency updates: a required check that
 never reports blocks the pull request, and a job that is skipped counts as passed. Then `make codeowners` and run the script again with `--apply`:
-the check becomes required and product code merges itself when it is green. With agent workflows,
-the PR pipeline also stops running its own reviewer agent. The check may not be `check`, nor
+the check becomes required and product code needs no approval once it is green (with agent
+workflows, auto-merge merges it). With agent workflows, the PR pipeline also stops running its own reviewer agent. The check may not be `check`, nor
 `gate` where agent workflows report under that name.
 
 ## 5. Optional, either way

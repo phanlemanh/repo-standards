@@ -47,7 +47,7 @@ from autonomy import (
 from repo_ontology import find_repo_root, load_yaml_file
 
 LABELS = [
-    ("risk:low", "0e8a16", "Autonomy gate: merges itself when the checks pass"),
+    ("risk:low", "0e8a16", "Autonomy gate: no approval needed once the checks pass"),
     ("risk:medium", "fbca04", "Autonomy gate: not proven by a machine, a person merges"),
     ("risk:high", "b60205", "Autonomy gate: changes the rules, a code owner decides"),
     ("intent", "5319e7", "A human intent for the agents"),
