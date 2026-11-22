@@ -1867,13 +1867,16 @@ for phrase in 'get approval before you start' 'ask in the issue and stop' 'need 
   if grep -qiF "$phrase" "$pd/AGENTS.md" "$pd/CONTRIBUTING.md" "$pd/.github/pull_request_template.md" "$pd/ontology/README.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/+AGENTS.md/40-service-api.md" "$ROOT/plugins/repo-setup/archetypes/service-api/starter/tools/api_compat.py"; then miss "people decide: generated text stops for a person: $phrase"; fi
 done
 grep -q 'never a reason to stop' "$pd/AGENTS.md" || miss "people decide: AGENTS.md does not say that a tier is no reason to stop"
-python3 - "$pd/.claude/settings.json" <<'PY' || miss "people decide: settings.json asks, blocks Bash by pattern, or lost a silent wall"
+# At team level the machine drafts a change to the rules in a pull request of its own (53a): the
+# two edit walls are gone there, and the wall on reading secrets stays.
+python3 - "$pd/.claude/settings.json" <<'PY' || miss "people decide: settings.json asks, blocks Bash by pattern, lost a silent wall, or still keeps the machine from drafting a rule change"
 import json, sys
 p = json.load(open(sys.argv[1], encoding="utf-8"))["permissions"]
 assert not p.get("ask"), p.get("ask")
 assert not [r for r in p["deny"] if r.startswith("Bash(")], p["deny"]
-for wall in ("Read(./.env)", "Edit(./.github/workflows/**)", "Edit(./governance/**)"):
-    assert wall in p["deny"], wall
+assert "Read(./.env)" in p["deny"], p["deny"]
+for wall in ("Edit(./.github/workflows/**)", "Edit(./governance/**)"):
+    assert wall not in p["deny"], wall
 PY
 if grep -q 'gate hook' "$ROOT/plugins/repo-setup/skills/explain/SKILL.md"; then miss "people decide: explain names a gate hook the plugin no longer ships"; fi
 # 43h. the principle is written down where the next change to the plugin will find it
@@ -3911,6 +3914,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/outside.sh
 . "$ROOT/tests/outside.sh"
+
+# shellcheck source=tests/autonomy_change.sh
+. "$ROOT/tests/autonomy_change.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
