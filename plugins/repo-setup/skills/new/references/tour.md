@@ -18,7 +18,8 @@ Keep the file name in English. Sections:
      the code is right).
    - `.claude/settings.json` helps avoid mistakes but is not an absolute barrier.
    - What this level does not include, for example pre-commit and secret scanning at `starter`.
-6. **Not done yet**: features, GitHub repo, deployment, and every `manual_steps` entry.
+6. **Not done yet**: features, GitHub repo, deployment, and every `manual_steps` entry. At level
+   `team`, point to `make outside` for what is in place outside the repository and what is left.
 7. **Next steps**: a first thing to ask Claude, and how to ask about a file you do not understand.
 
 For a professional, add **Decisions**: one line per layer, pointing to `setup-blueprint.yaml`.

@@ -165,6 +165,10 @@ rk_release() {
   subst "s/\"version\": \"[^\"]*\"/\"version\": \"$2\"/" "$1/.claude-plugin/plugin.json"
   if [ "${3:-}" = pre ]; then
     rm -f "$1/rule-checks.toml"
+    # the fragments of that release, and none that a later release added
+    find "$1" -path '*/+AGENTS.md/*' -type f | while read -r rk_f; do
+      [ -e "$ROOT/tests/fixtures/rule-kinds/pre/${rk_f#"$1"/}" ] || rm -f "$rk_f"
+    done
     cp -R "$ROOT/tests/fixtures/rule-kinds/pre/." "$1/"
   fi
 }

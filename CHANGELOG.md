@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Added: work outside the repository goes through one tool
+A team-level repository gets a ledger of its work outside the repository (GitHub settings,
+variables, keys, the platform it runs on) and `tools/outside.py`, which checks it, applies what
+the machine may, and lists what only a person can do: create a key, enter it, decide.
+
+- `governance/outside.toml` holds the kinds of command the machine may run ("recipes");
+  `ops/outside.toml` holds each piece of work ("rows"). Both are read from the default branch of
+  the remote, so a command runs only once the pull request that brings it is merged. A row only
+  the working tree has is listed as not merged; `status --draft` prints what it would run.
+- `python3 tools/outside.py status` (or `make outside`) prints what is in place, what the machine
+  will apply, what is yours, and what is unknown: a check that cannot run or answer is never in
+  place. `apply` applies settings and generates the keys the machine makes; a key present in one
+  place only is never made again. `secrets` asks for each key a person creates, with the typing
+  hidden, only in a terminal; the value goes to the store command on standard input and nowhere
+  else.
+- `tools/github_setup.py --check` says whether `--apply` would change anything (exit 0, 1, or 2
+  when GitHub could not be read), and writes nothing. The ledger checks the GitHub settings with
+  it; applying them still waits for a person's go-ahead.
+- The kit seeds the GitHub part: the setup row and `RELEASE_PLEASE_TOKEN` (not for a plugin
+  marketplace, which has no release-please); with `github-agents` the agent key and the GitHub
+  App; with `--deploy container` the decision to approve production. `DEPLOY_ENABLED` is not
+  seeded.
+- `/repo-setup:new` has a stage "Outside the repository" before Finish, instead of stopping for
+  everything outside the folder; `/repo-setup:github` and `/repo-setup:adopt` end with the
+  status. `skills/new/references/outside.md` says how to write recipes for a platform the kit
+  does not generate. The generated `AGENTS.md` (team) has a section on it, and
+  `docs/setup-principles.md` has rule 11.
+
+**What breaks on upgrade**: nothing. A team-level repository gets six new files
+(`tools/outside.py`, `tools/outside_ledger.py`, `tools/github_check.py`,
+`governance/outside.toml`, `ops/outside.toml`, `mk/outside.mk`) and a new section in `AGENTS.md`.
+The tool needs Python 3.11 or later. Parts 5.3 (the machine drafts rule changes, a person
+approves) and 5.2 (the autonomy card) of the design are not in this release.
+
+**Checked**: a ts-api team repository with `github-agents` and `--deploy container`, set up with
+0.10.4 and upgraded with this code: exit code 0, no conflict, the six files created,
+`AGENTS.md`, `ci.yml`, `tools/ci_inputs.py` and `tools/github_setup.py` updated, and the five
+seeded rows read.
+
+**Not yet run**: the recipes against a real GitHub repository; `gh secret set` taking a value
+on standard input for an environment secret.
+
 ### Fixed: the roadmap page of the feature loop is not an input of the heavy tier
 `HEAVY_NOT_INPUTS` in the `ci.yml` of every preset, and the default list of `tools/ci_inputs.py`,
 now end with `LO-TRINH.html`. The feature loop redraws that page in the commit that carries the

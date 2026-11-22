@@ -529,4 +529,23 @@ ob_tier() { ( cd "$1" && python3 tools/autonomy.py --files "$2" | json 'd["tier"
 [ "$(ob_tier "$ob_team" governance/outside.toml || true)" = high ] || miss "outside: the recipes file is not a rule of the game"
 [ "$(ob_tier "$ob_team" ops/outside.toml || echo high)" != high ] || miss "outside: a row of the ledger is a rule of the game"
 
+# 52h. the rule, the setup stage and the pages that say it
+grep -q 'python3 tools/outside.py' "$ob_team/AGENTS.md" || miss "outside: AGENTS.md of a team repository does not name the tool"
+if grep -q 'tools/outside.py' "$ob_start/AGENTS.md"; then miss "outside: a starter repository is told of a tool it does not have"; fi
+ob_nw="$ROOT/plugins/repo-setup/skills/new/SKILL.md"
+if grep -q 'Stop and ask for anything outside the folder' "$ob_nw"; then miss "outside: the new-repository skill still stops for everything outside the folder"; fi
+grep -q '^## 7. Outside the repository$' "$ob_nw" && grep -q '^## 8. Finish$' "$ob_nw" || miss "outside: the new-repository skill has no outside stage before Finish"
+ob_stage=$(awk '/^## 7\. Outside the repository$/{f=1;next} /^## 8\./{f=0} f' "$ob_nw")
+for want in 'tools/outside.py status' 'tools/outside.py apply' 'tools/outside.py secrets' 'references/outside.md'; do
+  grep -qF "$want" <<<"$ob_stage" || miss "outside: the outside stage does not name $want"
+done
+[ -s "$ROOT/plugins/repo-setup/skills/new/references/outside.md" ] || miss "outside: no page on writing recipes for a platform the kit does not generate"
+for s in github adopt; do
+  grep -q 'tools/outside.py status' "$ROOT/plugins/repo-setup/skills/$s/SKILL.md" || miss "outside: the $s skill does not end with the status"
+done
+grep -q 'make outside' "$ROOT/plugins/repo-setup/skills/new/references/tour.md" || miss "outside: the tour does not point to make outside"
+grep -q 'references/outside.md' "$ROOT/plugins/repo-setup/skills/new/references/layers/delivery.md" || miss "outside: the delivery layer does not point to the page on recipes"
+grep -q '^11\. \*\*Việc ngoài kho: máy làm\.\*\*' "$ROOT/docs/setup-principles.md" || miss "outside: rule 11 is not on the principles page"
+grep -q '^| 11 | .*| 52b, 52c, 52d, 52e |$' "$ROOT/docs/setup-principles.md" || miss "outside: rule 11 has no row naming its tests"
+
 echo "ok  work outside the repository (or misses reported above)"

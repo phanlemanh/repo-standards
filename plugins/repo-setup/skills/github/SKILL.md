@@ -99,3 +99,9 @@ the PR pipeline also stops running its own reviewer agent. The check may not be 
 
 ## 5. Optional, either way
 `RELEASE_PLEASE_TOKEN` (so CI runs on release PRs); `DEPLOY_ENABLED=true` once `make deploy` works.
+
+## 6. The rest of the work outside the repository
+This skill is the GitHub part of that work. The keys and settings above are rows of
+`ops/outside.toml`: end with `python3 tools/outside.py status`, which says what is in place, runs
+`tools/github_setup.py --check` for the settings, and lists the keys a person enters with
+`python3 tools/outside.py secrets`, in a terminal of their own.

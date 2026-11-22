@@ -90,10 +90,26 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
 7. Set `status: applied`.
 8. Write the tour using `references/tour.md`.
 
-Stop and ask for anything outside the folder: creating a GitHub repo, pushing, the GitHub App,
-secrets, or running `make eval`, which spends API credit. Follow `/repo-setup:github` for GitHub.
+Ask once before creating a GitHub repository or pushing for the first time, and before
+`make eval`, which spends API credit.
 
-## 7. Finish
+## 7. Outside the repository
+
+At level `team`, once the repository has a GitHub remote: the work outside the repository is
+listed in `ops/outside.toml` and done with `tools/outside.py`. Skip this stage at `starter`, and
+say in one line that the level has no such tool.
+
+1. Run `python3 tools/outside.py status` and say in plain words what the machine will apply.
+   Follow `/repo-setup:github` for the GitHub part: the dry run of `tools/github_setup.py`, then
+   one go-ahead for its `--apply`.
+2. Run `python3 tools/outside.py apply`, then `status` again.
+3. When the `delivery` layer is `manual`, write the recipes and rows for that platform following
+   `references/outside.md`, recipes in a pull request of their own.
+4. Give the user the `Yours` list once, with the one command to run in a terminal of their own:
+   `python3 tools/outside.py secrets`. Never ask for a key in the conversation.
+5. When they say it is done, run `status` a last time and say what is left, unknown rows included.
+
+## 8. Finish
 
 Offer one commit: `chore: set up repository (repo-setup <preset>/<level>)`. Then give a short
 summary: score and what it means, the three daily commands, what is not done, where the tour is.
