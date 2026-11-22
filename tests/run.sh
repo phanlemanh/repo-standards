@@ -251,6 +251,33 @@ done
 if python3 "$S/apply.py" --target "$TMP/bad-combo" --preset react-vite --archetype service-api --var project_name=B --var description=x --var owner=a >/dev/null 2>&1; then fail "incompatible combo accepted"; fi
 echo "ok  incompatible combination rejected"
 
+# 13b. the container guide says only what the level builds: a rollout to staging and an approval
+# for production are named in AGENTS.md only where deploy.yml and `make deploy` exist (level team)
+for stack in ts-api fastapi; do
+  for lv in starter team; do
+    cg="$TMP/container-guide-$stack-$lv"; mkdir -p "$cg" && git -C "$cg" init -q -b main
+    python3 "$S/apply.py" --target "$cg" --preset "$stack" --deploy container --level "$lv" \
+      --var project_name=Cg --var description=x --var owner=acme/platform >/dev/null || fail "container guide: $stack $lv: apply"
+    grep -q '^## Deployment: container' "$cg/AGENTS.md" && grep -qF '`make image`' "$cg/AGENTS.md" && grep -qF '/health' "$cg/AGENTS.md" \
+      || miss "container guide: $stack $lv: AGENTS.md lost what the image layer gives (make image, /health)"
+    if [ -f "$cg/.github/workflows/deploy.yml" ] && grep -q '^deploy:' "$cg/mk/deploy.mk" 2>/dev/null; then
+      grep -qi 'staging' "$cg/AGENTS.md" && grep -q 'approve' "$cg/AGENTS.md" && grep -qF '`make deploy`' "$cg/AGENTS.md" \
+        || miss "container guide: $stack $lv: the repository deploys, and AGENTS.md does not say staging rolls out and production waits for an approval"
+      [ "$lv" = team ] || miss "container guide: $stack $lv: a deploy pipeline below level team"
+    else
+      cg_said=$(grep -niE 'staging|make deploy|approve|releases? deploy' "$cg/AGENTS.md" || true)
+      [ -z "$cg_said" ] || miss "container guide: $stack $lv: AGENTS.md promises a rollout the repository does not have (no deploy.yml, no make deploy): $(echo $cg_said)"
+      [ "$lv" = starter ] || miss "container guide: $stack $lv: level team has no deploy pipeline"
+    fi
+  done
+done
+# the two texts the setup skill reads before anything is built say the same: the rollout is level team
+python3 "$S/apply.py" --list-options | json 'd["deploy"]["container"]["description"]' | grep 'at level team, image push + rollout' >/dev/null \
+  || miss "container guide: --list-options promises the image push and the rollout at every level"
+grep -qF 'come with level `team`' "$ROOT/plugins/repo-setup/skills/new/references/layers/delivery.md" \
+  || miss "container guide: the delivery layer page does not say the rollout comes with level team"
+echo "ok  container guide matches the level (or misses reported above)"
+
 # 14. module boundaries catch violations
 b="$TMP/combo-python-modular-monolith-none-x"
 printf 'from coffee_bad import x\nfrom ..loyalty import points_for\n' >> "$b/src/combo/modules/sales/pricing.py"
