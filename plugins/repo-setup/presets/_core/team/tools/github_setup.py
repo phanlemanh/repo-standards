@@ -3,6 +3,7 @@
 
   python3 tools/github_setup.py              # show what would be done (dry run)
   python3 tools/github_setup.py --apply      # do it (needs admin rights on the repository)
+  python3 tools/github_setup.py --check      # would --apply change anything? exit 0, 1 or 2
 
 Always: one merge method, the one governance/autonomy.yaml stores as merge_method (a policy
 from before that key keeps the repository's merge settings, or takes --merge-method);
@@ -384,7 +385,14 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--apply", action="store_true", help="execute (default: dry run)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true", help="execute (default: dry run)")
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="read only: exit 0 when --apply would change nothing, 1 when it would, "
+        "2 when the state could not be read (tools/github_check.py)",
+    )
     ap.add_argument(
         "--reviewer",
         help="production approver, e.g. @alice or @org/team "
@@ -447,6 +455,10 @@ def main(argv: list[str] | None = None) -> int:
         has_secret_scan(root),
         commit_format,
     )
+    if args.check:
+        import github_check  # the tool beside this one, needed only for --check
+
+        return github_check.check(repo, steps, unread_format)
     print(f"{'Applying' if args.apply else 'Dry run'} for {repo} (default branch {branch})\n")
     # What could not be read is a failure, also when nothing else went wrong.
     failures = len(unread_format)

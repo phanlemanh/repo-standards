@@ -361,4 +361,122 @@ ob_reset; rc=0; ob_tty '' -- sh -c "$(ob_tool "$ob_b" secrets)" >/dev/null 2>&1 
 ob_reset; rc=0; ob_tty '^C' -- sh -c "$(ob_tool "$ob_b" secrets)" >/dev/null 2>&1 || rc=$?
 [ "$rc" != 0 ] && [ ! -e "$OB_STDIN.PERSON2" ] || miss "outside: Ctrl-C at the prompt stored something or exited 0 ($rc)"
 
+# 52g. github_setup --check: says whether a run would change anything, and writes nothing.
+# A stand-in gh keeps the state of one repository, acme/sample, in $OB_GH: what --apply writes
+# is what --check reads back. Every write is logged to $OB_LOG.
+ob_ghbin="$TMP/ob-ghbin"; mkdir -p "$ob_ghbin"
+cat > "$ob_ghbin/gh" <<'PY'
+#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+state = Path(os.environ["OB_GH"]); state.mkdir(exist_ok=True)
+argv = sys.argv[1:]
+def load(name, default):
+    f = state / name
+    return json.loads(f.read_text()) if f.exists() else default
+def save(name, value):
+    (state / name).write_text(json.dumps(value))
+def fail(text, code=1):
+    print(text, file=sys.stderr); sys.exit(code)
+if argv[:2] == ["repo", "view"]:
+    print(json.dumps({"nameWithOwner": "acme/sample", "defaultBranchRef": {"name": "main"}})); sys.exit(0)
+if argv[:1] in (["secret"], ["label"]):
+    sys.exit(0)
+if argv[:1] != ["api"]:
+    fail("unknown call")
+method, jq, pairs, path, rest = "GET", None, {}, None, argv[1:]
+i = 0
+while i < len(rest):
+    a = rest[i]
+    if a == "-X": method = rest[i + 1]; i += 2; continue
+    if a == "-H": i += 2; continue
+    if a == "--jq": jq = rest[i + 1]; i += 2; continue
+    if a in ("-F", "-f"):
+        k, v = rest[i + 1].split("=", 1); pairs[k] = {"true": True, "false": False}.get(v, v); i += 2; continue
+    if a in ("--paginate",): i += 1; continue
+    if a == "--input": i += 2; continue
+    path = path or a; i += 1
+body = json.loads(sys.stdin.read() or "null") if "--input" in rest else None
+if method != "GET":
+    with open(os.environ["OB_LOG"], "a") as log:
+        log.write(f"gh {method} {path}\n")
+base = "repos/acme/sample"
+if "/rulesets" in path and (state / "down-rulesets").exists():
+    fail("gh: Server Error (HTTP 502)")
+if path.startswith(base + "/contents/"):
+    f = Path(os.environ["OB_GH_FILES"]) / path[len(base + "/contents/"):].split("?")[0]
+    print(f.read_text()) if f.is_file() else fail("gh: Not Found (HTTP 404)")
+elif path == "users/acme":
+    print(7)
+elif path == base:
+    if method == "PATCH": save("repo.json", {**load("repo.json", {}), **pairs})
+    else: print(json.dumps(load("repo.json", {})))
+elif path == base + "/actions/permissions/workflow":
+    if method == "PUT": save("workflow.json", pairs)
+    else: print(json.dumps(load("workflow.json", {})))
+elif path.startswith(base + "/environments/"):
+    name = path.rsplit("/", 1)[1]
+    envs = load("envs.json", {})
+    if method == "PUT":
+        rules = [{"type": "required_reviewers", "reviewers": [{"type": r["type"], "reviewer": {"id": r["id"]}} for r in body["reviewers"]]}] if body else []
+        envs[name] = {"name": name, "protection_rules": rules}; save("envs.json", envs)
+    elif name in envs: print(json.dumps(envs[name]))
+    else: fail("gh: Not Found (HTTP 404)")
+elif path == base + "/rulesets":
+    if method == "POST": save("ruleset.json", {**body, "id": 41})
+    elif "ruleset.json" in os.listdir(state): print(41)
+elif path == base + "/rulesets/41":
+    if method == "PUT": save("ruleset.json", {**body, "id": 41})
+    elif jq and "required_status_checks" in jq:
+        rs = load("ruleset.json", {"rules": []})
+        for rule in rs["rules"]:
+            if rule["type"] == "required_status_checks":
+                for c in rule["parameters"]["required_status_checks"]: print(c["context"])
+    else: print(json.dumps(load("ruleset.json", {})))
+elif path == base + "/actions/organization-secrets":
+    pass
+else:
+    fail(f"not known: {method} {path}")
+PY
+chmod +x "$ob_ghbin/gh"
+ob_t="$TMP/ob-gt"; mkdir -p "$ob_t" && git -C "$ob_t" init -q -b main
+python3 "$S/apply.py" --target "$ob_t" --preset python --level team --var project_name=G --var description=x --var owner=acme >/dev/null
+ob_setup() { ( cd "$ob_t" && PATH="$ob_ghbin:$PATH" OB_GH="$TMP/ob-gh" OB_GH_FILES="$ob_t" python3 -B tools/github_setup.py "$@" </dev/null ) 2>&1; }
+rm -rf "$TMP/ob-gh"; : > "$OB_LOG"
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ ' <<<"$ob_out" || miss "outside: --check on a repository with nothing set up does not exit 1 with '~' lines ($rc)"
+[ ! -s "$OB_LOG" ] || miss "outside: --check wrote to GitHub: $(head -2 "$OB_LOG")"
+ob_setup --apply >/dev/null || miss "outside: the stand-in GitHub did not take an apply: $(ob_setup --apply | tail -3)"
+: > "$OB_LOG"; rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 0 ] || miss "outside: --check right after an apply does not exit 0 ($rc): $(grep -v '^= ' <<<"$ob_out" | head -3)"
+if grep -q '^[~?] ' <<<"$ob_out"; then miss "outside: --check right after an apply has a line that is not '='"; fi
+[ ! -s "$OB_LOG" ] || miss "outside: --check wrote to GitHub: $(head -2 "$OB_LOG")"
+python3 - "$TMP/ob-gh/repo.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f)); d["allow_merge_commit"] = True; json.dump(d, open(f, "w"))
+PY
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ .*merge' <<<"$ob_out" || miss "outside: --check does not see a merge setting that differs ($rc)"
+ob_setup --apply >/dev/null || true
+python3 - "$TMP/ob-gh/envs.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f)); d.pop("production"); json.dump(d, open(f, "w"))
+PY
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ environment production' <<<"$ob_out" || miss "outside: --check does not see a missing environment ($rc)"
+ob_setup --apply >/dev/null || true
+python3 - "$TMP/ob-gh/ruleset.json" <<'PY'
+import json, sys; f = sys.argv[1]; d = json.load(open(f))
+for r in d["rules"]:
+    if r["type"] == "required_status_checks": r["parameters"]["required_status_checks"].pop()
+json.dump(d, open(f, "w"))
+PY
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 1 ] && grep -q '^~ ruleset' <<<"$ob_out" || miss "outside: --check does not see a ruleset that lost a required check ($rc)"
+ob_setup --apply >/dev/null || true
+touch "$TMP/ob-gh/down-rulesets"
+rc=0; ob_out=$(ob_setup --check) || rc=$?
+[ "$rc" = 2 ] && grep -q '^? ' <<<"$ob_out" || miss "outside: --check with a state it cannot read does not exit 2 with a '?' line ($rc)"
+rm -f "$TMP/ob-gh/down-rulesets"
+: > "$OB_LOG"; rc=0; ob_setup --check --apply >/dev/null || rc=$?
+[ "$rc" = 2 ] && [ ! -s "$OB_LOG" ] || miss "outside: --check and --apply together are accepted ($rc)"
+
 echo "ok  work outside the repository (or misses reported above)"
