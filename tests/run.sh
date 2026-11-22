@@ -3909,5 +3909,8 @@ echo "ok  derived (or misses reported above)"
 # shellcheck source=tests/seams.sh
 . "$ROOT/tests/seams.sh"
 
+# shellcheck source=tests/outside.sh
+. "$ROOT/tests/outside.sh"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
