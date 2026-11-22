@@ -1,7 +1,7 @@
 Dry run for acme/sample (default branch main)
 
   - label risk:low
-      gh label create risk:low --color 0e8a16 --description Autonomy gate: merges itself when the checks pass --force
+      gh label create risk:low --color 0e8a16 --description Autonomy gate: no approval needed once the checks pass --force
   - label risk:medium
       gh label create risk:medium --color fbca04 --description Autonomy gate: not proven by a machine, a person merges --force
   - label risk:high

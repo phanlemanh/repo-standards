@@ -16,7 +16,7 @@ recommend it. Say when each option would be wrong.
 | Local Claude Code only | Edits ask a person; nothing runs on GitHub | No agent picks up issues | The team wants agents on GitHub | `automated` |
 | Add `github-agents` (level `team`) | Agents work from issues and open PRs | Needs the GitHub App, one secret and API spend. Not yet run against a real Claude session | No one will review the results | `automated` |
 | Add `mcp` | Agents use the system through checked actions | Another surface to secure | Nothing outside needs the actions | `automated` |
-| Name a proof check (`proof.check`) | A tool already proves each change in CI, so product code can merge itself | That check must report on every pull request; naming it is a change to `governance/autonomy.yaml`, a pull request of its own that a person decides | Nothing proves changes yet | `partial` |
+| Name a proof check (`proof.check`) | A tool already proves each change in CI, so product code needs no approval once it is green | That check must report on every pull request; naming it is a change to `governance/autonomy.yaml`, a pull request of its own that a person decides | Nothing proves changes yet | `partial` |
 | Custom tiers or approvers | An existing team policy | A change to `governance/` is a pull request of its own that a code owner decides (`.claude/skills/autonomy-change`) | The sample policy fits | `partial` |
 
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and

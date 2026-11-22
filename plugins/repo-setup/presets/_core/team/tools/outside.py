@@ -43,6 +43,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 if sys.version_info < (3, 11):  # noqa: UP036 - tomllib, read by outside_ledger
     print("tools/outside.py needs Python 3.11 or later.", file=sys.stderr)
@@ -53,6 +54,7 @@ import outside_ledger as ledger
 LISTS = ("ok", "apply", "yours", "decisions", "unknown", "unmerged", "refused")
 LEFT = ("apply", "yours", "unknown", "refused")
 DEFAULT_TIMEOUT = 30.0
+BY_HAND = "recorded by hand"  # the start of the reason of a row nothing checks
 NO_REMOTE = "no default branch on a remote: reading the working tree"
 
 
@@ -67,6 +69,7 @@ class Row:
     where: str
     why: str
     how: str
+    value: str = ""  # a setting's declared value (public, never a secret's); "" for other rows
 
 
 def _say(text: str) -> None:
@@ -199,7 +202,7 @@ def assess(
     """("ok" | "missing" | "partial" | "unknown", why) of a row that is not a decision."""
     if not item.recipes:
         if item.done:
-            return "ok", f"recorded by hand on {item.done}, not checked"
+            return "ok", f"{BY_HAND} on {item.done}, not checked"
         return "missing", "not done yet"
     states = [(n, *_check_one(recipes[n], item.fields, root, timeout)) for n in item.recipes]
     unknown = [why for _, state, why in states if state == "unknown"]
@@ -239,7 +242,7 @@ def _place(
     if item.kind == "secret" and item.source == "generated":
         return "apply", "missing: the machine generates it and stores it"
     if item.kind == "secret":
-        return "yours", "missing: a machine cannot create it"
+        return "yours", MISSING_KEY
     return "yours", f"{why}: a person does it once"
 
 
@@ -253,7 +256,8 @@ def classify(
             continue
         state, why = assess(item, recipes, root, timeout)
         name, reason = _place(item, state, why, recipes)
-        lists[name].append(Row(item.id, item.kind, _where(item, recipes), reason, item.how))
+        value = item.fields.get("value", "") if item.kind == "setting" else ""
+        lists[name].append(Row(item.id, item.kind, _where(item, recipes), reason, item.how, value))
     return lists
 
 
@@ -334,6 +338,111 @@ def status(root: Path) -> tuple[str | None, dict[str, list[Row]]]:
     return ref, lists
 
 
+LEDGER = "ops/outside.toml"
+SECRETS_SWITCH = "python3 tools/outside.py secrets"
+STATUS_SWITCH = "python3 tools/outside.py status"
+MISSING_KEY = "missing: a machine cannot create it"
+
+
+def _count(n: int, one: str, many: str) -> str:
+    return f"{n} {one}" if n == 1 else f"{n} {many}"
+
+
+def _called(
+    when: str, you_do: str, why: str, switch: str, keys: str, known: bool = True
+) -> dict[str, Any]:
+    """A row of the card: the six keys every tool that writes one uses."""
+    return {
+        "when": when,
+        "you_do": you_do,
+        "why": why,
+        "switch": switch,
+        "keys": keys,
+        "known": known,
+    }
+
+
+def _ids(rows: list[Row]) -> str:
+    return f"{LEDGER}: " + ", ".join(r.id for r in rows)
+
+
+def _yours_rows(rows: list[Row]) -> list[dict[str, Any]]:
+    """The rows of "Yours", gathered by what the person does."""
+    keys_missing = [r for r in rows if r.kind == "secret" and r.why.startswith(MISSING_KEY)]
+    keys_partial = [r for r in rows if r.kind == "secret" and r not in keys_missing]
+    walls = [r for r in rows if r.kind == "setting"]
+    once = [r for r in rows if r.kind not in ("secret", "setting")]
+    out = []
+    if keys_missing:
+        when = _count(len(keys_missing), "key is missing", "keys are missing")
+        why = "a machine cannot create them"
+        out.append(_called(when, "enter once", why, SECRETS_SWITCH, _ids(keys_missing)))
+    if keys_partial:
+        when = _count(len(keys_partial), "key is in one place only", "keys are in one place only")
+        why = "a new value would replace the one in use"
+        out.append(_called(when, "decide", why, "-", _ids(keys_partial)))
+    if once:
+        when = _count(len(once), "action waits for a person", "actions wait for a person")
+        out.append(_called(when, "do once", "no machine can do it", "-", _ids(once)))
+    if walls:
+        when = _count(len(walls), "setting is not in place", "settings are not in place")
+        why = "the walls change only with your go-ahead"
+        out.append(_called(when, "say go after the dry run", why, "-", _ids(walls)))
+    return out
+
+
+def _machine(what: str, rows: list[Row]) -> dict[str, str]:
+    return {"what": what, "keys": _ids(rows)}
+
+
+def _called_by_list(lists: dict[str, list[Row]]) -> dict[str, list[dict[str, Any]]]:
+    """The rows of the card that call a person, under the list each one comes from."""
+    groups: dict[str, list[dict[str, Any]]] = {
+        "decisions": [
+            _called(r.why, "decide", "always yours", "-", f"{LEDGER}: {r.id}")
+            for r in lists["decisions"]
+        ],
+        "yours": _yours_rows(lists["yours"]),
+        "unknown": [],
+        "refused": [],
+    }
+    if lists["unknown"]:
+        rows = lists["unknown"]
+        when = _count(len(rows), "check cannot be answered", "checks cannot be answered")
+        reasons = list(dict.fromkeys(r.why for r in rows))  # each distinct reason, once
+        why = "unknown: " + "; ".join(reasons)
+        row = _called(when, "find out why", why, STATUS_SWITCH, _ids(rows), known=False)
+        groups["unknown"].append(row)
+    if lists["refused"]:
+        rows = lists["refused"]
+        when = _count(len(rows), "ledger row is refused", "ledger rows are refused")
+        groups["refused"].append(_called(when, "fix the row", rows[0].why, "-", _ids(rows)))
+    return groups
+
+
+def card(lists: dict[str, list[Row]]) -> dict[str, list[dict[str, Any]]]:
+    """The rows of the autonomy card that this ledger's lists come to: when a person is called,
+    what they do, why, and the switch to be called less (python3 tools/autonomy_card.py)."""
+    groups = _called_by_list(lists)
+    called = [row for name in ("decisions", "yours", "unknown", "refused") for row in groups[name]]
+    # A row a person recorded as done is not machine work and no machine checked it: it never
+    # counts as "in place".
+    by_hand = [r for r in lists["ok"] if r.why.startswith(BY_HAND)]
+    checked = [r for r in lists["ok"] if r not in by_hand]
+    parts = [
+        ("row the machine applies", "rows the machine applies", lists["apply"]),
+        ("row in place", "rows in place", checked),
+        (
+            "row a person recorded as done; no machine checks it",
+            "rows a person recorded as done; no machine checks them",
+            by_hand,
+        ),
+        ("row waits for its pull request", "rows wait for their pull request", lists["unmerged"]),
+    ]
+    machine = [_machine(_count(len(rows), one, many), rows) for one, many, rows in parts if rows]
+    return {"called": called, "machine": machine}
+
+
 TITLES = {
     "ok": "In place",
     "apply": "The machine will apply",
@@ -349,14 +458,23 @@ NEXT = {
 }
 
 
+def _card_lines(rows: list[dict[str, Any]]) -> list[str]:
+    return [
+        f"  card: {r['when']}" + (f" -> {r['switch']}" if r["switch"] != "-" else "") for r in rows
+    ]
+
+
 def print_text(ref: str | None, lists: dict[str, list[Row]]) -> None:
     print(f"Ledger read from {ref or 'the working tree'}.")
+    card_of = _called_by_list(lists)
     for name in LISTS:
         rows = lists[name]
         if not rows:
             continue
         hint = f"   -> {NEXT[name]}" if name in NEXT else ""
         print(f"\n{TITLES[name]} ({len(rows)}){hint}")
+        for line in _card_lines(card_of.get(name, [])):
+            print(line)
         for row in rows:
             print(f"  - {row.id}" + (f"  [{row.where}]" if row.where else ""))
             if name != "ok" or "not checked" in row.why:
@@ -406,7 +524,11 @@ def _status_command(root: Path, as_json: bool, show_draft: bool) -> int:
         return 0
     ref, lists = status(root)
     if as_json:
-        out = {"base": ref, **{name: [asdict(r) for r in lists[name]] for name in LISTS}}
+        out = {
+            "base": ref,
+            **{name: [asdict(r) for r in lists[name]] for name in LISTS},
+            "card": card(lists),
+        }
         print(json.dumps(out, indent=2))
     else:
         print_text(ref, lists)

@@ -41,7 +41,9 @@ do not report tests as passing.
    or `mk/` do not widen permissions, weaken checks, or expose secrets to untrusted code
    (`pull_request_target` with a checkout of PR code).
 9. **Tier**: if `tools/autonomy.py` exists, run `python3 tools/autonomy.py --base origin/<base>`.
-   A change to hooks or to scripts that run on install classified below high is blocking.
+   Its JSON has a `card` key: the row of the autonomy card (`make autonomy`) that calls a person
+   for this change, with that row's switch. A change to hooks or to scripts that run on install
+   classified below high is blocking.
 10. **Records**: a lasting why is written down in `docs/decisions/`, and the PR's "Human decisions
     needed" is honest. Do not edit generated or vendored files to make a check pass.
 

@@ -1091,7 +1091,7 @@ out=$(python3 "$S/apply.py" --target "$ad" --preset claude-plugin --level starte
   --var project_name=Sample --var description=x --var owner=acme --json)
 [ "$before" = "$(cd "$ad" && find . -type f -not -path './.git/*' | sort | xargs cksum | cksum)" ] || miss "adopt plugin repo: dry run changed files"
 padopt() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert $1, sys.argv[2]" "$out" "$1" 2>/dev/null || miss "adopt plugin repo: $1"; }
-padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/derived.mk', 'mk/upgrade.mk', 'tools/ci_inputs.py', 'tools/ci_verdict.py', 'tools/ledgers.py', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
+padopt "sorted(d['created']) == ['.claude/settings.json', '.claude/skills/review-change/SKILL.md', '.editorconfig', '.gitattributes', '.nvmrc', 'AGENTS.md', 'CLAUDE.md', 'Makefile', 'mk/autonomy.mk', 'mk/derived.mk', 'mk/upgrade.mk', 'tools/autonomy_card.py', 'tools/ci_inputs.py', 'tools/ci_verdict.py', 'tools/ledgers.py', 'tools/plugin_lint.py', 'tools/upgrade_markers.py']"
 padopt "d['merged'] == ['.gitignore']"
 padopt "d['kept'] == ['.claude-plugin/marketplace.json', 'CHANGELOG.md']"
 padopt "d['conflict'] == ['LICENSE', 'README.md']"
@@ -3939,6 +3939,9 @@ echo "ok  derived (or misses reported above)"
 
 # shellcheck source=tests/autonomy_change.sh
 . "$ROOT/tests/autonomy_change.sh"
+
+# shellcheck source=tests/autonomy_card.sh
+. "$ROOT/tests/autonomy_card.sh"
 
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."

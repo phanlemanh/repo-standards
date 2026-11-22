@@ -43,6 +43,9 @@ for spec in ${PRESETS:-$ALL $COMBOS}; do
   git add -A
   while IFS= read -r c; do [ -z "$c" ] || { echo "[$spec] \$ $c"; bash -c "$c" </dev/null; }; done <<<"$verify"
   python3 "$S/doctor.py" --min-score 100
+  # The autonomy card runs in a real install, with the real tools and no stand-in `gh`.
+  make autonomy >"$TMP/autonomy.txt" 2>&1 || { echo "FAIL: make autonomy"; cat "$TMP/autonomy.txt"; exit 1; }
+  grep -q "You are called when" "$TMP/autonomy.txt" || { echo "FAIL: make autonomy printed no card"; cat "$TMP/autonomy.txt"; exit 1; }
   case ",$cap," in *,ai,*)
     env -u ANTHROPIC_API_KEY make check >/dev/null || { echo "FAIL: make check needs an API key"; exit 1; }
     if env -u ANTHROPIC_API_KEY make eval >/dev/null 2>&1; then echo "FAIL: make eval ran without a key"; exit 1; fi
