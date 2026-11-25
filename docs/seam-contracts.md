@@ -94,7 +94,7 @@ dòng đó.
 
 **Bên định nghĩa:** design-assembly: cờ `--starter` của lối `adopt` (quyết định 0085 của nó), `audit`,
 `new`, `upgrade`. **Bên gọi:** ba kỹ năng của kho này. Plugin ghi bộ sổ thiết kế; kho này chỉ gọi. Mẫu dữ
-liệu đọc ở design-assembly 0.35.0, ngày 2026-11-22: `tests/fixtures/design-assembly/seam.json`.
+liệu đọc ở design-assembly 0.59.0, ngày 2026-11-25: `tests/fixtures/design-assembly/seam.json`.
 
 | Chỗ gọi | Gọi gì | Khi nào |
 | --- | --- | --- |
@@ -119,8 +119,7 @@ Mã thoát của `adopt --starter`, như kỹ năng xử lý:
 
 Màu thương hiệu không phải lý do của mã 2. Từ quyết định 0087 của design-assembly (bản 0.36.0, vào
 nhánh chính của plugin ngày 2026-11-22), `adopt --starter` đặt bộ sổ lúc ra đời cả ở kho mà vai màu chính có sắc riêng hay đã nhận giá trị
-trước đó, ghi mọi giá trị là của kho, và thoát 1 khi còn câu chờ. Bản 0.35.0 còn từ chối kho ấy bằng mã 2;
-mẫu dữ liệu `seam.json` vẫn ghi nghĩa của bản đó, vì nó đọc ở 0.35.0.
+trước đó, ghi mọi giá trị là của kho, và thoát 1 khi còn câu chờ. Bản 0.35.0 còn từ chối kho ấy bằng mã 2.
 
 Lời mời ở chặng 8 chọn theo câu trả lời `brand_primary` mà kho này giữ, không theo dòng `next:` của
 plugin: sau `adopt --starter`, dòng ấy nêu `/design-assembly:adopt` ở cả kho sàn xám lẫn kho có màu thương
@@ -136,14 +135,15 @@ có `--var marketplace`. Kho không có lớp `design` không có gì của plug
 tìm được bản gốc của một `settings.json` đã sửa tay và gộp ba bên.
 
 Bài kiểm: 51h (settings), 51i (nâng cấp một `settings.json` để nguyên và một tệp đã sửa), 51j (chỗ của
-lời gọi trong ba kỹ năng, mã thoát, lời mời, không cờ nào nói thay người).
+lời gọi trong ba kỹ năng, mã thoát, lời mời, không cờ nào nói thay người; câu về mã 2 của kỹ năng mang đúng
+nghĩa mẫu dữ liệu đọc từ plugin, nên đọc lại mẫu ở một bản đổi nghĩa ấy thì bài đỏ).
 
 ## 7. Bộ sổ lúc ra đời và dấu bản công cụ
 
 **Bên định nghĩa:** design-assembly: cột «From birth» của hợp đồng, và `design/tool-stamp.json`. **Bên
 đọc:** `plugins/repo-setup/scripts/design_ledgers.py`, gọi từ `doctor.py`.
 
-Bảy sổ một kho có từ lúc ra đời, theo design-assembly 0.35.0:
+Bảy sổ một kho có từ lúc ra đời, theo design-assembly 0.59.0:
 
 - `design/decisions.yaml`
 - `design/tokens.json`
@@ -164,7 +164,9 @@ không biết), `next` (`/design-assembly:upgrade` khi `behind`). Nó chỉ đ�
 không tìm plugin trên máy.
 
 Kho này không ghi tệp nào trong bảy sổ, dấu bản, `tools/design-assembly/` hay `mk/design-assembly.mk`:
-mỗi sổ một người ghi.
+mỗi sổ một người ghi. Cũng không ghi `tests/e2e/floating-parts.spec.ts`: từ bản 0.57.0, `adopt --starter`
+đặt tệp kiểm ấy ở kho có trình duyệt kiểm thử (`@playwright/test`) mà chưa có nó, và thư mục `tests/e2e`
+là `testDir` của sàn. Kho chưa có món nào từ nguồn ngoài thì tệp không khai bài nào.
 
 Bài kiểm: 51f (danh sách của `design_ledgers.py`, mẫu dữ liệu và trang này khớp nhau), 51g (setup không
 ghi tệp nào của plugin), 51k (doctor trên một kho có sàn: thiếu cả bảy, rồi dấu bản cũ, bằng, không biết;
@@ -175,7 +177,7 @@ ghi tệp nào của plugin), 51k (doctor trên một kho có sàn: thiếu cả
 **Bên định nghĩa:** kho này. **Bên dùng:** design-assembly, qua `host-make.mjs` của nó.
 
 `tests/fixtures/design-assembly/host-strings.json` là bản chép nguyên `references/host-strings.json` của
-design-assembly 0.35.0: mọi chuỗi plugin đọc trong Makefile, `mk/` và `package.json` của kho chủ. Plugin
+design-assembly 0.59.0: mọi chuỗi plugin đọc trong Makefile, `mk/` và `package.json` của kho chủ. Plugin
 không đọc workflow nào. Trên một kho sinh với `--preset react-vite --with design`, chưa chạy lệnh cài, mỗi
 chuỗi có một câu trả lời:
 

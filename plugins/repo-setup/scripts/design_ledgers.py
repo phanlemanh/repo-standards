@@ -21,7 +21,7 @@ import json
 import re
 from pathlib import Path
 
-# Read from design-assembly 0.35.0 (tests/fixtures/design-assembly/seam.json).
+# Read from design-assembly 0.59.0 (tests/fixtures/design-assembly/seam.json).
 BIRTH_LEDGERS = (
     "design/decisions.yaml",
     "design/tokens.json",
