@@ -3973,6 +3973,9 @@ echo "ok  derived (or misses reported above)"
 # shellcheck source=tests/autonomy_card.sh
 . "$ROOT/tests/autonomy_card.sh"
 
+# shellcheck source=tests/generated_wording.sh
+. "$ROOT/tests/generated_wording.sh"
+
 # shellcheck source=tests/wiki_lint_derived.sh
 . "$ROOT/tests/wiki_lint_derived.sh"
 

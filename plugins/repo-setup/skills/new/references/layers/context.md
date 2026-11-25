@@ -24,7 +24,19 @@ recommend it. Say when each option would be wrong.
 Labels: `automated` (`apply.py` does it and it is verified), `partial` (the core is automated and
 the manual steps are listed), `manual` (only recorded, with guidance; `doctor` does not score it).
 
-**Recommendation when the user hands this to Claude:** ask only for the name and one sentence, and take the owner from the git remote.
+**Recommendation when the user hands this to Claude:** ask only for the name and one sentence, and take the owner as below.
+
+**Owner.** The GitHub user or organization that will hold the repository: `LICENSE` names it, and
+at level `team` `CODEOWNERS` and `SECURITY.md` use it as a handle. Take the first that gives one,
+without a question:
+
+1. The owner part of the `origin` remote URL.
+2. With no remote, the GitHub account signed in on this machine: `gh api user --jq .login`.
+3. With neither, the name in `git config user.name`, and a `manual_steps` line: set `owner` to the
+   GitHub handle once the repository has one. At level `team` that name is not a handle, so ask for
+   the handle in the same question as the name and the sentence instead.
+
+Say in one line which one you took.
 
 ## Recording
 

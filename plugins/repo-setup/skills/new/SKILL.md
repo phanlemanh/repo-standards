@@ -14,8 +14,9 @@ folder two levels above this file): `detect.py`, `apply.py`, `doctor.py`, `bluep
 ## Language
 
 Code, file names, commits and identifiers are always English. Set `conversation_language` from the
-language the user writes in, and talk in it, translating option labels. Set `docs_language` to the
-same unless the user says otherwise. Keep technical words such as repo, commit, CI as they are and
+language the user writes in, and talk in it, translating option labels. Progress lines during a
+long step (building, installing, checking) are in it too. Set `docs_language` to the same unless
+the user says otherwise. Keep technical words such as repo, commit, CI as they are and
 explain each one the first time you talk to a newcomer.
 
 ## 1. Check the machine
@@ -106,7 +107,9 @@ A layer with only one sensible answer gets one line, no question. Keep the bluep
    Claude", write one record for the whole setup. A repo without a wiki (`claude-plugin`) keeps
    these records in `docs/decisions/`.
 8. Set `status: applied`.
-9. Write the tour using `references/tour.md`.
+9. Write the tour using `references/tour.md`. Then translate the prose of `README.md` into
+   `docs_language` when it is not English, the "Start here" line included; keep commands, paths,
+   links and code blocks as they are.
 
 Ask once before creating a GitHub repository or pushing for the first time, and before
 `make eval`, which spends API credit.

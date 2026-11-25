@@ -290,8 +290,9 @@ case "$(smk_plan "$da_g" check-quick)" in *"tools/design-assembly/check.mjs"*) ;
 case "$(smk_plan "$da_g" derived)" in *"design-derived ran"*) ;; *) miss "seams: make derived does not run the target the gate step adds to DERIVED_TARGETS" ;; esac
 da_joined=$(python3 -c "import sys; sys.path.insert(0, '$S'); import make_wiring; print(make_wiring.joined_targets(open(sys.argv[1], 'rb').read()))" "$da_g/mk/design-assembly.mk")
 [ "$da_joined" = "['design-assembly', 'design-derived']" ] || miss "seams: make_wiring does not see the targets of the gate step: $da_joined"
-# One writer per ledger: the setup writes none of the ledgers, the stamp, the tool or the gate step.
-for f in $(da_fx '" ".join(d["birth_ledgers"] + [d["tool_stamp"]["file"]])') mk/design-assembly.mk tools/design-assembly; do
+# One writer per ledger: the setup writes none of the ledgers, the stamp, the tool, the gate step or
+# the other files the plugin's adopt --starter lays.
+for f in $(da_fx '" ".join(d["birth_ledgers"] + [d["tool_stamp"]["file"]] + d["adopt_starter"]["also_writes"])') mk/design-assembly.mk tools/design-assembly; do
   [ ! -e "$da/$f" ] || miss "seams: the setup writes $f, which is design-assembly's"
 done
 
@@ -365,6 +366,11 @@ done
 for word in 'brand colour' 'keeps those values'; do
   case "$da_step" in *"$word"*) miss "seams: step 6 of /repo-setup:new still ties exit 2 to: $word" ;; esac
 done
+# The step names exit 2 in the words the fixture read from the plugin, so a fixture read again at a
+# version that gives exit 2 another meaning turns this red until the step says it too.
+da_m2=$(da_fx "d['adopt_starter']['exit']['2']['means']")
+printf '%s\n' "$da_step" | grep -F '`2`' | grep -F -- "$da_m2" >/dev/null \
+  || miss "seams: step 6 of /repo-setup:new does not say exit 2 means what the fixture read: $da_m2"
 # The one new place a person appears (spec 0013 of design-assembly, question 2): an offer, at the end.
 # Which step it offers follows the brand_primary answer this setup holds: the plugin's adopt where the
 # repository was set up with a brand colour (its status says the guide is not for such a repository),
