@@ -34,6 +34,8 @@ from pathlib import Path
 REGISTRY_NAME = "rule-checks.toml"
 FRAGMENT_DIR = "+AGENTS.md"
 MARKER = re.compile(r"[ \t]*<!-- kept: ([a-z][a-z0-9-]*) -->")
+# A kind written on a line of its own: the line goes with it, or a blank line would stay behind.
+MARKER_LINE = re.compile(r"^[ \t]*<!-- kept: [a-z][a-z0-9-]* -->[ \t]*\n", re.MULTILINE)
 KINDS = ("red", "refuses", "raises-tier")
 WORD = "word"
 NONE = "none"
@@ -229,7 +231,7 @@ def finish(content: bytes, root: Path, present: Callable[[str], bool], adopt: bo
     if registry is None:
         return content
     text = content.decode("utf-8")
-    stripped = MARKER.sub("", text)
+    stripped = MARKER.sub("", MARKER_LINE.sub("", text))
     if adopt:
         return stripped.encode("utf-8")
     section = summary(text, registry, present)
