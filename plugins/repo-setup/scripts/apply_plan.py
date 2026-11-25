@@ -254,9 +254,43 @@ DESIGN_ASSEMBLY_MARKETPLACE = "phanlemanh/design-assembly"
 DESIGN_ASSEMBLY_PLUGIN = "design-assembly@design-assembly"
 
 
-def plugin_settings(market: str, design: bool) -> str:
+# printWidth of the .prettierrc.json the Node presets write (presets/ts-node/starter).
+PRETTIER_PRINT_WIDTH = 100
+
+
+def one_line_json(value: object) -> str:
+    """`value` on one line, as prettier writes an object that fits: `{ "k": v }`, `{}` when empty."""
+    if not isinstance(value, dict) or not value:
+        return json.dumps(value)
+    return "{ " + ", ".join(f"{json.dumps(k)}: {one_line_json(v)}" for k, v in value.items()) + " }"
+
+
+def prettier_json(value: object, indent: int, used: int, after: int) -> str:
+    """`value` as prettier writes JSON: an object on one line, with a space inside its braces,
+    when that line fits PRETTIER_PRINT_WIDTH; else one member per line, each tried the same way.
+    `indent` is the indent of the line the value starts on, `used` the columns before the value on
+    that line, `after` the columns that follow it (a comma)."""
+    if not isinstance(value, dict) or not value:
+        return json.dumps(value)
+    flat = one_line_json(value)
+    if used + len(flat) + after <= PRETTIER_PRINT_WIDTH:
+        return flat
+    pad = " " * (indent + 2)
+    lines = []
+    for i, (k, v) in enumerate(value.items()):
+        last = i == len(value) - 1
+        key = f"{json.dumps(k)}: "
+        lines.append(pad + key + prettier_json(v, indent + 2, len(pad) + len(key), 0 if last else 1)
+                     + ("" if last else ","))
+    return "{\n" + "\n".join(lines) + "\n" + " " * indent + "}"
+
+
+def plugin_settings(market: str, design: bool, prettier: bool = False) -> str:
     """The plugin keys .claude/settings.json ends with: the repo-standards marketplace when one is
-    given, and design-assembly when the repository has the design floor. Empty when neither."""
+    given, and design-assembly when the repository has the design floor. Empty when neither.
+    `prettier` writes them as the repository's prettier would (prettier_json), so that a repository
+    that runs `prettier --check` is green right after an upgrade; without it, the one-line form
+    the releases up to 0.10.4 wrote (plugin_variables says why that form stays)."""
     known: dict[str, dict] = {}
     enabled: dict[str, bool] = {}
     if market:
@@ -272,17 +306,22 @@ def plugin_settings(market: str, design: bool) -> str:
         enabled[DESIGN_ASSEMBLY_PLUGIN] = True
     if not known:
         return ""
-    return (',\n  "extraKnownMarketplaces": ' + json.dumps(known)
-            + ',\n  "enabledPlugins": ' + json.dumps(enabled))
+    if not prettier:
+        return (',\n  "extraKnownMarketplaces": ' + json.dumps(known)
+                + ',\n  "enabledPlugins": ' + json.dumps(enabled))
+    known_key, enabled_key = '  "extraKnownMarketplaces": ', '  "enabledPlugins": '
+    return (",\n" + known_key + prettier_json(known, 2, len(known_key), 1)
+            + ",\n" + enabled_key + prettier_json(enabled, 2, len(enabled_key), 0))
 
 
 def plugin_variables(variables: dict[str, str], caps: list[str]) -> dict[str, str]:
     """`plugins_enabled`, the placeholder today's settings template reads: it knows the
-    capabilities. The earlier placeholder, `plugin_settings`, keeps the value the earlier releases
-    rendered, so that an upgrade still finds the base of a settings.json those releases wrote and
-    merges the new lines in (upgrade_base.py)."""
+    capabilities, and it is written the way prettier writes it. The earlier placeholder,
+    `plugin_settings`, keeps the value the earlier releases rendered, so that an upgrade still
+    finds the base of a settings.json those releases wrote and merges the new lines in
+    (upgrade_base.py). For the same reason the form of `plugins_enabled` stays once released."""
     return {"plugins_enabled": plugin_settings(variables.get("marketplace", "").strip(),
-                                               "design" in caps)}
+                                               "design" in caps, prettier=True)}
 
 
 def render(text: str, variables: dict[str, str], where: str) -> str:

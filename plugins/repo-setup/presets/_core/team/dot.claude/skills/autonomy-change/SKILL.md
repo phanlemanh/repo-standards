@@ -11,16 +11,16 @@ A change to `governance/autonomy.yaml` changes the rules of the game: it is `hig
 
 ## 1. Find the one key
 
-| The user says | The key in `governance/autonomy.yaml` |
-| --- | --- |
-| X merges on its own once the checks pass | add the path of X to `low` |
-| X waits for a person again | take the path of X out of `low` |
-| product code merges on its own | `default: low`, which needs `proof.check` |
-| check C proves that a change does what it should | `proof.check: "C"` |
-| check C must pass before anything merges | add C to `required_checks` |
-| who decides a change to the rules, or the rest | `owners.high` (the rules), `owners.medium` (the rest); "make Lan a decider" is usually both |
-| dependency updates of one semver level | `rules.dependency_updates` |
-| one commit per pull request, or the branch's commits | `merge_method` |
+| The user says                                        | The key in `governance/autonomy.yaml`                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| X merges on its own once the checks pass             | add the path of X to `low`                                                                  |
+| X waits for a person again                           | take the path of X out of `low`                                                             |
+| product code merges on its own                       | `default: low`, which needs `proof.check`                                                   |
+| check C proves that a change does what it should     | `proof.check: "C"`                                                                          |
+| check C must pass before anything merges             | add C to `required_checks`                                                                  |
+| who decides a change to the rules, or the rest       | `owners.high` (the rules), `owners.medium` (the rest); "make Lan a decider" is usually both |
+| dependency updates of one semver level               | `rules.dependency_updates`                                                                  |
+| one commit per pull request, or the branch's commits | `merge_method`                                                                              |
 
 - One request is one change: one key, or both lists of `owners` for a new decider. When the words
   fit more than one change, or none, name the keys they could mean and what each would do, and let

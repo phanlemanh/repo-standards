@@ -235,6 +235,11 @@ upgrade_case() {
   grep -q '^# kept by the repository' .editorconfig || { echo "FAIL: $label lost an edit in .editorconfig"; exit 1; }
   grep -q '^Kept by the repository.' README.md || { echo "FAIL: $label lost an edit in README.md"; exit 1; }
   if [ "$install_first" = yes ]; then
+    # The files the upgrade wrote pass the repository's own prettier as they are, before any
+    # format step: the owner runs `make check` next (tests/prettier_shape.sh, section 57).
+    wrote=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print('\n'.join(d['created'] + d['updated'] + d['merged']))" "$out")
+    pz=$(xargs npx --no-install prettier --check --ignore-unknown --log-level warn <<<"$wrote" 2>&1) \
+      || { echo "FAIL: $label wrote files its prettier would change: $pz"; exit 1; }
     case "$(field marked)" in *'"package.json"'*) echo "FAIL: $label marked package.json after npm install"; exit 1 ;; esac
     grep -q '"prepare"' package.json || { echo "FAIL: $label did not bring the prepare script into package.json"; exit 1; }
     python3 -c "import json,sys; d=json.load(open('package.json')); sys.exit(0 if d.get('devDependencies') else 1)" \

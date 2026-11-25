@@ -5,16 +5,16 @@ between, and machines check it. This section is for agents started from a GitHub
 driven by another workflow, for example a feature loop with its own gates, follows that workflow
 for when to stop.
 
-| Stage | Agent | Human edge |
-| --- | --- | --- |
-| Intent | Clarify in the issue; add testable acceptance criteria | Writes the intent issue, adds `agent:implement` / `agent:spec` |
-| Spec | `wiki/specs/NNNN-*.md`, in the `spec` format of `ontology/page-types.yaml` | Approves (`spec:approved`) when the issue asked for the spec only, or GitHub refused the agent a workflow file |
-| Build | Branch `agent/<issue>-<slug>`, tests first, `make check` green | — |
-| Verify | Independent reviewer agent (no edit rights) checks spec ↔ code ↔ tests | — |
-| Merge | `risk:low` merges itself when the required checks pass | Merges `risk:medium`; a code owner decides `risk:high` |
-| Release | release-please PR; staging deploy | Merges the release PR; approves the `production` environment |
-| Operate | Triage, incident page, fix PR | Paged for severe incidents |
-| Learn | `wiki/log.md`, decisions, weekly metrics | Tunes `governance/autonomy.yaml` |
+| Stage   | Agent                                                                      | Human edge                                                                                                     |
+| ------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Intent  | Clarify in the issue; add testable acceptance criteria                     | Writes the intent issue, adds `agent:implement` / `agent:spec`                                                 |
+| Spec    | `wiki/specs/NNNN-*.md`, in the `spec` format of `ontology/page-types.yaml` | Approves (`spec:approved`) when the issue asked for the spec only, or GitHub refused the agent a workflow file |
+| Build   | Branch `agent/<issue>-<slug>`, tests first, `make check` green             | —                                                                                                              |
+| Verify  | Independent reviewer agent (no edit rights) checks spec ↔ code ↔ tests     | —                                                                                                              |
+| Merge   | `risk:low` merges itself when the required checks pass                     | Merges `risk:medium`; a code owner decides `risk:high`                                                         |
+| Release | release-please PR; staging deploy                                          | Merges the release PR; approves the `production` environment                                                   |
+| Operate | Triage, incident page, fix PR                                              | Paged for severe incidents                                                                                     |
+| Learn   | `wiki/log.md`, decisions, weekly metrics                                   | Tunes `governance/autonomy.yaml`                                                                               |
 
 ### Rules for agents
 
