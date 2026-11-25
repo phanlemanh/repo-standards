@@ -47,10 +47,10 @@ fi
 
 # 57b. the shapes prettier keeps, read without prettier: no two blank lines in a row in Markdown,
 #      every row of a Markdown table as wide as the others, and in .claude/settings.json an object
-#      written on one line fits printWidth and has a space inside its braces.
-for ps_entry in "${ps_dirs[@]}"; do
-  ps_d="${ps_entry%%:*}"; ps_spec="${ps_entry#*:}"
-  ps_out=$(python3 - "$ps_d" <<'PY'
+#      written on one line fits printWidth and has a space inside its braces. A function, not a
+#      heredoc inside $(...): bash 3.2 (macOS) misreads the quotes of a heredoc there.
+ps_shape() {
+  python3 - "$1" <<'PY'
 import fnmatch, json, re, sys, unicodedata
 from pathlib import Path
 
@@ -112,6 +112,9 @@ for rel in files:
                 problems.append(f"{rel}:{n}: an object on one line without a space inside its braces")
 print("\n".join(problems))
 PY
-)
+}
+for ps_entry in "${ps_dirs[@]}"; do
+  ps_d="${ps_entry%%:*}"; ps_spec="${ps_entry#*:}"
+  ps_out=$(ps_shape "$ps_d")
   [ -z "$ps_out" ] || miss "prettier shape ($ps_spec): $(tr '\n' ';' <<<"$ps_out")"
 done
