@@ -27,7 +27,7 @@ the manual steps are listed), `manual` (only recorded, with guidance; `doctor` d
 production after a person approves the GitHub environment, come with level `team`. When the level
 is `starter`, tell the user that, and do not say a rollout is set up.
 
-**Recommendation when the user hands this to Claude:** nothing yet for a tool; `container` when it runs on a server.
+**Recommendation when the user hands this to Claude:** nothing yet: it runs on your machine with `make dev`, also for a project that will one day run on a server. Say it in those words, and do not bring up containers, images or registries unless the user does: putting it on a server is a later step, when they ask for it.
 
 ## Recording
 
