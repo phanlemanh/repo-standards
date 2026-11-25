@@ -12,7 +12,11 @@ Keep the file name in English. Sections:
    only what exists. With the `design` capability, introduce `src/example` as the sample screen the
    AI will copy when it builds new screens (open `/example` under `make dev`; `/` is left for the
    first real screen), and `design/terms.json` as the words it must not swap.
-4. **What happens automatically**: CI on push, and `make check` in that CI. Nothing runs by itself inside Claude Code.
+4. **What happens automatically**: CI on push, and `make check` in that CI. Inside Claude Code, one
+   thing runs by itself: when a session opens, `.claude/settings.json` runs `make derived`, which
+   draws the files kept out of git (name the ones this repository has, such as the wiki log, the
+   wiki index and the glossary). It commits nothing
+   and never stops the session. Nothing else runs without being asked.
 5. **What to know about safety**:
    - What the `doctor` score measures (files and checks are in place) and what it does not (whether
      the code is right).
