@@ -13,6 +13,8 @@ Checks
   wiki      every page has front matter with a known type and a title; pages live in the
             folder of their type; filenames follow the pattern; required sections exist;
             must_link rules hold; relative links resolve; pages are reachable from index.md.
+            A link to a missing file that git ignores and does not track is a drawn file not
+            drawn yet: a warning, not an error.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -166,6 +169,25 @@ def check_ontology(root: Path, rep: Report) -> dict[str, dict[str, Any]]:
     return entities
 
 
+NOT_DRAWN = "is not drawn yet (git ignores it): run `make derived`, or the tool that draws it"
+
+
+def not_drawn(root: Path, dest: Path) -> bool:
+    """A missing file that git ignores and does not track: a file another step draws
+    (design-assembly's design/screens.yaml), not drawn on this clone yet. Not a broken link.
+    Outside a git work tree, or without git, nothing is known, so the link stays broken."""
+    try:
+        path = dest.resolve().relative_to(root).as_posix()
+        proc = subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), "check-ignore", "-q", "--", path],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+    except (ValueError, OSError):
+        return False
+    return proc.returncode == 0
+
+
 def is_fragment_file(wiki: Path, page: Path) -> bool:
     """A file of the wiki that is no page: a head file, an entry of wiki/log/, a hidden file."""
     parts = page.relative_to(wiki).parts
@@ -200,7 +222,9 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
             if re.match(r"^[a-z]+:", target) or target.startswith("#"):
                 continue
             dest = (page.parent / target.split("#", 1)[0]).resolve()
-            if not dest.exists():
+            if not dest.exists() and not_drawn(root, dest):
+                rep.warn(rel(root, page), f"link '{target}' {NOT_DRAWN}")
+            elif not dest.exists():
                 rep.error(rel(root, page), f"broken link '{target}'")
             elif dest.suffix == ".md":
                 reachable.add(dest)
@@ -268,7 +292,11 @@ def check_wiki(root: Path, rep: Report, entities: dict[str, dict[str, Any]]) -> 
                 if not ok:
                     rep.error(path, f"must link to an existing {need} in front matter 'links'")
         for x in fm.get("links") or []:
-            if not (root / str(x)).exists():
+            if (root / str(x)).exists():
+                continue
+            if not_drawn(root, root / str(x)):
+                rep.warn(path, f"front matter link '{x}' {NOT_DRAWN}")
+            else:
                 rep.error(path, f"front matter link '{x}' does not exist (paths are repo-relative)")
         scan_links(page, body)
 

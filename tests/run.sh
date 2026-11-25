@@ -3976,6 +3976,9 @@ echo "ok  derived (or misses reported above)"
 # shellcheck source=tests/generated_wording.sh
 . "$ROOT/tests/generated_wording.sh"
 
+# shellcheck source=tests/wiki_lint_derived.sh
+. "$ROOT/tests/wiki_lint_derived.sh"
+
 [ "$misses" -eq 0 ] || fail "$misses regression check(s) failed"
 echo "All tests passed."
 reached_end=1

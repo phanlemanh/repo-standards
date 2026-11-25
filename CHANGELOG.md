@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed: `doctor` no longer fails `ontology_wiki_valid` on a drawn file not drawn yet (#69)
+A wiki page may link a file another step draws and git ignores, such as design-assembly's `design/screens.yaml`. On a clone where it was not drawn yet, `tools/wiki_lint.py` reported "front matter link ... does not exist" (or "broken link"), so `make check` and `doctor` failed on a hole that was not there.
+- `tools/wiki_lint.py`: a link, in front matter or in the body, to a missing file that `git check-ignore` reports (ignored and not tracked) is now a warning, "is not drawn yet (git ignores it): run `make derived`, or the tool that draws it". A missing file git does not ignore, a tracked file that was deleted, and any link outside a git work tree are errors as before. Section 56 of `tests/run.sh` holds both sides and the `doctor` verdict.
+- **What breaks on upgrade**: nothing stops working. `tools/wiki_lint.py` is replaced, or three-way merged where your repository edited it (conflict markers keep `make check` red until you remove them). Such a link now gives a warning instead of an error, so `python3 tools/wiki_lint.py --strict` still fails on it until the file is drawn.
+
 ### Fixed: five sentences every new repository carried that were not true or not said
 From the UX audit (`docs/reports/2026-11-22-ux-audit.md`, F6 and F7) and the newcomer simulation (`docs/reports/2026-11-24-newcomer-simulation.md`, N3 to N5). Wording only: no option, layer or check changes, and no new place a person appears.
 - `docs/START-HERE.md` (`skills/new/references/tour.md`) no longer says "Nothing runs by itself inside Claude Code". It says the one thing that does: when a session opens, `.claude/settings.json` runs `make derived`, which draws the files kept out of git and commits nothing. New section 55a of the fast tests (`tests/generated_wording.sh`) reads the hooks of the settings template and fails when the tour claims nothing runs or does not name a `make` target a hook runs.
