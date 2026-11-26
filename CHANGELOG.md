@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.5 — 2026-11-26
+
+Three parts of the design that were not in 0.10.4: work outside the repository goes through one
+tool (5.1), `make autonomy` prints the autonomy card (5.2), and the machine drafts a change to the
+rules while a person decides it (5.3). The setup now calls design-assembly, which lays a
+repository's design ledgers. Five fixes, among them the five sentences the UX audit and the
+newcomer simulation found untrue or missing in every new repository, and a clean upgrade that left a
+Node repository red, found by the check before this release
+(`docs/reports/2026-11-26-release-readiness-0.10.5.md`).
+
 ### Fixed: a clean upgrade leaves a Node repository's `make check` green, with no format step
 An upgrade writes a template as it is and runs nothing after it. Three templates were not in the form prettier writes, so a Node repository (`ts-node`, `ts-api`, `react-vite`) upgraded to this release with exit code 0 and nothing marked, and `make check` was still red at `lint` until `make format` ran. Found on a copy of `design-ci-probe`, 0.10.3 to this release (`docs/reports/2026-11-26-release-readiness-0.10.5.md`, L1). A new repository never showed it: its install runs `npm run format`.
 - `.claude/skills/autonomy-change/SKILL.md` (team) and the `github-agents` part of `AGENTS.md`: their tables are laid out the way prettier lays them out.
@@ -173,6 +183,45 @@ taking the new default. Nothing was pushed to it.
 
 **Not yet run**: the reuse on a real pull request with a signature commit. The list itself is
 tested on throwaway repositories.
+
+### Verified
+
+- Offline suite on Linux and macOS, manifest validation and every end-to-end combination in CI:
+  each pull request of this release was green on the head that was merged, all five checks. The
+  last run on `main` before the bump, `b0e296d`, took 28 minutes with `e2e`.
+- `tests/e2e.sh` on a workstation at `b0e296d`, one combination per run: all 17 combinations and
+  both upgrade cases green. Six Node combinations failed the first time at
+  `npm install --save-dev @vitest/coverage-v8`, while `vitest` 5.1.2 was being published to npm,
+  and passed when run again.
+- The call to the real design-assembly, which `e2e.sh` does not make: plugin 0.62.0 (the fixture
+  is read at 0.59.0) on a `react-vite` repository with `design` at `team`. `adopt --starter`
+  exits 1 (ledgers laid, questions waiting), all seven "From birth" ledgers are there, `make check`
+  is green before and after, `doctor` gives 100 with no ledger missing.
+- An upgrade from 0.10.3 on scratch clones of both repositories that use the plugin, at
+  `b0e296d`. `design-ci-probe`: exit code 0, nothing marked, `make check` red at `lint` until
+  `make format`; that is the first entry above, fixed after the trial and checked by section 57
+  of `tests/run.sh` and the `ts-node` upgrade case of `e2e.sh`, not by a second trial.
+  `onehub-inventory`: exit code 1, four files marked, each one a place both sides edited.
+- Nothing was pushed to either repository for this release: the clones were read and thrown away.
+- Not yet run: an upgrade of a real repository to this version, merged; `github_setup.py --apply`
+  on a real repository (the new description of `risk:low`, the branch rule of a single-owner
+  repository); the outside-work ledger and `gh secret set` against a real environment.
+
+### Known gaps
+
+- `README.md` links `docs/START-HERE.md`, which only `/repo-setup:new` writes (the release notes
+  entry above). The way to close it is not chosen yet.
+- `onehub-inventory` keeps its own guard against what 5.3 changes: two deny lines on
+  `.github/workflows/` and `governance/`, a sentence in `AGENTS.md`, and a test of its own that
+  pins the deny list. Its upgrade to this version stops at `.claude/settings.json` and `AGENTS.md`
+  until its owner decides whether 5.3 applies there.
+- An upgrade brings the README's new "Start here" line in English, also into a README written in
+  another language: the translation step runs on a new setup only.
+- The plugin's README says nothing about how to upgrade a repository (UX audit, F2).
+- Nothing tells when design-assembly moves ahead of the fixture: read at 0.59.0, the plugin was at
+  0.62.0 when this release was checked.
+- `tools/ontology_actions.py`, a file every repository receives, is still 856 lines, over the limit
+  of 800 the setup gives.
 
 ## 0.10.4 — 2026-11-21
 

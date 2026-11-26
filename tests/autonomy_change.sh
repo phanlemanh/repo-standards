@@ -236,10 +236,11 @@ if "53d" not in rows.get("1", ""):
     bad.append("the row of rule 1 does not name 53d")
 if "53a" not in rows.get("3", ""):
     bad.append("the row of rule 3 does not name 53a")
-log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## ", 1)[0]
+# the entry is in a section newer than 0.10.4: under Unreleased until a release, then under it
+log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## 0.10.4 ", 1)[0]
 entry = next((e for e in log.split("\n### ") if "the machine drafts a change to the rules" in e), "")
 if not entry:
-    bad.append("CHANGELOG.md has no entry for part 5.3 under ## Unreleased")
+    bad.append("CHANGELOG.md has no entry for part 5.3 after 0.10.4")
 for said in ("**What breaks on upgrade**", "Edit(./governance/**)", "one account", "kept by word"):
     if entry and said not in entry:
         bad.append(f"the CHANGELOG entry does not say {said}")
@@ -318,7 +319,8 @@ import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 gaps = (root / "docs/setup-principles.md").read_text(encoding="utf-8").split("## Chỗ còn hở", 1)[-1]
 one = next((b for b in gaps.split("\n- ") if b.startswith("**Repo một chủ.**")), "")
-log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## ", 1)[0]
+# the entry is in a section newer than 0.10.4: under Unreleased until a release, then under it
+log = (root / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[-1].split("\n## 0.10.4 ", 1)[0]
 entry = next((e for e in log.split("\n### ") if "the machine drafts a change to the rules" in e), "")
 bad = []
 for where, text, words in (("«Repo một chủ»", one, ("medium", "claude[bot]")), ("the CHANGELOG entry", entry, ("medium", "claude[bot]"))):
