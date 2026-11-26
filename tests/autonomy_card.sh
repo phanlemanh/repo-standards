@@ -497,12 +497,13 @@ case "$acd_tour" in *'START-HERE'*'make autonomy'*|*'make autonomy'*'START-HERE'
 case "$acd_tour" in *'not copy the table into `docs/START-HERE.md`'*) ;; *) miss "autonomy card: tour.md does not say the table is not copied into START-HERE.md" ;; esac
 acd_ex=$(grep 'autonomy_card.py' "$acd_pl/skills/explain/SKILL.md" || true)
 [ -n "$acd_ex" ] || miss "autonomy card: the explain table lacks tools/autonomy_card.py"
-acd_cl=$(awk '/^## Unreleased/{f=1;next} /^## /{f=0} f' "$ROOT/CHANGELOG.md")
-case "$acd_cl" in *'make autonomy'*) ;; *) miss "autonomy card: the changelog does not name make autonomy under Unreleased" ;; esac
+# The entry is in a section newer than 0.10.4: under Unreleased until a release, then under it.
+acd_cl=$(awk '/^## 0\.10\.4 /{exit} /^## Unreleased/{f=1;next} f' "$ROOT/CHANGELOG.md")
+case "$acd_cl" in *'make autonomy'*) ;; *) miss "autonomy card: the changelog does not name make autonomy after 0.10.4" ;; esac
 for acd_w in 'tools/autonomy_card.py' 'mk/autonomy.mk' '`card`'; do
-  case "$acd_cl" in *"$acd_w"*) ;; *) miss "autonomy card: the changelog does not name $acd_w under Unreleased" ;; esac
+  case "$acd_cl" in *"$acd_w"*) ;; *) miss "autonomy card: the changelog does not name $acd_w after 0.10.4" ;; esac
 done
-case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the changelog has no What breaks on upgrade line under Unreleased" ;; esac
+case "$acd_cl" in *'What breaks on upgrade'*) ;; *) miss "autonomy card: the changelog has no What breaks on upgrade line after 0.10.4" ;; esac
 
 # 54k. the owner's ruling "say what is true": a low pull request merges by itself only where the
 # agent pipeline is installed (its auto-merge). Outside capabilities/github-agents, no template,
